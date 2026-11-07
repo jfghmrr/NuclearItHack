@@ -1,17 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="rec_title">Запись с микрофона</string>
+    <string name="rec_title">Новая запись</string>
     <string name="rec_running">Идёт запись</string>
     <string name="rec_waiting">Запись ждёт</string>
-    <string name="rec_screen_off_hint">Можно выключить экран: запись продолжится. Звук не покидает устройство</string>
+    <string name="rec_screen_off_hint">Можно выключить экран.\nЗапись продолжится на устройстве.</string>
     <string name="rec_level">Уровень сигнала микрофона</string>
+    <string name="rec_level_caption">Уровень звука</string>
+    <string name="rec_discard">Отменить запись</string>
     <string name="rec_busy_title">Микрофон занят, запись ждёт</string>
     <string name="rec_busy_body">Записанное сохранено. Запись продолжится сама, когда микрофон освободится</string>
     <string name="rec_stop">Остановить и расшифровать</string>
     <string name="rec_cancel">Отменить запись</string>
-    <string name="rec_cancel_title">Удалить запись?</string>
-    <string name="rec_cancel_body">Записано %1$s. Вернуть запись будет нельзя</string>
-    <string name="rec_cancel_confirm">Удалить</string>
+    <string name="rec_cancel_title">Удалить эту запись?</string>
+    <string name="rec_cancel_body">Записано %1$s. Аудио будет удалено. Вернуть его после удаления не получится.</string>
+    <string name="rec_cancel_confirm">Удалить запись</string>
     <string name="rec_cancel_dismiss">Продолжить запись</string>
     <string name="rec_denied">Без доступа к микрофону записать разговор нельзя. Импорт файлов работает как обычно</string>
     <string name="rec_unavailable">Микрофон сейчас недоступен. Импорт файлов работает как обычно</string>
@@ -22,4 +24,10 @@
     <string name="rec_notification_title">Стенокот</string>
     <string name="rec_notification_text">Идёт запись</string>
     <string name="rec_notification_stop">Остановить</string>
+    <string name="mic_title">Доступ к микрофону</string>
+    <string name="mic_headline">Можно записать разговор?</string>
+    <string name="mic_body">Стенокоту нужен микрофон, чтобы записывать аудио. Разрешение можно изменить в настройках Android.</string>
+    <string name="mic_note">Запрос появляется только перед записью</string>
+    <string name="mic_continue">Продолжить</string>
+    <string name="mic_import">Импортировать аудио</string>
 </resources>
