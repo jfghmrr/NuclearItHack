@@ -8,6 +8,7 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import androidx.compose.foundation.clickable
@@ -66,8 +67,9 @@ private const val META_SEPARATOR = " · "
 /** Файл лежит в папке приложения: запись в Download не удалась. */
 internal val OutputFileUi.inAppFolder: Boolean get() = APP_FOLDER_MARK in path
 
-/** Папка файла относительно общего хранилища. */
-internal fun outputFolder(path: String): String = path.substringBeforeLast('/', "")
+/** Папка файла относительно общего хранилища. Конвейер отдаёт полный путь, система ждёт относительный. */
+internal fun outputFolder(path: String, storageRoot: String = Environment.getExternalStorageDirectory().path): String =
+    path.removePrefix(storageRoot).trimStart('/').substringBeforeLast('/', "")
 
 /**
  * Находит запись файла в Download. Нужна, если конвейер не передал адрес сам: файл принадлежит
