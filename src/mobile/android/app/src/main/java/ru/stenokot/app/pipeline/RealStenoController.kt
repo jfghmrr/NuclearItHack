@@ -118,12 +118,8 @@ class RealStenoController(
 
     /** Приложение на экране: можно запускать службу и продолжать прерванное. */
     fun onForeground() {
-        runner.onForeground()
+        runner.onForeground { if (hasPendingWork()) startService() }
         refreshAudio()
-        scope.launch(io) {
-            runner.awaitReady()
-            if (hasPendingWork()) startService()
-        }
     }
 
     override fun job(id: String): StateFlow<JobDetailUi?> = jobFlows.getOrPut(id) {

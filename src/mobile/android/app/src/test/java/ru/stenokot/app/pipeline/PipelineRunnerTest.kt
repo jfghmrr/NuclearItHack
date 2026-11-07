@@ -688,6 +688,20 @@ class PipelineRunnerTest {
     }
 
     @Test
+    fun foregroundReportsOnlyAfterTheInterruptedJobIsBackInTheQueue() = runTest {
+        val h = harness()
+        h.engines.onTranscribe = { index -> if (index == 1) h.runner.interruptForTimeout() }
+        val id = h.import("service")
+        h.await { it[id]?.phase == JobPhase.INTERRUPTED }
+        h.engines.onTranscribe = {}
+
+        var seen: JobPhase? = null
+        h.runner.onForeground { seen = h.runner.jobs.value.getValue(id).phase }
+        h.await(done(id))
+        assertEquals(JobPhase.QUEUED, seen)
+    }
+
+    @Test
     fun everyServiceTimeoutResumesByItselfWithoutSpendingTheCrashLimit() = runTest {
         val h = harness()
         var left = 3
