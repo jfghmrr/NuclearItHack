@@ -1,1 +1,13 @@
 test_id,timestamp_utc,commit,file_name,file_size_bytes,audio_duration_s,device,condition,rtf_core,rtf_full,peak_rss_mb,wer,der,json_valid,notes
+honor_ru_30s,2026-11-07,74bea98,,,30,Honor NTN-LX1,MP3 через VIEW,0.74,,,,,true,время до JSON 26 с
+honor_ru_3m,2026-11-07,74bea98,,,180,Honor NTN-LX1,MP3 через VIEW,0.47,,,,,true,время до JSON 88 с
+honor_ru_6m22,2026-11-07,74bea98,clip_10m_vbr.mp3,,382,Honor NTN-LX1,MP3 через VIEW,0.58,,,,,true,время до JSON 221 с
+honor_en_14s,2026-11-07,74bea98,,,14,Honor NTN-LX1,MP3 через VIEW,1.91,,1410,,,true,время до JSON 29 с; около 12 с загрузка Parakeet
+honor_en_3m,2026-11-07,74bea98,,,180,Honor NTN-LX1,MP3 через VIEW,0.60,,1410,,,true,время до JSON 109 с
+honor_en_5m,2026-11-07,74bea98,,,300,Honor NTN-LX1,MP3 через VIEW,0.68,,1410,,,true,время до JSON 207 с
+honor_ballast_en_3m,2026-11-07,74bea98,,,180,Honor NTN-LX1,балласт 1.9 ГБ,0.65,,,,,true,время до JSON 120 с; без предупреждений
+honor_ballast_ru_3m,2026-11-07,74bea98,,,180,Honor NTN-LX1,балласт 1.9 ГБ,0.48,,,,,true,время до JSON 88 с; JSON совпал байт в байт
+honor_ballast_en_5m,2026-11-07,74bea98,,,300,Honor NTN-LX1,балласт 1.9 ГБ,0.69,,,,,true,время до JSON 209 с
+honor_long_57m,2026-11-07,74bea98,long_90m.mp3,,3437,Honor NTN-LX1,MP3 через VIEW,1.075,1.33,900,,,true,время до JSON 3695 с; 11 говорящих; 520 реплик
+avd_long_57m,2026-11-07,c5cf2e6,long_90m.mp3,,3437,emulator-5554 arm64 4 ГБ,отладочная сборка,,,1150,,,true,время до JSON 291 с
+avd_der_heldout49,2026-11-07,c5cf2e6,49 размеченных файлов,,15540,emulator-5554 arm64 4 ГБ,WAV; collar 0.25,,,,,10.07,true,collar 0: 16.46; точное число говорящих 32 из 49
