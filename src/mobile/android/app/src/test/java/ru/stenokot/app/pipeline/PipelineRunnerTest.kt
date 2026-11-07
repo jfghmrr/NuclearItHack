@@ -1248,12 +1248,21 @@ class PipelineRunnerTest {
     }
 
     @Test
-    fun deferredLanguageModelReleasesRecognizerBeforeRetry() = runTest {
+    fun recognizerWaitsForFileDuringRetryPauseAndLeavesBeforeRetry() = runTest {
         val h = harness()
+        val held = CompletableDeferred<LlmResult>()
+        h.engines.llmBehavior = { run ->
+            if (run == 1) held.await() else LlmResult(LlmStatus.APPLIED, "protocol.json", null)
+        }
         val first = h.import("first")
+        h.await { it[first]?.phase == JobPhase.RUNNING && it[first]?.stage == Stage.LLM }
+        delay(50)
         val second = h.import("second")
+        held.complete(LlmResult(LlmStatus.CANCELLED_BY_NEW_JOB, null, null))
         h.await(done(second))
-        h.await(done(first))
+        h.await { it[first]?.llm?.status == LlmStatus.APPLIED }
+        val retry = h.engines.events.lastIndexOf("llm")
+        assertEquals(listOf("warm", "cool"), h.engines.events.subList(retry - 2, retry))
         assertEquals(0, h.engines.warmCollisions)
     }
 

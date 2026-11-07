@@ -480,6 +480,7 @@ class PipelineRunner(
                 } else {
                     val retry = JobQueue.nextRetry(all)
                     if (retry != null) {
+                        engines.warmUp()
                         val interrupted = withTimeoutOrNull(config.idleRetryMs) { wake.receive() }
                         if (interrupted == null) llmPhase(retry.id, isRetry = true)
                         continue
