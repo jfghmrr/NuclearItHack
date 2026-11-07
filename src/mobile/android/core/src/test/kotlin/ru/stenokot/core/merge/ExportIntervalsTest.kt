@@ -24,6 +24,29 @@ class ExportIntervalsTest {
     private fun merge(durationMs: Long, tokens: List<AsrToken>, turns: List<SpeakerTurn>): List<Utterance> =
         DefaultMerger(durationMs).merge(listOf(segment(0, 0, durationMs, tokens)), turns)
 
+    private fun at(vararg words: Pair<String, Long>): List<AsrToken> = words.map { AsrToken(" ${it.first}", it.second) }
+
+    /** Тихий ответ одним словом после тире: диаризация отдала его второму голосу, слияние его сохраняет. */
+    @Test
+    fun replyAfterDialogueDashKeepsItsSpeaker() {
+        val tokens = at(
+            "—" to 1_600, "Ты" to 1_700, "негр?" to 1_900, "—" to 2_240, "Да." to 2_984, "—" to 3_200,
+            "Как" to 4_240, "у" to 4_500, "тебя" to 4_600, "дела?" to 4_900,
+        )
+        val turns = listOf(SpeakerTurn(1_600, 2_400, 0), SpeakerTurn(2_984, 3_322, 1), SpeakerTurn(4_200, 5_300, 0))
+        val out = merge(6_000, tokens, turns)
+        val reply = out.single { it.text.startsWith("Да.") }
+        assertTrue(out.filter { it !== reply }.all { it.speaker != reply.speaker })
+    }
+
+    @Test
+    fun islandWithoutPausesIsStillAbsorbed() {
+        val tokens = at("раз" to 1_000, "два" to 1_300, "три" to 1_600, "четыре" to 1_900, "пять" to 2_200)
+        val turns = listOf(SpeakerTurn(900, 1_550, 0), SpeakerTurn(1_550, 1_850, 1), SpeakerTurn(1_850, 2_600, 0))
+        val out = merge(3_000, tokens, turns)
+        assertEquals(1, out.map { it.speaker }.toSet().size)
+    }
+
     @Test
     fun startReachesTurnStart() {
         val out = merge(6_000, spoken("раз два три", 1_000, 400), listOf(SpeakerTurn(500, 5_000, 0)))
