@@ -87,16 +87,18 @@ class WindowedDiarizer(
         return finished ?: finishRestored(book.finish(linked), lines, pcm, progress)
     }
 
+    /** Монолог из одного окна с одним кластером остаётся как есть: вторая модель ему не нужна. */
     private fun finish(
         turns: List<SpeakerTurn>,
         lines: List<DiarJournalLine>,
         pcm: PcmReader,
-        extractor: SpeakerEmbeddingExtractor,
+        extractor: Lazy<SpeakerEmbeddingExtractor>,
         progress: Progress,
     ): List<SpeakerTurn> {
-        if (turns.isEmpty()) return turns
+        val monologue = lines.size == 1 && lines.single().turns.map { it.cluster }.distinct().size == 1
+        if (turns.isEmpty() || monologue) return turns
         val rest = Progress { value, note -> progress.report(WINDOWS_SHARE + (1f - WINDOWS_SHARE) * value, note) }
-        return journal.finish.apply(turns, lines, PhrasePrinter(pcm, extractor, isCancelled), rest)
+        return journal.finish.apply(turns, lines, PhrasePrinter(pcm, extractor.value, isCancelled), rest)
     }
 
     /** Все окна уже в журнале: нужна только модель отпечатков. */
@@ -108,13 +110,15 @@ class WindowedDiarizer(
     ): List<SpeakerTurn> {
         if (turns.isEmpty()) return turns
         models.require(ModelFiles.DIAR_EMBEDDING)
-        val extractor = loadModel(ModelFiles.DIAR_EMBEDDING) {
-            SpeakerEmbeddingExtractor(assetManager = models.assets, config = embeddingConfig())
+        val extractor = lazy(LazyThreadSafetyMode.NONE) {
+            loadModel(ModelFiles.DIAR_EMBEDDING) {
+                SpeakerEmbeddingExtractor(assetManager = models.assets, config = embeddingConfig())
+            }
         }
         try {
             return finish(turns, lines, pcm, extractor, progress)
         } finally {
-            extractor.release()
+            if (extractor.isInitialized()) extractor.value.release()
         }
     }
 
