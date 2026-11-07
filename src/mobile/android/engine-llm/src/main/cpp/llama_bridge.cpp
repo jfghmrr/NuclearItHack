@@ -86,22 +86,13 @@ bool should_continue_loading(float, void *) {
     return !g_cancel.load(std::memory_order_relaxed);
 }
 
+/** Передаёт в журнал только предупреждения и ошибки: загрузка модели печатает сотни строк. */
 void forward_log(enum ggml_log_level level, const char *text, void *) {
-    int priority;
-    switch (level) {
-        case GGML_LOG_LEVEL_ERROR:
-            priority = ANDROID_LOG_ERROR;
-            break;
-        case GGML_LOG_LEVEL_WARN:
-            priority = ANDROID_LOG_WARN;
-            break;
-        case GGML_LOG_LEVEL_INFO:
-            priority = ANDROID_LOG_INFO;
-            break;
-        default:
-            return;
+    if (level == GGML_LOG_LEVEL_ERROR) {
+        __android_log_write(ANDROID_LOG_ERROR, kTag, text);
+    } else if (level == GGML_LOG_LEVEL_WARN) {
+        __android_log_write(ANDROID_LOG_WARN, kTag, text);
     }
-    __android_log_write(priority, kTag, text);
 }
 
 /** Сбрасывает KV-кэш. Нужно после прерванного пакета: часть токенов могла в него попасть. */

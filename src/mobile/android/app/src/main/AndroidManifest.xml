@@ -43,5 +43,9 @@
                 <data android:mimeType="application/ogg" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".llm.LlmService"
+            android:exported="false"
+            android:process=":llm" />
     </application>
 </manifest>

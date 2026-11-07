@@ -6,5 +6,9 @@
             android:name=".llm.LlmRawProbeActivity"
             android:exported="true"
             android:process=":llm" />
+        <activity
+            android:name=".llm.LlmRunnerProbeActivity"
+            android:exported="true"
+            android:launchMode="singleTask" />
     </application>
 </manifest>
