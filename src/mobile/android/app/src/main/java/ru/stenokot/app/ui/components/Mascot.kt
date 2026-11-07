@@ -2,14 +2,23 @@ package ru.stenokot.app.ui.components
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import ru.stenokot.app.R
+import ru.stenokot.app.ui.theme.EnterMotion
 import ru.stenokot.app.ui.theme.StenoSize
+import ru.stenokot.app.ui.theme.StenoTheme
+import ru.stenokot.app.ui.theme.breathing
+import ru.stenokot.app.ui.theme.enterOnce
 
 /**
  * Сюжет маскота. [sideInset] это доля пустого поля слева от фигуры: она нужна, чтобы прижатый
@@ -30,6 +39,33 @@ enum class MascotKind(@DrawableRes val art: Int, val sideInset: Float) {
 @Composable
 fun Mascot(kind: MascotKind, modifier: Modifier = Modifier, size: Dp = StenoSize.mascot) {
     Image(painterResource(kind.art), contentDescription = null, modifier.size(size))
+}
+
+private const val PLATE_ART = 1.7f
+private const val PLATE_WIDTH = 1.48f
+private const val PLATE_HEIGHT = 1.24f
+
+/**
+ * Маскот на круглой подложке, как на макете. Картинка больше круга: вокруг фигуры прозрачное поле.
+ * Движение либо однократное [motion], либо [breathing] на время ожидания.
+ */
+@Composable
+fun MascotPlate(
+    kind: MascotKind,
+    modifier: Modifier = Modifier,
+    plate: Dp = StenoSize.mascotPlate,
+    motion: EnterMotion? = null,
+    breathing: Boolean = false,
+) {
+    val art = Modifier.requiredSize(plate * PLATE_ART)
+    Box(modifier.size(plate * PLATE_WIDTH, plate * PLATE_HEIGHT), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(plate).background(StenoTheme.colors.primaryContainer, CircleShape))
+        when {
+            breathing -> Image(painterResource(kind.art), null, art.breathing())
+            motion != null -> Image(painterResource(kind.art), null, art.enterOnce(motion))
+            else -> Image(painterResource(kind.art), null, art)
+        }
+    }
 }
 
 /** Маскот, у которого фигура, а не картинка, стоит на левом краю колонки. */

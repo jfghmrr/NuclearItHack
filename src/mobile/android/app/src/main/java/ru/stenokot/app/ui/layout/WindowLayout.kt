@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 val ContentMaxWidth = 640.dp
 
 private const val SHORT_HEIGHT_DP = 640
+private const val WIDE_GUTTER_DP = 380
 
 /** Как экран должен раскладываться в текущем окне. */
 @Immutable
@@ -39,6 +40,7 @@ data class WindowLayout(
     val height: WindowHeightSizeClass,
     val heightDp: Int,
     val fontScale: Float,
+    val widthDp: Int = WIDE_GUTTER_DP,
 ) {
     /** Широкое окно или телефон в альбомной ориентации: две панели рядом. */
     val twoPane: Boolean
@@ -63,8 +65,8 @@ data class WindowLayout(
     /** Подсказки к импорту не помещаются рядом с кнопкой и живут в прокручиваемой части. */
     val hintsInContent: Boolean get() = short || largeText
 
-    /** Боковое поле экрана. */
-    val gutter: Dp get() = if (compactWidth) 16.dp else 24.dp
+    /** Боковое поле экрана: как на макете, а на узком телефоне меньше, чтобы сберечь строку. */
+    val gutter: Dp get() = if (widthDp < WIDE_GUTTER_DP) 16.dp else 24.dp
 }
 
 /** Текущая раскладка окна. */
@@ -79,8 +81,9 @@ fun ProvideWindowLayout(activity: Activity, content: @Composable () -> Unit) {
     val sizeClass = calculateWindowSizeClass(activity)
     val fontScale = LocalDensity.current.fontScale
     val heightDp = LocalConfiguration.current.screenHeightDp
-    val layout = remember(sizeClass, heightDp, fontScale) {
-        WindowLayout(sizeClass.widthSizeClass, sizeClass.heightSizeClass, heightDp, fontScale)
+    val widthDp = LocalConfiguration.current.screenWidthDp
+    val layout = remember(sizeClass, heightDp, widthDp, fontScale) {
+        WindowLayout(sizeClass.widthSizeClass, sizeClass.heightSizeClass, heightDp, fontScale, widthDp)
     }
     CompositionLocalProvider(LocalWindowLayout provides layout, content = content)
 }

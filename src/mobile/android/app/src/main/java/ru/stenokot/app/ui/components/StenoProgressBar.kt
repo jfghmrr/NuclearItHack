@@ -26,7 +26,7 @@ fun StenoProgressBar(
     description: String? = null,
     tag: String? = null,
     height: Dp = StenoSize.progressHeight,
-    track: Color = StenoTheme.colors.surfaceVariant,
+    track: Color = StenoTheme.colors.outlineVariant,
     indicator: Color = StenoTheme.colors.primary,
 ) {
     val value = fraction.coerceIn(0f, 1f)

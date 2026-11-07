@@ -40,7 +40,8 @@ private fun badgeColor(badge: JobBadge): Color {
 
 /**
  * Статус задачи: значок и слово, цвет только дополняет их. Необязательный [extra] стоит рядом,
- * а если не помещается, целиком переходит на новую строку. На тональной подложке цвет задаёт [tint].
+ * а если не помещается, целиком переходит на новую строку. На тональной подложке цвет задаёт [tint],
+ * а [label] заменяет общее слово более точным, например «Протокол готов».
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -49,6 +50,7 @@ fun JobStatusLabel(
     modifier: Modifier = Modifier,
     extra: String? = null,
     tint: Color? = null,
+    label: String = badge.label,
 ) {
     val color = tint ?: badgeColor(badge)
     val type = StenoTheme.type
@@ -62,10 +64,10 @@ fun JobStatusLabel(
             horizontalArrangement = Arrangement.spacedBy(StenoSpace.xs),
         ) {
             StenoIcon(badgeIcon(badge), color, size = StenoSize.iconSmall)
-            Text(badge.label, style = type.labelSmall, color = color)
+            Text(label, style = type.meta, color = color)
         }
         extra?.let {
-            Text(it, style = type.bodySmall, color = StenoTheme.colors.onSurfaceVariant)
+            Text(it, style = type.meta, color = StenoTheme.colors.onSurfaceVariant)
         }
     }
 }

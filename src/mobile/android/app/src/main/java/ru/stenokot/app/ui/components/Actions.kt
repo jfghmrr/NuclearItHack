@@ -35,32 +35,25 @@ import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 
-private val ActionShape = RoundedCornerShape(StenoRadius.xl)
-private val ActionPadding = PaddingValues(horizontal = 20.dp, vertical = StenoSpace.m)
-private val LargeTextPadding = PaddingValues(horizontal = StenoSpace.m, vertical = StenoSpace.m)
-private val DensePadding = PaddingValues(horizontal = StenoSpace.m, vertical = StenoSpace.s)
+private val ActionShape = RoundedCornerShape(StenoRadius.button)
+private val ActionPadding = PaddingValues(horizontal = StenoSpace.l, vertical = StenoSpace.m)
+private val DensePadding = PaddingValues(horizontal = StenoSpace.s, vertical = StenoSpace.s)
+private val IconGap = 10.dp
+private val DenseIconGap = 6.dp
 
-/** Отступы кнопки. При крупном шрифте подпись важнее воздуха: иначе длинное слово разорвётся. */
-@Composable
-private fun actionPadding(dense: Boolean): PaddingValues = when {
-    dense -> DensePadding
-    LocalWindowLayout.current.largeText -> LargeTextPadding
-    else -> ActionPadding
-}
-
-/** Подпись прижата влево, значок вправо: кнопка читается как строка документа, а не как плашка. */
+/** Значок слева от подписи, всё по центру. При крупном шрифте значок уступает место словам. */
 @Composable
 private fun RowScope.ActionContent(text: String, @DrawableRes icon: Int?, dense: Boolean) {
+    if (icon != null && !LocalWindowLayout.current.largeText) {
+        Icon(painterResource(icon), contentDescription = null, Modifier.size(StenoSize.icon))
+        Spacer(Modifier.width(if (dense) DenseIconGap else IconGap))
+    }
     Text(
         text = text,
-        modifier = Modifier.weight(1f),
-        style = if (dense) StenoTheme.type.labelMedium else StenoTheme.type.labelLarge,
-        textAlign = TextAlign.Start,
+        modifier = Modifier.weight(1f, fill = false),
+        style = StenoTheme.type.labelLarge,
+        textAlign = TextAlign.Center,
     )
-    if (icon != null && !LocalWindowLayout.current.largeText) {
-        Spacer(Modifier.width(if (dense) StenoSpace.s else StenoSpace.m))
-        Icon(painterResource(icon), contentDescription = null, Modifier.size(StenoSize.icon))
-    }
 }
 
 /** Главное действие экрана. На экране такое одно. [dense] для пары кнопок в одну строку. */
@@ -79,7 +72,7 @@ fun PrimaryAction(
         modifier = modifier.fillMaxWidth().heightIn(min = StenoSize.actionHeight).tagged(tag),
         enabled = enabled,
         shape = ActionShape,
-        contentPadding = actionPadding(dense),
+        contentPadding = if (dense) DensePadding else ActionPadding,
         elevation = null,
     ) { ActionContent(text, icon, dense) }
 }
@@ -100,16 +93,16 @@ fun TonalAction(
         modifier = modifier.fillMaxWidth().heightIn(min = StenoSize.actionHeight).tagged(tag),
         enabled = enabled,
         shape = ActionShape,
-        contentPadding = actionPadding(false),
+        contentPadding = ActionPadding,
         elevation = null,
         colors = ButtonDefaults.buttonColors(
-            containerColor = colors.secondaryContainer,
-            contentColor = colors.onSecondaryContainer,
+            containerColor = colors.primaryContainer,
+            contentColor = colors.primary,
         ),
     ) { ActionContent(text, icon, false) }
 }
 
-/** Контурное действие: второстепенное рядом с главным. */
+/** Второстепенное действие рядом с главным: поверхность и тонкий контур. */
 @Composable
 fun OutlinedAction(
     text: String,
@@ -126,10 +119,57 @@ fun OutlinedAction(
         modifier = modifier.fillMaxWidth().heightIn(min = StenoSize.actionHeight).tagged(tag),
         enabled = enabled,
         shape = ActionShape,
-        contentPadding = actionPadding(dense),
-        border = BorderStroke(StenoSize.hairline, if (enabled) colors.outline else colors.outlineVariant),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
+        contentPadding = if (dense) DensePadding else ActionPadding,
+        border = BorderStroke(StenoSize.hairline, colors.outlineVariant),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = colors.surface,
+            contentColor = colors.onSurface,
+        ),
     ) { ActionContent(text, icon, dense) }
+}
+
+/** Действие без подложки на всю ширину: второй выход с экрана. */
+@Composable
+fun GhostAction(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    @DrawableRes icon: Int? = null,
+    enabled: Boolean = true,
+    tag: String? = null,
+) {
+    TextButton(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth().heightIn(min = StenoSize.touchTarget).tagged(tag),
+        enabled = enabled,
+        shape = ActionShape,
+        contentPadding = DensePadding,
+        colors = ButtonDefaults.textButtonColors(contentColor = StenoTheme.colors.primary),
+    ) { ActionContent(text, icon, false) }
+}
+
+/** Опасное действие: удаление, которое нельзя отменить. */
+@Composable
+fun DangerAction(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    tag: String? = null,
+) {
+    val colors = StenoTheme.colors
+    Button(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth().heightIn(min = StenoSize.touchTarget).tagged(tag),
+        enabled = enabled,
+        shape = ActionShape,
+        contentPadding = DensePadding,
+        elevation = null,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = colors.errorContainer,
+            contentColor = colors.error,
+        ),
+    ) { ActionContent(text, null, false) }
 }
 
 /** Тихое текстовое действие без контура. */
@@ -148,7 +188,7 @@ fun QuietAction(
         shape = RoundedCornerShape(StenoRadius.m),
         contentPadding = PaddingValues(horizontal = StenoSpace.s, vertical = StenoSpace.s),
     ) {
-        Text(text, style = StenoTheme.type.labelMedium, textAlign = TextAlign.End)
+        Text(text, style = StenoTheme.type.labelLarge, textAlign = TextAlign.Center)
     }
 }
 

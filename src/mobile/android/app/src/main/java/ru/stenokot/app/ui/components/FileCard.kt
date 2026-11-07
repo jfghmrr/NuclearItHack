@@ -25,7 +25,7 @@ import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 
-private val CardShape = RoundedCornerShape(StenoRadius.xl)
+private val CardShape = RoundedCornerShape(StenoRadius.card)
 
 /**
  * Карточка файла: имя с многоточием посередине, чтобы было видно расширение, данные записи и
@@ -45,7 +45,7 @@ fun FileCard(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 72.dp)
-            .background(colors.surfaceContainerLowest, CardShape)
+            .background(colors.surface, CardShape)
             .border(BorderStroke(StenoSize.hairline, colors.outlineVariant), CardShape)
             .testTag(Tags.CARD_FILE)
             .then(

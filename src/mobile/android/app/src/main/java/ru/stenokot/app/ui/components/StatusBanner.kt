@@ -38,7 +38,7 @@ data class ToneColors(val container: Color, val content: Color, val icon: Color)
 fun toneColors(tone: BannerTone): ToneColors {
     val colors = StenoTheme.colors
     return when (tone) {
-        BannerTone.NEUTRAL -> ToneColors(colors.surfaceContainerHigh, colors.onSurface, colors.onSurfaceVariant)
+        BannerTone.NEUTRAL -> ToneColors(colors.surfaceContainer, colors.onSurfaceVariant, colors.onSurfaceVariant)
         BannerTone.WORKING -> ToneColors(colors.primaryContainer, colors.onPrimaryContainer, colors.primary)
         BannerTone.SUCCESS -> ToneColors(colors.successContainer, colors.onSuccessContainer, colors.success)
         BannerTone.WARNING -> ToneColors(colors.warningContainer, colors.onWarningContainer, colors.warning)
@@ -67,19 +67,19 @@ fun StatusBanner(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = StenoSize.touchTarget)
-            .background(palette.container, RoundedCornerShape(StenoRadius.l))
-            .padding(horizontal = StenoSpace.m, vertical = StenoSpace.s + StenoSpace.xs)
+            .background(palette.container, RoundedCornerShape(StenoRadius.field))
+            .padding(horizontal = StenoSpace.l, vertical = StenoSpace.m)
             .then(if (polite) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier)
             .tagged(tag),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.m),
     ) {
-        StenoIcon(icon, palette.icon)
+        StenoIcon(icon, palette.icon, size = StenoSize.iconMedium)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(StenoSpace.xs / 2)) {
             title?.let {
-                Text(it, style = type.labelMedium.copy(fontWeight = FontWeight.W600), color = palette.content)
+                Text(it, style = type.bodySmall.copy(fontWeight = FontWeight.W700), color = palette.content)
             }
-            body?.let { Text(it, style = type.bodyMedium, color = palette.content) }
+            body?.let { Text(it, style = type.bodySmall, color = palette.content) }
             action?.invoke()
         }
     }

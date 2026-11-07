@@ -1,12 +1,10 @@
 package ru.stenokot.app.ui.components
 
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -14,19 +12,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -39,56 +30,52 @@ import ru.stenokot.app.domain.StageUi
 import ru.stenokot.app.ui.Tags
 import ru.stenokot.app.ui.format.formatTimecode
 import ru.stenokot.app.ui.format.userStageLabel
-import ru.stenokot.app.ui.layout.LocalWindowLayout
-import ru.stenokot.app.ui.theme.StenoColors
-import ru.stenokot.app.ui.theme.StenoMotion
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 
-private val NodeSize = 28.dp
-private val NodeTop = 10.dp
+private val RowHeight = 41.dp
+private val CheckSize = 13.dp
 
-/** Цвет линии рельса: пройденный участок чернилами акцента, остальной тонкой линией. */
-private fun lineColor(done: Boolean, colors: StenoColors): Color =
-    if (done) colors.primary else colors.outlineVariant
-
-/** Рисует участки рельса выше и ниже узла строки. */
-private fun Modifier.railLine(above: Color?, below: Color?): Modifier = drawBehind {
-    val x = NodeSize.toPx() / 2
-    val middle = (NodeTop + NodeSize / 2).toPx()
-    val width = 2.dp.toPx()
-    above?.let { drawLine(it, Offset(x, 0f), Offset(x, middle), width, StrokeCap.Butt) }
-    below?.let { drawLine(it, Offset(x, middle), Offset(x, size.height), width, StrokeCap.Butt) }
-}
-
+/** Кружок этапа: номер, галочка или значок. Цвет только дополняет форму и подпись. */
 @Composable
-private fun RailNode(status: StageStatus, paused: Boolean) {
+private fun StepDot(number: Int, status: StageStatus, paused: Boolean) {
     val colors = StenoTheme.colors
+    val type = StenoTheme.type
+    val active = status == StageStatus.ACTIVE
+    val fill = when {
+        active && paused -> colors.warning
+        active -> colors.primary
+        status == StageStatus.DONE || status == StageStatus.SKIPPED -> colors.primaryContainer
+        status == StageStatus.FAILED -> colors.errorContainer
+        else -> colors.background
+    }
     Box(
         modifier = Modifier
-            .padding(top = NodeTop)
-            .size(NodeSize)
-            .background(
-                color = when {
-                    status == StageStatus.ACTIVE && paused -> colors.warning
-                    status == StageStatus.ACTIVE -> colors.primary
-                    else -> colors.surface
+            .size(StenoSize.stepDot)
+            .background(fill, CircleShape)
+            .then(
+                if (status == StageStatus.PENDING) {
+                    Modifier.border(StenoSize.hairline, colors.outlineVariant, CircleShape)
+                } else {
+                    Modifier
                 },
-                shape = CircleShape,
             ),
         contentAlignment = Alignment.Center,
     ) {
         when (status) {
-            StageStatus.DONE -> StenoIcon(R.drawable.ic_check_circle_fill, colors.success, size = StenoSize.icon)
-            StageStatus.ACTIVE -> StenoIcon(
-                icon = if (paused) R.drawable.ic_device_thermostat else R.drawable.ic_hourglass_top,
-                tint = if (paused) colors.onWarning else colors.onPrimary,
-                size = StenoSize.iconSmall + 2.dp,
+            StageStatus.DONE -> StenoIcon(R.drawable.ic_check, colors.primary, size = CheckSize)
+            StageStatus.SKIPPED -> StenoIcon(R.drawable.ic_block, colors.onSurfaceVariant, size = CheckSize)
+            StageStatus.FAILED -> StenoIcon(R.drawable.ic_close, colors.error, size = CheckSize)
+            StageStatus.ACTIVE, StageStatus.PENDING -> Text(
+                text = number.toString(),
+                style = type.eyebrow,
+                color = when {
+                    !active -> colors.onSurfaceVariant
+                    paused -> colors.onWarning
+                    else -> colors.onPrimary
+                },
             )
-            StageStatus.PENDING -> StenoIcon(R.drawable.ic_radio_button_unchecked, colors.outline, size = StenoSize.icon)
-            StageStatus.SKIPPED -> StenoIcon(R.drawable.ic_block, colors.onSurfaceVariant, size = StenoSize.iconMedium)
-            StageStatus.FAILED -> StenoIcon(R.drawable.ic_error, colors.error, size = StenoSize.icon)
         }
     }
 }
@@ -102,97 +89,61 @@ private fun spokenRow(label: String, stage: StageUi): String = when (stage.statu
 }
 
 /**
- * Рельс этапов: вертикальная линия с узлами. У готовых этапов справа реальное время, у текущего
- * строка раскрывается слотом [activeBody], ожидающие стоят тихо. Значения приходят от конвейера.
- * При смене этапа активная строка сама встаёт в видимую часть прокрутки.
+ * Рельс этапов: пять строк с кружками. Текущая выделена начертанием и номером на акценте,
+ * готовые отмечены галочкой и словом. Время этапа озвучивается, значения приходят от конвейера.
  */
 @Composable
-fun StageRail(
-    stages: List<StageUi>,
-    modifier: Modifier = Modifier,
-    paused: Boolean = false,
-    activeBody: @Composable ColumnScope.(StageUi) -> Unit,
-) {
-    val colors = StenoTheme.colors
+fun StageRail(stages: List<StageUi>, modifier: Modifier = Modifier, paused: Boolean = false) {
     Column(modifier.fillMaxWidth().testTag(Tags.LIST_STAGES)) {
         stages.forEachIndexed { index, stage ->
-            key(stage.stage) {
-                val above = if (index == 0) null else lineColor(stages[index - 1].status == StageStatus.DONE, colors)
-                val below = if (index == stages.lastIndex) null else lineColor(stage.status == StageStatus.DONE, colors)
-                RailRow(stage, above, below, paused, activeBody)
-            }
+            key(stage.stage) { RailRow(index + 1, stage, paused) }
         }
     }
 }
 
 @Composable
-private fun RailRow(
-    stage: StageUi,
-    lineAbove: Color?,
-    lineBelow: Color?,
-    paused: Boolean,
-    activeBody: @Composable ColumnScope.(StageUi) -> Unit,
-) {
+private fun RailRow(number: Int, stage: StageUi, paused: Boolean) {
     val colors = StenoTheme.colors
     val type = StenoTheme.type
     val active = stage.status == StageStatus.ACTIVE
     val label = userStageLabel(stage.stage)
     val spoken = spokenRow(label, stage)
-    val visibility = remember { BringIntoViewRequester() }
-    LaunchedEffect(active) {
-        if (active) visibility.bringIntoView()
+    val tail = when (stage.status) {
+        StageStatus.DONE -> stringResource(R.string.scr03_stage_done)
+        StageStatus.SKIPPED -> stringResource(R.string.scr03_stage_skipped)
+        StageStatus.FAILED -> stringResource(R.string.scr03_stage_failed)
+        else -> null
     }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = StenoSize.touchTarget)
-            .bringIntoViewRequester(visibility)
-            .animateContentSize(tween(StenoMotion.MEDIUM))
-            .railLine(lineAbove, lineBelow)
+            .heightIn(min = RowHeight)
             .testTag(Tags.rowStage(stage.stage.name))
-            .then(if (active) Modifier else Modifier.spokenAs(spoken, label)),
+            .then(if (active) Modifier else Modifier.spokenAs(spoken, label))
+            .padding(horizontal = StenoSpace.m, vertical = StenoSpace.xs),
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.m),
     ) {
-        RailNode(stage.status, paused)
-        Column(Modifier.weight(1f).padding(top = NodeTop, bottom = if (active) StenoSpace.l else StenoSpace.s)) {
-            val title: @Composable (Modifier) -> Unit = { titleModifier ->
-                Text(
-                    text = label,
-                    modifier = titleModifier.then(
-                        if (active) {
-                            Modifier
-                                .testTag(Tags.STAGE)
-                                .semantics {
-                                    contentDescription = spoken
-                                    liveRegion = LiveRegionMode.Polite
-                                }
-                        } else {
-                            Modifier
-                        },
-                    ),
-                    style = if (active) type.titleMedium else type.bodyLarge.copy(fontWeight = FontWeight.W500),
-                    color = if (stage.status == StageStatus.PENDING) colors.onSurfaceVariant else colors.onSurface,
-                )
-            }
-            val time: @Composable () -> Unit = {
-                stage.tookMs?.let {
-                    Text(formatTimecode(it), style = type.monoMedium, color = colors.onSurfaceVariant)
-                }
-            }
-            if (LocalWindowLayout.current.largeText) {
-                title(Modifier)
-                time()
-            } else {
-                Row(
-                    modifier = Modifier.heightIn(min = NodeSize),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
-                ) {
-                    title(Modifier.weight(1f))
-                    time()
-                }
-            }
-            if (active) activeBody(stage)
-        }
+        StepDot(number, stage.status, paused)
+        Text(
+            text = label,
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (active) {
+                        Modifier
+                            .testTag(Tags.STAGE)
+                            .semantics {
+                                contentDescription = spoken
+                                liveRegion = LiveRegionMode.Polite
+                            }
+                    } else {
+                        Modifier
+                    },
+                ),
+            style = if (active) type.bodySmall.copy(fontWeight = FontWeight.W700) else type.bodySmall,
+            color = if (active) colors.onSurface else colors.onSurfaceVariant,
+        )
+        tail?.let { Text(it, style = type.meta, color = colors.onSurfaceVariant) }
     }
 }

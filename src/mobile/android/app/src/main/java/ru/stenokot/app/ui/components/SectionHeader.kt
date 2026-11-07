@@ -15,6 +15,20 @@ import androidx.compose.ui.unit.dp
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 
+/** Подпись группы записей: день или раздел. Текст уже в прописных буквах, как в макете. */
+@Composable
+fun GroupLabel(text: String, modifier: Modifier = Modifier, tag: String? = null) {
+    Text(
+        text = text.uppercase(),
+        modifier = modifier
+            .padding(top = StenoSpace.l, bottom = StenoSpace.s)
+            .semantics { heading() }
+            .tagged(tag),
+        style = StenoTheme.type.eyebrow,
+        color = StenoTheme.colors.onSurfaceVariant,
+    )
+}
+
 /** Заголовок секции. Необязательный [count] показывает, сколько строк внутри. */
 @Composable
 fun SectionHeader(
@@ -35,7 +49,7 @@ fun SectionHeader(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
     ) {
-        Text(title, Modifier.weight(1f, fill = false), style = type.titleMedium, color = colors.onSurface)
+        Text(title, Modifier.weight(1f, fill = false), style = type.labelMedium, color = colors.onSurfaceVariant)
         count?.let { Text(it.toString(), style = type.monoMedium, color = colors.onSurfaceVariant) }
     }
 }

@@ -19,9 +19,12 @@ import ru.stenokot.app.ui.layout.LocalWindowLayout
 import ru.stenokot.app.ui.layout.statusLineInsets
 import ru.stenokot.app.ui.theme.StenoTheme
 
+private const val STATUS_ALPHA = 0.7f
+
 /**
  * Постоянная строка `txt_status`. Значение является машинным кодом и не переводится:
- * автоматика читает текст, TalkBack получает русское описание.
+ * автоматика читает текст, TalkBack получает русское описание. Строка есть на каждом экране,
+ * но держится тихо и не спорит с содержимым.
  */
 @Composable
 fun StatusLine(code: String, modifier: Modifier = Modifier) {
@@ -30,9 +33,9 @@ fun StatusLine(code: String, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(colors.surfaceContainer)
+            .background(colors.background)
             .statusLineInsets()
-            .heightIn(min = 20.dp)
+            .heightIn(min = 16.dp)
             .padding(horizontal = LocalWindowLayout.current.gutter),
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -41,8 +44,8 @@ fun StatusLine(code: String, modifier: Modifier = Modifier) {
             modifier = Modifier
                 .testTag(Tags.STATUS)
                 .semantics { contentDescription = spoken },
-            style = StenoTheme.type.monoSmall,
-            color = colors.onSurfaceVariant,
+            style = StenoTheme.type.eyebrow,
+            color = colors.onSurfaceVariant.copy(alpha = STATUS_ALPHA),
         )
     }
 }

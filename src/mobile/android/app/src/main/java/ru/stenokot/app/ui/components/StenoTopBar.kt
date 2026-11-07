@@ -1,7 +1,9 @@
 package ru.stenokot.app.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -20,35 +22,52 @@ import androidx.compose.ui.unit.dp
 import ru.stenokot.app.R
 import ru.stenokot.app.ui.Tags
 import ru.stenokot.app.ui.layout.LocalWindowLayout
+import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 
-/** Верхняя панель: кнопка назад и заголовок экрана. */
+private val BarEdge = 10.dp
+
+/** Верхняя панель: кнопка назад, заголовок с необязательной подписью и действия справа. */
 @Composable
-fun StenoTopBar(title: String, modifier: Modifier = Modifier, onBack: (() -> Unit)? = null) {
-    val gutter = LocalWindowLayout.current.gutter
+fun StenoTopBar(
+    title: String,
+    modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null,
+    subtitle: String? = null,
+    actions: (@Composable RowScope.() -> Unit)? = null,
+) {
+    val colors = StenoTheme.colors
+    val type = StenoTheme.type
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .padding(start = if (onBack != null) StenoSpace.xs else gutter, end = gutter),
+            .heightIn(min = StenoSize.topBarHeight)
+            .padding(
+                start = if (onBack != null) BarEdge else LocalWindowLayout.current.gutter,
+                end = if (actions != null) BarEdge else LocalWindowLayout.current.gutter,
+            ),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(StenoSpace.xs),
+        horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
     ) {
         if (onBack != null) {
             IconButton(onClick = onBack, modifier = Modifier.testTag(Tags.BACK)) {
                 Icon(
                     painter = painterResource(R.drawable.ic_arrow_back),
                     contentDescription = stringResource(R.string.common_back),
-                    tint = StenoTheme.colors.onSurface,
+                    tint = colors.onSurface,
                 )
             }
         }
-        Text(
-            text = title,
-            modifier = Modifier.semantics { heading() },
-            style = StenoTheme.type.titleLarge,
-            color = StenoTheme.colors.onSurface,
-        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                modifier = Modifier.semantics { heading() },
+                style = type.titleLarge,
+                color = colors.onSurface,
+            )
+            subtitle?.let { Text(it, style = type.meta, color = colors.onSurfaceVariant) }
+        }
+        actions?.invoke(this)
     }
 }
