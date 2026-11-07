@@ -1,0 +1,34 @@
+# Секреты и локальная конфигурация
+.env
+*.key
+*.pem
+*.jks
+*.keystore
+keystore.properties
+local.properties
+
+# Редакторы и операционные системы
+.DS_Store
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# Логи и временные файлы
+*.log
+tmp/
+
+# Сборка
+.gradle/
+.kotlin/
+build/
+.cxx/
+captures/
+*.apk
+*.aab
+
+# Модели и нативные библиотеки скачиваются скриптом scripts/fetch_models.sh
+models/
+*.gguf
+*.onnx
+src/mobile/android/app/src/main/jniLibs/
