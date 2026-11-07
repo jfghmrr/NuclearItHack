@@ -10,6 +10,7 @@ import ru.stenokot.app.speech.DiarizationJournal
 import ru.stenokot.app.speech.GigaAsr
 import ru.stenokot.app.speech.ModelSource
 import ru.stenokot.app.speech.ParakeetAsr
+import ru.stenokot.app.speech.PhraseRefiner
 import ru.stenokot.app.speech.SileroVadEngine
 import ru.stenokot.app.speech.WindowedDiarizer
 import ru.stenokot.core.audio.AudioInput
@@ -22,6 +23,7 @@ import ru.stenokot.core.engine.LlmRunner
 import ru.stenokot.core.engine.Merger
 import ru.stenokot.core.engine.PcmReader
 import ru.stenokot.core.engine.Progress
+import ru.stenokot.core.engine.TurnRefiner
 import ru.stenokot.core.engine.Vad
 import ru.stenokot.core.lang.LanguageVote
 import ru.stenokot.core.merge.DefaultMerger
@@ -76,6 +78,9 @@ interface PipelineEngines {
 
     /** Создаёт диаризатор, который пишет чекпойнт после каждого окна. */
     fun diarizer(request: DiarizationRequest): Diarizer
+
+    /** Создаёт уточнение говорящих. Null значит, что стадия обходится без него. */
+    fun refiner(audioDurationMs: Long, isCancelled: () -> Boolean): TurnRefiner? = null
 
     /** Создаёт слияние слов и говорящих для записи длиной [audioDurationMs]. */
     fun merger(audioDurationMs: Long): Merger
@@ -135,6 +140,9 @@ class EngineFactory(context: Context, modelSetVersion: String, availableMemory: 
         journal = DiarizationJournal(request.restored, request.onWindow),
         isCancelled = request.isCancelled,
     )
+
+    override fun refiner(audioDurationMs: Long, isCancelled: () -> Boolean): TurnRefiner =
+        PhraseRefiner(models, audioDurationMs, isCancelled)
 
     override fun merger(audioDurationMs: Long): Merger = DefaultMerger(audioDurationMs)
 

@@ -11,6 +11,7 @@ import ru.stenokot.core.model.LlmResult
 import ru.stenokot.core.model.SpeakerTurn
 import ru.stenokot.core.model.SpeechSegment
 import ru.stenokot.core.model.Utterance
+import ru.stenokot.core.storage.DiarJournalLine
 
 /** Приёмник прогресса стадии. Значение находится в диапазоне от 0 до 1. */
 fun interface Progress {
@@ -55,6 +56,18 @@ interface Asr : Closeable {
 interface Diarizer : Closeable {
     /** Возвращает интервалы говорящих на шкале записи. */
     fun diarize(pcm: PcmReader, progress: Progress): List<SpeakerTurn>
+}
+
+/** Уточнение говорящих по готовым словам и звуку записи. */
+interface TurnRefiner : Closeable {
+    /** Возвращает новые интервалы [turns]. Слова и текст от них не зависят, меняется только авторство. */
+    fun refine(
+        pcm: PcmReader,
+        asr: List<AsrSegment>,
+        turns: List<SpeakerTurn>,
+        lines: List<DiarJournalLine>,
+        progress: Progress,
+    ): List<SpeakerTurn>
 }
 
 /** Слияние слов и говорящих. Никогда не меняет текст слов. */

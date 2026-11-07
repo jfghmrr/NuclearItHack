@@ -17,6 +17,7 @@ class JobFiles(val dir: File) {
     val asrAttempt: File get() = File(dir, "asr.attempt")
     val diar: File get() = File(dir, "diar.jsonl")
     val diarAttempt: File get() = File(dir, "diar.attempt")
+    val refineAttempt: File get() = File(dir, "refine.attempt")
     val turns: File get() = File(dir, "turns.json")
     val merged: File get() = File(dir, "merged.json")
     val transcript: File get() = File(dir, "transcript.json")

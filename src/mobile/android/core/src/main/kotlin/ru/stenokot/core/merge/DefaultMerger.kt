@@ -66,6 +66,17 @@ class DefaultMerger(
         return Pass(words, TurnIndex(turns, audioDurationMs), chunkEnds(asr, words)).run()
     }
 
+    /**
+     * Слова по порядку с номерами говорящих из [turns], ещё не разбитые на реплики. Основа для
+     * уточнения говорящих: решение о слове то же, что и в [merge].
+     */
+    fun assignWords(asr: List<AsrSegment>, turns: List<SpeakerTurn>): List<Word> {
+        if (audioDurationMs <= 0) return emptyList()
+        val words = chronologicalWords(asr)
+        if (words.isEmpty()) return emptyList()
+        return Pass(words, TurnIndex(turns, audioDurationMs), chunkEnds(asr, words)).assigned()
+    }
+
     private fun chronologicalWords(asr: List<AsrSegment>): List<Word> =
         attachPunctuation(stitchChunks(asr))
             .sortedBy { it.startMs }
@@ -100,13 +111,24 @@ class DefaultMerger(
         private val overlap = BooleanArray(count)
 
         fun run(): List<Utterance> {
+            decide()
+            return buildUtterances()
+        }
+
+        fun assigned(): List<Word> {
+            decide()
+            return words.indices.map { i ->
+                words[i].copy(endMs = wordEnd[i], speaker = index.sourceSpeaker(speaker[i]))
+            }
+        }
+
+        private fun decide() {
             computeVoteIntervals()
             vote()
             fillUnassigned()
             absorbIslands()
             snapBoundaries()
             absorbSmallSpeakers()
-            return buildUtterances()
         }
 
         private fun computeVoteIntervals() {

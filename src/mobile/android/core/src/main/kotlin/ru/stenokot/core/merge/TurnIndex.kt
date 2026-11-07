@@ -11,6 +11,7 @@ internal class TurnIndex(turns: List<SpeakerTurn>, durationMs: Long) {
     private val maxEnd = LongArray(this.turns.size)
     private val maxEndTurn = IntArray(this.turns.size)
     private val bySpeaker: Map<Int, List<SpeakerTurn>> = this.turns.groupBy { it.speaker }
+    private val sourceNumbers: List<Int> = turns.filter { it.speaker >= 0 }.map { it.speaker }.distinct().sorted()
 
     /** Верхняя граница номера говорящего. */
     val speakerCount: Int = (this.turns.maxOfOrNull { it.speaker } ?: -1) + 1
@@ -27,6 +28,9 @@ internal class TurnIndex(turns: List<SpeakerTurn>, durationMs: Long) {
             maxEndTurn[index] = best
         }
     }
+
+    /** Номер говорящего во входных интервалах. */
+    fun sourceSpeaker(number: Int): Int = sourceNumbers.getOrElse(number) { number }
 
     /** Вызывает [visit] для интервалов, пересекающих полуоткрытый отрезок. */
     inline fun forEachOverlapping(fromMs: Long, toMs: Long, visit: (SpeakerTurn) -> Unit) {

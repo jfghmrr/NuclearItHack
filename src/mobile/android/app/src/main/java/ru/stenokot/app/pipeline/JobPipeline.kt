@@ -105,7 +105,7 @@ class JobPipeline(
             val files = store.files(id)
             AsrJournal(files.asr).clear()
             DiarJournal(files.diar).clear()
-            listOf(files.vad, files.lang, files.turns, files.merged, files.asrAttempt, files.diarAttempt)
+            listOf(files.vad, files.lang, files.turns, files.merged, files.asrAttempt, files.diarAttempt, files.refineAttempt)
                 .forEach(File::delete)
             val kept = job.completedStages.filter { it <= Stage.DECODE }.toSet()
             book.mutate(id) { it.copy(completedStages = kept, noSpeech = false) }
@@ -310,9 +310,33 @@ class JobPipeline(
             run.boundary(Stage.DIARIZE)
             turns = diarizeFrom(run, journal, done)
         }
-        val finished = turns.ifEmpty { wholeRecordingTurn(run) }
+        val finished = refined(run, turns.ifEmpty { wholeRecordingTurn(run) }, done)
         val document = TurnsDocument(finished.map { it.toLine() })
         AtomicFiles.replaceText(run.files.turns, ServiceJson.encodeToString(TurnsDocument.serializer(), document))
+    }
+
+    /**
+     * Уточнение только улучшает готовый результат, поэтому его сбой задачу не останавливает. После
+     * смерти процесса второй попытки нет: отметка попытки говорит, что прошлая кончилась падением.
+     */
+    private fun refined(run: Run, turns: List<SpeakerTurn>, lines: List<DiarJournalLine>): List<SpeakerTurn> {
+        if (run.files.refineAttempt.exists()) return turns
+        val refiner = engines.refiner(book.require(run.id).durationMs ?: 0, run.control::isStopRequested) ?: return turns
+        run.files.refineAttempt.writeText("1")
+        return try {
+            val asr = AsrJournal(run.files.asr).restore()
+                .filterNot { it.skipped }
+                .sortedBy { it.index }
+                .map { it.toSegment() }
+            refiner.use { it.refine(run.pcm, asr, turns, lines, stageProgress(DIARIZE_SHARE, 1f)) }
+        } catch (cancelled: CancellationException) {
+            run.files.refineAttempt.delete()
+            throw cancelled
+        } catch (failure: Exception) {
+            if (run.control.isStopRequested()) run.files.refineAttempt.delete()
+            run.control.check()
+            turns
+        }
     }
 
     /** Один проход диаризатора. Возвращает null, если проход оборвался и окно надо повторить. */
@@ -327,7 +351,7 @@ class JobPipeline(
         )
         val diarizer = loading { engines.diarizer(request) }
         return try {
-            diarizer.use { it.diarize(run.pcm, stageProgress()) }
+            diarizer.use { it.diarize(run.pcm, stageProgress(0f, DIARIZE_SHARE)) }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
@@ -420,6 +444,9 @@ class JobPipeline(
 
     private fun stageProgress() = Progress { value, note -> board.report(value, note) }
 
+    private fun stageProgress(from: Float, to: Float) =
+        Progress { value, note -> board.report(from + (to - from) * value, note) }
+
     private fun readSegments(files: JobFiles): List<SpeechSegment> =
         ServiceJson.decodeFromString(VadDocument.serializer(), files.vad.readText()).segments.map { it.toSegment() }
 
@@ -498,6 +525,7 @@ class JobPipeline(
         const val THERMAL_SEVERE = 3
         const val THERMAL_CRITICAL = 4
         const val BYTES_IN_MB = 1024L * 1024
+        const val DIARIZE_SHARE = 0.9f
     }
 }
 

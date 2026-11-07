@@ -26,6 +26,7 @@ import ru.stenokot.core.model.Language
 import ru.stenokot.core.model.LlmResult
 import ru.stenokot.core.model.LlmStatus
 import ru.stenokot.core.model.META_PUBLISH_FAILED
+import ru.stenokot.core.model.SpeakerTurn
 import ru.stenokot.core.model.Stage
 
 /** Поведение очереди, стадий, чекпойнтов и языковой модели на виртуальном времени. */
@@ -173,6 +174,38 @@ class PipelineRunnerTest {
         assertTrue(reopened.engines.transcribed.isEmpty())
         assertEquals(listOf(0, 1, 2), DiarJournal(reopened.store.files(id).diar).restore().map { it.index })
         assertTrue(reopened.store.files(id).turns.exists())
+    }
+
+    @Test
+    fun refinedTurnsReachMerge() = runTest {
+        val h = harness()
+        h.engines.refineBehavior = { turns -> turns + SpeakerTurn(0, 500, 1) }
+        val id = h.import("refine")
+        h.await(done(id))
+        assertEquals(1, h.engines.refineRuns)
+        assertTrue(h.engines.events.any { it.endsWith(":2") && it.startsWith("merge:") })
+    }
+
+    @Test
+    fun refinerFailureKeepsDiarizationResult() = runTest {
+        val h = harness()
+        h.engines.refineBehavior = { error("сбой уточнения") }
+        val id = h.import("refine-broken")
+        h.await(done(id))
+        assertEquals(1, h.engines.refineRuns)
+        assertTrue(h.store.files(id).transcript.exists())
+        assertTrue(h.engines.events.any { it.endsWith(":1") && it.startsWith("merge:") })
+    }
+
+    @Test
+    fun refinerDoesNotRepeatAfterCrash() = runTest {
+        val h = harness()
+        h.engines.refineBehavior = { turns -> turns }
+        val id = h.import("refine-once")
+        h.store.files(id).dir.mkdirs()
+        h.store.files(id).refineAttempt.writeText("1")
+        h.await(done(id))
+        assertEquals(0, h.engines.refineRuns)
     }
 
     @Test

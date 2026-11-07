@@ -23,6 +23,7 @@ import ru.stenokot.core.engine.LlmRunner
 import ru.stenokot.core.engine.Merger
 import ru.stenokot.core.engine.PcmReader
 import ru.stenokot.core.engine.Progress
+import ru.stenokot.core.engine.TurnRefiner
 import ru.stenokot.core.engine.Vad
 import ru.stenokot.core.model.AsrSegment
 import ru.stenokot.core.model.AsrToken
@@ -67,6 +68,8 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
     var language: Language = Language.RU
     var noSpeech = false
     var windows = 3
+    var refineBehavior: ((List<SpeakerTurn>) -> List<SpeakerTurn>)? = null
+    var refineRuns = 0
     var probeFailure: Exception? = null
     var decodeBehavior: (suspend () -> Unit)? = null
     val restoredPerPass = ArrayList<Int>()
@@ -181,6 +184,24 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
         }
 
         override fun close() = closed("diar")
+    }
+
+    override fun refiner(audioDurationMs: Long, isCancelled: () -> Boolean): TurnRefiner? {
+        val behavior = refineBehavior ?: return null
+        return object : TurnRefiner {
+            override fun refine(
+                pcm: PcmReader,
+                asr: List<AsrSegment>,
+                turns: List<SpeakerTurn>,
+                lines: List<DiarJournalLine>,
+                progress: Progress,
+            ): List<SpeakerTurn> {
+                refineRuns += 1
+                return behavior(turns)
+            }
+
+            override fun close() = Unit
+        }
     }
 
     override fun merger(audioDurationMs: Long): Merger = Merger { asr, turns ->
