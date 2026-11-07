@@ -41,13 +41,18 @@ fun Mascot(kind: MascotKind, modifier: Modifier = Modifier, size: Dp = StenoSize
     Image(painterResource(kind.art), contentDescription = null, modifier.size(size))
 }
 
-private const val PLATE_ART = 1.7f
+private const val FIGURE_SHARE = 0.85f
 private const val PLATE_WIDTH = 1.48f
 private const val PLATE_HEIGHT = 1.24f
 
+/** Во сколько раз картинка больше круга, чтобы фигура любой позы была одной ширины, как на макете. */
+private val MascotKind.plateArt: Float
+    get() = FIGURE_SHARE / (1f - 2f * sideInset)
+
 /**
- * Маскот на круглой подложке, как на макете. Картинка больше круга: вокруг фигуры прозрачное поле.
- * Движение либо однократное [motion], либо [breathing] на время ожидания.
+ * Маскот на круглой подложке, как на макете. Спящий кот целиком лежит внутри круга, сидящий выступает
+ * за него сверху и снизу, и область под него выше. Прозрачное поле картинки может выходить за область,
+ * сама фигура нет. Движение либо однократное [motion], либо [breathing] на время ожидания.
  */
 @Composable
 fun MascotPlate(
@@ -57,8 +62,9 @@ fun MascotPlate(
     motion: EnterMotion? = null,
     breathing: Boolean = false,
 ) {
-    val art = Modifier.requiredSize(plate * PLATE_ART)
-    Box(modifier.size(plate * PLATE_WIDTH, plate * PLATE_HEIGHT), contentAlignment = Alignment.Center) {
+    val art = Modifier.requiredSize(plate * kind.plateArt)
+    val height = if (kind == MascotKind.WAITING) plate else plate * PLATE_HEIGHT
+    Box(modifier.size(plate * PLATE_WIDTH, height), contentAlignment = Alignment.Center) {
         Box(Modifier.size(plate).background(StenoTheme.colors.primaryContainer, CircleShape))
         when {
             breathing -> Image(painterResource(kind.art), null, art.breathing())
