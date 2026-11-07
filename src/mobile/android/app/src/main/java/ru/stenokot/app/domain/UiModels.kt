@@ -34,6 +34,18 @@ data class ModelsUi(
     val items: List<ModelItemUi>,
 )
 
+/**
+ * Сверка файлов моделей с хэшами сборки. В [verdicts] по имени модели лежит true, если все её файлы
+ * совпали. Пустой словарь значит, что в этом запуске сверки ещё не было.
+ */
+@Immutable
+data class ModelCheckUi(
+    val running: Boolean = false,
+    val checkedBytes: Long = 0,
+    val totalBytes: Long = 0,
+    val verdicts: Map<String, Boolean> = emptyMap(),
+)
+
 /** Найденный на устройстве аудиофайл. */
 @Immutable
 data class AudioFileUi(

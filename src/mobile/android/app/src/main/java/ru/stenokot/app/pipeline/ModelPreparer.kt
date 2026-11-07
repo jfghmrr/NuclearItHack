@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.stenokot.app.BuildConfig
 import ru.stenokot.app.data.AtomicFiles
+import ru.stenokot.app.domain.ModelCheckUi
 import ru.stenokot.app.domain.ModelItemUi
 import ru.stenokot.app.domain.ModelReadiness
 import ru.stenokot.app.domain.ModelsUi
@@ -39,13 +40,38 @@ class ModelPreparer(
         ModelsUi(ModelReadiness.COPYING, 0, 0, 0, emptyList()),
     )
     private val gate = ProgressGate(clock = clock)
+    private val checkGate = ProgressGate(clock = clock)
+    private val checkState = MutableStateFlow(ModelCheckUi())
 
     /** Готовность моделей для интерфейса. Обновляется не чаще раза в секунду. */
     val models: StateFlow<ModelsUi> = ui
 
+    /** Ход и итог сверки файлов моделей. */
+    val check: StateFlow<ModelCheckUi> = checkState
+
     /** Запускает проверку и копию в фоне. */
     fun start() {
         scope.launch(io) { prepare() }
+    }
+
+    /**
+     * Сверяет файлы моделей с хэшами сборки. Работает только по просьбе пользователя и уступает
+     * тяжёлой стадии, как и копия. Повторный вызов во время сверки ничего не меняет.
+     */
+    fun startCheck() {
+        val idle = checkState.value
+        if (idle.running || !checkState.compareAndSet(idle, idle.copy(running = true))) return
+        scope.launch(io) {
+            val total = ledger.paths.sumOf { sizeOf(it) ?: 0L }
+            checkState.value = ModelCheckUi(running = true, totalBytes = total)
+            var done = 0L
+            val check = ModelCheck(ledger, ::openModel, beforeBlock = { busy.first { !it } })
+            val verdicts = check.run { read ->
+                done += read
+                if (checkGate.allow(force = false)) checkState.update { it.copy(checkedBytes = done) }
+            }
+            checkState.value = ModelCheckUi(checkedBytes = done, totalBytes = total, verdicts = verdicts)
+        }
     }
 
     override fun state(): LlmModelState = llm.value
@@ -144,6 +170,16 @@ class ModelPreparer(
     private fun reportCopy(copied: Long, total: Long) {
         if (gate.allow(force = copied >= total)) {
             ui.update { it.copy(copiedBytes = copied, totalBytes = total, freeBytes = app.noBackupFilesDir.usableSpace) }
+        }
+    }
+
+    /** Тот файл, которым пользуется приложение: языковая модель работает из своей копии. */
+    private fun openModel(path: String): InputStream {
+        val llmCopy = File(File(File(app.noBackupFilesDir, MODELS_DIR), ledger.version), ModelLedger.LLM_PATH)
+        return when {
+            !modelsInAssets -> devFile(path).inputStream()
+            path == ModelLedger.LLM_PATH && llmCopy.isFile -> llmCopy.inputStream()
+            else -> app.assets.openFd("$ASSET_ROOT/$path").createInputStream()
         }
     }
 

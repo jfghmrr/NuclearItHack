@@ -8,16 +8,24 @@ import java.io.InputStream
 import java.security.MessageDigest
 
 /** Считает SHA-256 файла. Перед каждым блоком вызывается пауза, как при копировании. */
-suspend fun sha256Of(file: File, beforeBlock: suspend () -> Unit, bufferBytes: Int = 1 shl 20): String {
+suspend fun sha256Of(file: File, beforeBlock: suspend () -> Unit, bufferBytes: Int = 1 shl 20): String =
+    FileInputStream(file).use { sha256Of(it, beforeBlock, bufferBytes) }
+
+/** То же для потока. [onRead] получает размер каждого прочитанного блока. */
+suspend fun sha256Of(
+    input: InputStream,
+    beforeBlock: suspend () -> Unit,
+    bufferBytes: Int = 1 shl 20,
+    onRead: (Int) -> Unit = {},
+): String {
     val digest = MessageDigest.getInstance("SHA-256")
     val buffer = ByteArray(bufferBytes)
-    FileInputStream(file).use { input ->
-        while (true) {
-            beforeBlock()
-            val read = input.read(buffer)
-            if (read < 0) break
-            digest.update(buffer, 0, read)
-        }
+    while (true) {
+        beforeBlock()
+        val read = input.read(buffer)
+        if (read < 0) break
+        digest.update(buffer, 0, read)
+        onRead(read)
     }
     return digest.digest().joinToString("") { "%02x".format(it) }
 }
