@@ -1,6 +1,9 @@
 package ru.stenokot.app.debug
 
+import android.content.ContentValues
+import android.content.Context
 import android.net.Uri
+import android.provider.MediaStore
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +34,7 @@ import ru.stenokot.core.model.Stage
 private const val TICK_MS = 1_000L
 private const val CANCEL_MS = 1_500L
 private const val QUEUE_MS = 1_200L
+private const val DEMO_JSON = "{\"transcript\":[]}"
 
 /** Шаг имитации: стадия конвейера, её счётчик и этап пользователя. */
 private data class LiveStep(val stage: Stage, val user: UserStage, val total: Int?)
@@ -50,7 +54,7 @@ private val LiveSteps = listOf(
  * Контроллер отладочной сборки. Показывает любое состояние брифа через [show] и умеет проиграть
  * обработку на демо-данных, чтобы проверить переходы между экранами.
  */
-internal class FakeController : StenoController {
+internal class FakeController(private val context: Context? = null) : StenoController {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val homeState = MutableStateFlow(demoScene("S01-D")!!.home)
     private val verificationState = MutableStateFlow(DemoData.verificationEmpty)
@@ -185,7 +189,35 @@ internal class FakeController : StenoController {
         homeState.update { state -> state.copy(jobs = state.jobs.filter { it.id != id }) }
     }
 
-    override fun export(id: String, kind: ExportKind, target: Uri) = Unit
+    /**
+     * Создаёт настоящую запись файла в Download. Нужна для проверки «Поделиться»: файл принадлежит
+     * приложению, как и опубликованный конвейером результат.
+     */
+    fun publishDemoFile(name: String) {
+        val resolver = context?.contentResolver ?: return
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/Stenokot/")
+        }
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return
+        resolver.openOutputStream(uri, "wt")?.use { it.write(DEMO_JSON.toByteArray()) }
+    }
+
+    override fun export(id: String, kind: ExportKind, target: Uri) {
+        val resolver = context?.contentResolver ?: return
+        scope.launch(Dispatchers.IO) {
+            val failed = runCatching {
+                resolver.openOutputStream(target, "wt")?.use { it.write(DEMO_JSON.toByteArray()) }
+                    ?: error("нет потока")
+            }.isFailure
+            jobs.update { map ->
+                val detail = map[id] ?: return@update map
+                val result = detail.result?.let { it.copy(output = it.output.copy(exportFailed = failed)) }
+                map + (id to detail.copy(result = result))
+            }
+        }
+    }
 
     override fun refreshAudio() {
         homeState.update { it.copy(audioPermissionGranted = true) }

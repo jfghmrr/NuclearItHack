@@ -107,4 +107,18 @@ class FormattersTest {
         assertNull(formatRemaining(null, 60_000))
         assertEquals("Осталось примерно 3–5 минут", formatRemaining(180_000, 300_000)?.replace(NBSP, ' '))
     }
+
+    @Test
+    fun `таймкод для озвучивания склоняется после предлога`() {
+        assertEquals("0 минут 4 секунд", spokenTimecode(4_000))
+        assertEquals("1 минуты 21 секунды", spokenTimecode(81_000))
+        assertEquals("1 часа 24 минут 7 секунд", spokenTimecode(5_047_000))
+    }
+
+    @Test
+    fun `маленький файл показывается в кибибайтах и не бывает нулевым`() {
+        assertEquals("51\u00A0КиБ", formatFileSize(52_429))
+        assertEquals("1\u00A0КиБ", formatFileSize(10))
+        assertEquals("11,7\u00A0МиБ", formatFileSize(12_268_339))
+    }
 }

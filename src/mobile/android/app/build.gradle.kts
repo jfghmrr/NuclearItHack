@@ -89,6 +89,19 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("team") ?: signingConfigs.getByName("debug")
         }
+        /** Как релиз, но с демо-состояниями: на ней замеряется скорость прокрутки. */
+        create("perf") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+        }
+    }
+
+    sourceSets {
+        getByName("perf") {
+            kotlin.srcDir("src/debug/java")
+            manifest.srcFile("src/debug/AndroidManifest.xml")
+        }
     }
 
     buildFeatures {
