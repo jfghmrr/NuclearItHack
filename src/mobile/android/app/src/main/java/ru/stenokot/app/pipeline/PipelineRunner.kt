@@ -26,6 +26,7 @@ import ru.stenokot.app.data.JobReconciler
 import ru.stenokot.app.data.JobStore
 import ru.stenokot.app.data.LlmRecord
 import ru.stenokot.app.data.SpeedBook
+import ru.stenokot.core.audio.FileAudioInput
 import ru.stenokot.core.engine.Progress
 import ru.stenokot.core.llm.LlmBudgetPolicy
 import ru.stenokot.core.model.ErrorCode
@@ -44,8 +45,9 @@ private enum class LlmStop { NEW_JOB, USER }
  *
  * Один рабочий поток берёт задачи по порядку поступления, поэтому две тяжёлые модели не встретятся
  * никогда. Копия импортированного файла делается отдельно и сразу: права на чужой адрес живут
- * недолго, а задача может ждать своей очереди часами. Языковая модель идёт после контрактного файла
- * и всегда уступает новому импорту.
+ * недолго, а задача может ждать своей очереди часами. Большой файл с постоянным доступом не
+ * копируется вовсе и читается на месте. Языковая модель идёт после контрактного файла и всегда
+ * уступает новому импорту.
  */
 class PipelineRunner(
     private val store: JobStore,
@@ -65,7 +67,7 @@ class PipelineRunner(
 ) {
     private val book = JobBook(store, onStatus)
     private val board = LiveBoard(clock)
-    private val pipeline = JobPipeline(book, store, engines, device, outputs, metrics, board, clock, config)
+    private val pipeline = JobPipeline(book, store, engines, device, sources, outputs, metrics, board, clock, config)
     private val controls = ConcurrentHashMap<String, JobControl>()
     private val intake = Channel<String>(Channel.UNLIMITED)
     private val intakePending: MutableSet<String> = Collections.newSetFromMap(ConcurrentHashMap())
@@ -186,17 +188,21 @@ class PipelineRunner(
      * Приложение вышло на передний план. Только здесь можно запускать службу после смерти процесса,
      * поэтому очередь отпускается и прерванные задачи продолжаются сами, не больше
      * [RunnerConfig.autoResumeLimit] раз. Дальше решает пользователь кнопкой «Продолжить»: иначе
-     * файл, убивающий процесс, повторялся бы без конца.
+     * файл, убивающий процесс, повторялся бы без конца. Лимит службы процесс не убивает и попыткой
+     * не считается: возвращение на экран как раз обнуляет его счётчик в системе.
      */
     fun onForeground() {
         scope.launch(io) {
             ready.await()
             held.value = false
             book.snapshot()
-                .filter { it.phase == JobPhase.INTERRUPTED && it.autoResumes < config.autoResumeLimit }
+                .filter { it.phase == JobPhase.INTERRUPTED }
+                .filter { it.errorCode == ErrorCode.FGS_TIMEOUT || it.autoResumes < config.autoResumeLimit }
                 .sortedBy { it.seq }
                 .forEach { job ->
-                    book.mutate(job.id) { it.copy(autoResumes = it.autoResumes + 1) }
+                    if (job.errorCode != ErrorCode.FGS_TIMEOUT) {
+                        book.mutate(job.id) { it.copy(autoResumes = it.autoResumes + 1) }
+                    }
                     requeue(job.id)
                 }
             book.snapshot()
@@ -220,6 +226,10 @@ class PipelineRunner(
             control(active.id).request(StopRequest.Interrupt(ErrorCode.FGS_TIMEOUT))
         }
     }
+
+    /** Файл, читаемый на месте, всё ещё открывается. Для задачи с копией ответ всегда отрицательный. */
+    fun sourceReachable(job: JobRecord): Boolean =
+        job.sourceInPlace && runCatching { sources.inPlace(job)?.input?.open()?.use { true } ?: false }.getOrDefault(false)
 
     /** Обновляет запись задачи после экспорта. */
     suspend fun updateJob(id: String, change: (JobRecord) -> JobRecord) {
@@ -278,9 +288,9 @@ class PipelineRunner(
     }
 
     /**
-     * Предварительная проверка. Сначала имя и размер, затем копия, затем пробное чтение копии: всё
-     * это до загрузки моделей, поэтому плохой файл отсеивается здесь. Копия нужна раньше пробы ещё и
-     * потому, что права на чужой адрес живут недолго.
+     * Предварительная проверка. Сначала имя и размер, затем копия, затем пробное чтение: всё это до
+     * загрузки моделей, поэтому плохой файл отсеивается здесь. Копия нужна раньше пробы ещё и потому,
+     * что права на чужой адрес живут недолго. После копии её байты уже заняты и нового места не просят.
      */
     private suspend fun importOne(id: String) {
         val control = control(id)
@@ -302,26 +312,32 @@ class PipelineRunner(
                     preflight = preflightRecord(info, info.sizeBytes, null),
                 )
             } ?: return
-            requireSpace(named)
-            val source = copySource(id, named, control, visible)
+            val inPlace = sources.inPlace(named)?.takeIf {
+                PreflightRules.readsInPlace(info.sizeBytes, it.lasting, sources.freeBytes())
+            }
+            if (inPlace == null) requireSpace(named)
+            val copy = if (inPlace == null) copySource(id, named, control, visible) else null
+            val input = inPlace?.input ?: FileAudioInput(checkNotNull(copy))
             control.check()
-            val probe = control.stoppable { engines.probe(source) }
+            val probe = control.stoppable { engines.probe(input) }
             val checked = book.mutate(id) { current ->
-                val record = preflightRecord(info, source.length(), probe)
+                val record = preflightRecord(info, copy?.length() ?: info.sizeBytes, probe, copyBytes = 0)
                 val lowMemory = device.availableMemoryBytes() < StageBudgets.memoryBytes(Stage.ASR)
                 current.copy(preflight = record).let { if (lowMemory) it.warned(ErrorCode.LOW_MEMORY.name) else it }
             } ?: return
             requireSpace(checked)
             book.mutate(id) { current ->
                 current.copy(
-                    sourceFile = source.name,
+                    sourceFile = copy?.name,
+                    sourceInPlace = inPlace != null,
                     completedStages = current.completedStages + Stage.IMPORT,
                     stageMs = current.stageMs + (Stage.IMPORT to clock() - startedAt),
                 )
             }
-            sources.release(checked)
+            if (copy != null) sources.release(checked)
         } catch (stop: JobStopped) {
-            markCancelled(id)
+            stopped(id, stop.request)
+            board.clear(id)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
@@ -331,13 +347,19 @@ class PipelineRunner(
         }
     }
 
-    private fun preflightRecord(info: SourceInfo, sizeBytes: Long, probe: SourceProbe?) = PreflightRules.record(
+    private fun preflightRecord(
+        info: SourceInfo,
+        sizeBytes: Long,
+        probe: SourceProbe?,
+        copyBytes: Long = sizeBytes,
+    ) = PreflightRules.record(
         fileName = info.name,
         sizeBytes = sizeBytes,
         durationMs = probe?.durationMs,
         mime = probe?.mime ?: info.mime,
         freeBytes = sources.freeBytes(),
         speed = speed.current(),
+        copyBytes = copyBytes,
     )
 
     private fun requireSpace(job: JobRecord) {

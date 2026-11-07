@@ -2,11 +2,10 @@ package ru.stenokot.app.audio
 
 import android.media.MediaCodec
 import android.media.MediaExtractor
-import android.os.StatFs
-import java.io.File
+import java.io.IOException
 import java.nio.ByteBuffer
+import ru.stenokot.core.audio.AudioInput
 import ru.stenokot.core.model.ErrorCode
-import ru.stenokot.core.model.PreflightInfo
 
 /** Что известно о файле до загрузки моделей. */
 data class AudioProbe(
@@ -38,29 +37,27 @@ object Preflight {
     private const val DEQUEUE_US = 5_000L
     private const val TAIL_POSITION = 0.9
     private const val PROBE_BUFFER = 1 shl 18
-    private const val WAV_BYTES_PER_SECOND = 32_000L
-    private const val JOURNAL_RESERVE = 16L * 1024 * 1024
+    private const val LARGE_WAV_MIME = "audio/wav"
+    private const val LARGE_WAV_CODEC = "pcm"
 
-    /** Проверяет [file]. При отказе бросает [EngineException] с кодом ошибки декодирования. */
-    fun probe(file: File): AudioProbe {
-        if (!file.isFile || !file.canRead()) {
-            throw EngineException(ErrorCode.IMPORT_READ_FAILED, "Файл недоступен: ${file.name}")
-        }
-        val size = file.length()
-        if (size == 0L) throw EngineException(ErrorCode.DECODE_CORRUPT, "Пустой файл: ${file.name}")
-        AudioTrackSource.open(file, headOnly = true).use { track ->
+    /** Проверяет [source]. При отказе бросает [EngineException] с кодом ошибки декодирования. */
+    fun probe(source: AudioInput): AudioProbe {
+        val size = fileSize(source)
+        if (size == 0L) throw EngineException(ErrorCode.DECODE_CORRUPT, "Пустой файл: ${source.name}")
+        source.open().use(LargeWav::detect)?.let { return probeLargeWav(it, size) }
+        AudioTrackSource.open(source, headOnly = true).use { track ->
             if (track.sampleRate <= 0 || track.channels <= 0) {
                 throw EngineException(ErrorCode.DECODE_CORRUPT, "Дорожка без параметров звука: ${track.mime}")
             }
             val isMp3 = track.mime == "audio/mpeg"
-            val tag = if (isMp3) Mp3Tag.read(file) else null
+            val tag = if (isMp3) source.open().use(Mp3Tag::read) else null
             if (tag != null && tag.isTruncated(size)) {
                 throw EngineException(ErrorCode.DECODE_CORRUPT, "Файл обрезан: заявлено ${tag.bytes} байт, есть $size")
             }
             val codecName = trialDecode(track)
             val reliable = !track.isUnwrapped && (!isMp3 || tag?.frames != null)
             val headerUs = when {
-                track.isUnwrapped -> OggFlac.durationUs(file)
+                track.isUnwrapped -> source.open().use(OggFlac::durationUs)
                 else -> tag?.durationMs?.times(1000) ?: track.headerDurationUs
             }
             if (reliable && headerUs != null) requireTail(track, headerUs)
@@ -77,28 +74,21 @@ object Preflight {
         }
     }
 
-    /**
-     * Собирает данные для экрана проверки. Свободное место считается по каталогу [workDir], оценка времени
-     * остаётся пустой: её заполняет конвейер, когда есть замер скорости устройства.
-     */
-    fun inspect(file: File, displayName: String, workDir: File): PreflightInfo {
-        val probe = probe(file)
-        return PreflightInfo(
-            fileName = displayName,
-            sizeBytes = probe.sizeBytes,
-            durationMs = probe.headerDurationMs,
-            mime = probe.mime,
-            freeBytes = StatFs(workDir.path).availableBytes,
-            requiredBytes = requiredBytes(probe),
-            estimateMinMs = null,
-            estimateMaxMs = null,
-        )
-    }
+    private fun probeLargeWav(wav: LargeWav, size: Long) = AudioProbe(
+        mime = LARGE_WAV_MIME,
+        codecName = LARGE_WAV_CODEC,
+        container = null,
+        sampleRate = wav.sampleRate,
+        channels = wav.channels,
+        headerDurationMs = wav.durationMs,
+        headerReliable = true,
+        sizeBytes = size,
+    )
 
-    /** Место под копию файла, pcm16k.wav и журналы стадий. */
-    private fun requiredBytes(probe: AudioProbe): Long {
-        val seconds = (probe.headerDurationMs ?: 0L) / 1000
-        return probe.sizeBytes + seconds * WAV_BYTES_PER_SECOND + JOURNAL_RESERVE
+    private fun fileSize(source: AudioInput): Long = try {
+        source.open().use { it.length() }
+    } catch (error: IOException) {
+        throw EngineException(ErrorCode.IMPORT_READ_FAILED, "Файл недоступен: ${source.name}", error)
     }
 
     /** Декодирует начало дорожки: контейнер мог открыться, а данные оказаться мусором. */

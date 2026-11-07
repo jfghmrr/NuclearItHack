@@ -1,8 +1,10 @@
 package ru.stenokot.app.audio
 
 import java.io.File
+import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import ru.stenokot.core.audio.FileAudioInput
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -32,7 +34,7 @@ class WavHeaderPatchTest {
 
     private fun patched(file: File): ByteBuffer {
         val bytes = file.readBytes().copyOf(44)
-        WavHeaderPatch.detect(file)!!.applyTo(0, bytes, 0, bytes.size)
+        detect(file)!!.applyTo(0, bytes, 0, bytes.size)
         return ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
     }
 
@@ -50,18 +52,18 @@ class WavHeaderPatchTest {
 
     @Test
     fun `честный размер не трогается`() {
-        assertNull(WavHeaderPatch.detect(wav(1000, 1000)))
+        assertNull(detect(wav(1000, 1000)))
     }
 
     @Test
     fun `обрезанный файл остаётся обрезанным`() {
-        assertNull(WavHeaderPatch.detect(wav(5000, 1000)))
+        assertNull(detect(wav(5000, 1000)))
     }
 
     @Test
     fun `поправка попадает в нужное место при чтении с середины`() {
         val file = wav(0, 1000)
-        val patch = WavHeaderPatch.detect(file)
+        val patch = detect(file)
         assertNotNull(patch)
         val part = file.readBytes().copyOfRange(40, 44)
         patch!!.applyTo(40, part, 0, part.size)
@@ -73,6 +75,19 @@ class WavHeaderPatchTest {
         val file = File.createTempFile("patch", ".bin")
         file.deleteOnExit()
         file.writeBytes(ByteArray(100))
-        assertNull(WavHeaderPatch.detect(file))
+        assertNull(detect(file))
     }
+
+    @Test
+    fun sizeAboveFourGigabytesStopsAtTheFieldLimitInsteadOfWrapping() {
+        val file = wav(0xFFFFFFFFL, 16)
+        RandomAccessFile(file, "rw").use { it.setLength(5_000_000_000L) }
+        val bytes = ByteArray(44)
+        detect(file)!!.applyTo(0, bytes, 0, bytes.size)
+        val head = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+        assertEquals(0xFFFFFFFFL, head.getInt(4).toLong() and 0xFFFFFFFFL)
+        assertEquals(0xFFFFFFFFL, head.getInt(40).toLong() and 0xFFFFFFFFL)
+    }
+
+    private fun detect(file: File): WavHeaderPatch? = FileAudioInput(file).open().use(WavHeaderPatch::detect)
 }

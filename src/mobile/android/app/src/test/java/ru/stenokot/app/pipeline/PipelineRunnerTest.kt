@@ -683,7 +683,155 @@ class PipelineRunnerTest {
 
         h.runner.onForeground()
         h.await(done(id))
-        assertEquals(1, h.runner.jobs.value.getValue(id).autoResumes)
+        assertEquals(0, h.runner.jobs.value.getValue(id).autoResumes)
+        assertEquals(1, h.engines.events.count { it.startsWith("decode:") })
+    }
+
+    @Test
+    fun everyServiceTimeoutResumesByItselfWithoutSpendingTheCrashLimit() = runTest {
+        val h = harness()
+        var left = 3
+        h.engines.onTranscribe = { if (left > 0) h.runner.interruptForTimeout() }
+        val id = h.import("timeouts")
+        while (left > 0) {
+            h.await { it[id]?.phase == JobPhase.INTERRUPTED }
+            left -= 1
+            h.runner.onForeground()
+            h.await { it[id]?.phase != JobPhase.INTERRUPTED }
+        }
+        h.await(done(id))
+        assertEquals(0, h.runner.jobs.value.getValue(id).autoResumes)
+    }
+
+    @Test
+    fun serviceTimeoutDuringImportIsAnInterruptionNotACancel() = runTest {
+        val h = harness()
+        h.sources.onCopy = { h.runner.interruptForTimeout() }
+        val id = h.import("import")
+        h.await { it[id]?.phase == JobPhase.INTERRUPTED || it[id]?.phase == JobPhase.CANCELLED }
+        assertEquals(ErrorCode.FGS_TIMEOUT, h.runner.jobs.value.getValue(id).errorCode)
+        h.sources.onCopy = {}
+
+        h.runner.onForeground()
+        h.await(done(id))
+    }
+
+    @Test
+    fun largeFileIsReadInPlaceWithoutCopyAndWithoutSpaceForIt() = runTest {
+        val size = 5_000_000_000
+        val free = 2_000_000_000L
+        val h = harness {
+            sources.size = size
+            sources.free = free
+            sources.inPlace = InPlaceSource(TextInput("оригинал"), lasting = true)
+        }
+        val id = h.import("big")
+        h.await(done(id))
+        val job = h.runner.jobs.value.getValue(id)
+        assertTrue(job.sourceInPlace)
+        assertNull(job.sourceFile)
+        assertTrue(h.sources.copied.isEmpty())
+        assertEquals(size, job.preflight?.sizeBytes)
+        assertTrue(checkNotNull(job.preflight).requiredBytes < free)
+        assertTrue("decode:оригинал" in h.engines.events)
+        assertTrue(h.store.files(id).dir.listFiles().orEmpty().none { it.name.startsWith("source") })
+    }
+
+    @Test
+    fun smallFileIsCopiedEvenWhenItCouldBeReadInPlace() = runTest {
+        val h = harness { sources.inPlace = InPlaceSource(TextInput("оригинал"), lasting = true) }
+        val id = h.import("small")
+        h.await(done(id))
+        assertEquals("source.mp3", h.runner.jobs.value.getValue(id).sourceFile)
+        assertEquals(listOf(id), h.sources.copied)
+    }
+
+    @Test
+    fun largeFileWithTemporaryAccessIsCopiedWhenTheCopyFits() = runTest {
+        val h = harness {
+            sources.size = 1_000_000_000
+            sources.inPlace = InPlaceSource(TextInput("оригинал"), lasting = false)
+        }
+        val id = h.import("temporary")
+        h.await(done(id))
+        assertEquals(listOf(id), h.sources.copied)
+        assertFalse(h.runner.jobs.value.getValue(id).sourceInPlace)
+    }
+
+    @Test
+    fun largeFileWithTemporaryAccessIsReadInPlaceWhenTheCopyDoesNotFit() = runTest {
+        val h = harness {
+            sources.size = 3_000_000_000
+            sources.free = 2_000_000_000
+            sources.inPlace = InPlaceSource(TextInput("оригинал"), lasting = false)
+        }
+        val id = h.import("tight")
+        h.await(done(id))
+        assertTrue(h.sources.copied.isEmpty())
+        assertTrue(h.runner.jobs.value.getValue(id).sourceInPlace)
+    }
+
+    @Test
+    fun largeFileThatCanNeitherFitNorBeSoughtReportsLowStorage() = runTest {
+        val h = harness {
+            sources.size = 3_000_000_000
+            sources.free = 2_000_000_000
+        }
+        val id = h.import("pipe")
+        h.await { it[id]?.phase == JobPhase.FAILED }
+        assertEquals(ErrorCode.STORAGE_LOW, h.runner.jobs.value.getValue(id).errorCode)
+    }
+
+    @Test
+    fun inPlaceFileThatNoLongerFitsTheWavStillReportsLowStorage() = runTest {
+        val h = harness {
+            sources.size = 5_000_000_000
+            sources.free = 10_000_000
+            sources.inPlace = InPlaceSource(TextInput("оригинал"), lasting = true)
+        }
+        val id = h.import("nospace")
+        h.await { it[id]?.phase == JobPhase.FAILED }
+        assertEquals(ErrorCode.STORAGE_LOW, h.runner.jobs.value.getValue(id).errorCode)
+        assertTrue(h.engines.events.none { it.startsWith("decode:") })
+    }
+
+    @Test
+    fun inPlaceJobResumesAfterDeathByReadingTheOriginalAgain() = runTest {
+        val h = harness {
+            sources.size = 5_000_000_000
+            sources.inPlace = InPlaceSource(TextInput("оригинал"), lasting = true)
+        }
+        h.engines.decodeBehavior = { awaitCancellation() }
+        val id = h.import("resume")
+        h.await { it[id]?.stage == Stage.DECODE && it[id]?.phase == JobPhase.RUNNING }
+        delay(50)
+        h.die()
+
+        val second = Harness(this, h.root, FakeEngines(), sources = h.sources)
+        second.await { it[id]?.phase == JobPhase.INTERRUPTED }
+        second.runner.onForeground()
+        second.await(done(id))
+        assertTrue("decode:оригинал" in second.engines.events)
+    }
+
+    @Test
+    fun inPlaceJobFailsClearlyWhenTheOriginalIsGoneBeforeDecoding() = runTest {
+        val h = harness {
+            sources.size = 5_000_000_000
+            sources.inPlace = InPlaceSource(TextInput("оригинал"), lasting = true)
+        }
+        h.engines.decodeBehavior = { awaitCancellation() }
+        val id = h.import("gone")
+        h.await { it[id]?.stage == Stage.DECODE && it[id]?.phase == JobPhase.RUNNING }
+        delay(50)
+        h.die()
+
+        h.sources.inPlace = null
+        val second = Harness(this, h.root, FakeEngines(), sources = h.sources)
+        second.await { it[id]?.phase == JobPhase.INTERRUPTED }
+        second.runner.onForeground()
+        second.await { it[id]?.phase == JobPhase.FAILED }
+        assertEquals(ErrorCode.IMPORT_READ_FAILED, second.runner.jobs.value.getValue(id).errorCode)
     }
 
     @Test

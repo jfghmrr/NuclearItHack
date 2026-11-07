@@ -11,6 +11,9 @@ import kotlinx.coroutines.withTimeout
 import ru.stenokot.app.data.JobRecord
 import ru.stenokot.app.data.JobStore
 import ru.stenokot.app.data.SpeedBook
+import ru.stenokot.core.audio.AudioInput
+import ru.stenokot.core.audio.FileAudioInput
+import ru.stenokot.core.audio.SeekableInput
 import ru.stenokot.core.contract.TranscriptValidator
 import ru.stenokot.core.contract.ValidationResult
 import ru.stenokot.core.engine.Asr
@@ -81,14 +84,14 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
         openHeavy -= 1
     }
 
-    override fun probe(source: File): SourceProbe {
+    override fun probe(source: AudioInput): SourceProbe {
         events += "probe"
         probeFailure?.let { throw it }
         return SourceProbe(60_000, "audio/mpeg")
     }
 
-    override suspend fun decode(source: File, outWav: File, progress: Progress): AudioInfo {
-        events += "decode:${source.readText()}"
+    override suspend fun decode(source: AudioInput, outWav: File, progress: Progress): AudioInfo {
+        events += "decode:${contents(source)}"
         decodeBehavior?.invoke()
         outWav.writeText("pcm")
         progress.report(1f, null)
@@ -180,6 +183,26 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
 }
 
 /** Показатели устройства, которые задаёт тест. */
+/** Запись с текстом вместо звука: подделка декодера читает её как есть. */
+class TextInput(private val text: String) : AudioInput {
+    override val name: String = "original.mp3"
+
+    override fun open(): SeekableInput {
+        val file = File.createTempFile("input", ".txt").apply {
+            deleteOnExit()
+            writeText(text)
+        }
+        return FileAudioInput(file).open()
+    }
+}
+
+/** Читает запись целиком, как короткий текст. */
+private fun contents(source: AudioInput): String = source.open().use { input ->
+    val bytes = ByteArray(input.length().toInt())
+    input.readFully(bytes)
+    String(bytes)
+}
+
 class FakeDevice : DeviceMonitor {
     var memory = 2_000L * 1024 * 1024
     var thermal = 0
@@ -194,15 +217,21 @@ class FakeDevice : DeviceMonitor {
 class FakeSources : SourceGateway {
     var describeFailure: Exception? = null
     var free = 10_000_000_000L
+    var size = 1_000L
+    var inPlace: InPlaceSource? = null
+    var onCopy: () -> Unit = {}
     val copied = ArrayList<String>()
 
     override suspend fun describe(job: JobRecord): SourceInfo {
         describeFailure?.let { throw it }
-        return SourceInfo(job.title, 1_000, "audio/mpeg")
+        return SourceInfo(job.title, size, "audio/mpeg")
     }
+
+    override fun inPlace(job: JobRecord): InPlaceSource? = inPlace
 
     override suspend fun copy(job: JobRecord, target: File, progress: (Long, Long) -> Unit) {
         copied += job.id
+        onCopy()
         target.writeText(job.id)
         progress(1, 1)
     }

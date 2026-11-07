@@ -1,6 +1,9 @@
 package ru.stenokot.app.audio
 
 import java.io.File
+import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.sin
@@ -28,6 +31,33 @@ class WavPcmReaderTest {
         var sum = 0.0
         for (sample in samples) sum += sample * sample
         return 10 * log10(sum / samples.size)
+    }
+
+    @Test
+    fun `заголовок восьмичасовой записи хранит размеры без потерь`() {
+        val dataBytes = 8L * 3600 * 16000 * 2
+        val header = ByteBuffer.wrap(pcm16MonoHeader(16000, dataBytes)).order(ByteOrder.LITTLE_ENDIAN)
+        assertEquals(921_600_000L + 36, header.getInt(4).toLong() and 0xFFFFFFFFL)
+        assertEquals(921_600_000L, header.getInt(40).toLong() and 0xFFFFFFFFL)
+    }
+
+    @Test
+    fun `чтение за двумя гигабайтами данных не теряет смещение`() {
+        val samples = 1_100_000_000L
+        val file = File.createTempFile("sparse", ".wav")
+        file.deleteOnExit()
+        RandomAccessFile(file, "rw").use { output ->
+            output.write(pcm16MonoHeader(16000, samples * 2))
+            output.setLength(WAV_HEADER_BYTES + samples * 2)
+            output.seek(WAV_HEADER_BYTES + (samples - 1) * 2)
+            output.write(byteArrayOf(0, 0x40))
+        }
+        WavPcmReader.open(file).use { reader ->
+            assertEquals(samples, reader.totalSamples)
+            assertTrue(reader.read(samples - 1, 1).single() > 0f)
+            assertEquals(0f, reader.read(samples - 2, 1).single(), 0f)
+            assertEquals(1, reader.read(samples - 1, 100).size)
+        }
     }
 
     @Test

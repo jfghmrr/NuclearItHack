@@ -111,6 +111,7 @@ data class JobRecord(
     val completedStages: Set<Stage> = emptySet(),
     val preflight: PreflightRecord? = null,
     val sourceFile: String? = null,
+    val sourceInPlace: Boolean = false,
     val audio: AudioRecord? = null,
     val language: Language? = null,
     val langFailed: Boolean = false,

@@ -247,7 +247,7 @@ class RealStenoController(
             summary = JobUiMapper.summary(job, live, all),
             processing = if (showsProcessing) JobUiMapper.processing(job, live, speed.current(), powerSave()) else null,
             result = if (job.transcriptSaved) {
-                JobUiMapper.result(job, live, utterances, document, modelsUi, store.files(job.id).pcm.path)
+                JobUiMapper.result(job, live, utterances, document, modelsUi, playerPath(job))
             } else {
                 null
             },
@@ -258,6 +258,13 @@ class RealStenoController(
             },
         )
     }
+
+    /**
+     * Что играет плеер. Файл, читаемый на месте, звучит лучше рабочего WAV, но может исчезнуть или
+     * потерять права. Обычная задача играет WAV: его шкала совпадает с шкалой стенограммы точно.
+     */
+    private fun playerPath(job: JobRecord): String =
+        if (runner.sourceReachable(job)) job.sourceUri else store.files(job.id).pcm.path
 
     private fun powerSave(): Boolean = app.getSystemService(PowerManager::class.java).isPowerSaveMode
 

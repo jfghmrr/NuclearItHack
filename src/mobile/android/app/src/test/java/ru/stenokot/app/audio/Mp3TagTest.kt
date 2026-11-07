@@ -2,6 +2,7 @@ package ru.stenokot.app.audio
 
 import java.io.File
 import java.nio.ByteBuffer
+import ru.stenokot.core.audio.FileAudioInput
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -42,7 +43,7 @@ class Mp3TagTest {
 
     @Test
     fun `кадр Xing даёт длительность и размер`() {
-        val tag = Mp3Tag.read(file(frame("Xing", 1000, 500_000)))
+        val tag = read(file(frame("Xing", 1000, 500_000)))
         assertNotNull(tag)
         assertEquals(26_122L, tag!!.durationMs)
         assertEquals(500_000L, tag.bytes)
@@ -50,25 +51,27 @@ class Mp3TagTest {
 
     @Test
     fun `большой ID3 с обложкой пропускается`() {
-        val tag = Mp3Tag.read(file(id3(300_000), frame("Info", 10, 4_000)))
+        val tag = read(file(id3(300_000), frame("Info", 10, 4_000)))
         assertEquals(300_010L, tag!!.audioStart)
         assertEquals(10L, tag.frames)
     }
 
     @Test
     fun `обрезанный файл определяется по размеру из заголовка`() {
-        val tag = Mp3Tag.read(file(frame("Xing", 1000, 500_000)))!!
+        val tag = read(file(frame("Xing", 1000, 500_000)))!!
         assertTrue(tag.isTruncated(200_000))
         assertFalse(tag.isTruncated(500_000))
     }
 
     @Test
     fun `MP3 без служебного кадра не даёт надёжной длительности`() {
-        assertNull(Mp3Tag.read(file(frame("XXXX", 1, 1))))
+        assertNull(read(file(frame("XXXX", 1, 1))))
     }
 
     @Test
     fun `посторонний файл не принимается за MP3`() {
-        assertNull(Mp3Tag.read(file(ByteArray(4096) { 0x41 })))
+        assertNull(read(file(ByteArray(4096) { 0x41 })))
     }
+
+    private fun read(file: File): Mp3Tag? = FileAudioInput(file).open().use(Mp3Tag::read)
 }

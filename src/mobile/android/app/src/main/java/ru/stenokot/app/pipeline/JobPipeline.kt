@@ -21,6 +21,8 @@ import ru.stenokot.app.data.toRecord
 import ru.stenokot.app.data.toSegment
 import ru.stenokot.app.data.toTurn
 import ru.stenokot.app.data.toUtterance
+import ru.stenokot.core.audio.AudioInput
+import ru.stenokot.core.audio.FileAudioInput
 import ru.stenokot.core.contract.TranscriptEncoder
 import ru.stenokot.core.contract.ValidationResult
 import ru.stenokot.core.engine.Asr
@@ -63,6 +65,7 @@ class JobPipeline(
     private val store: JobStore,
     private val engines: PipelineEngines,
     private val device: DeviceMonitor,
+    private val sources: SourceGateway,
     private val outputs: OutputGateway,
     private val metrics: MetricsRecorder,
     private val board: LiveBoard,
@@ -161,15 +164,20 @@ class JobPipeline(
 
     private suspend fun decode(run: Run) {
         val job = book.require(run.id)
-        val sourceName = job.sourceFile
-            ?: throw EngineFailure(ErrorCode.IMPORT_READ_FAILED, "Нет копии исходного файла")
         val tmp = File(run.files.dir, run.files.pcm.name + ".tmp")
         tmp.delete()
-        val info = run.control.stoppable {
-            engines.decode(File(run.files.dir, sourceName), tmp, stageProgress())
-        }
+        val source = sourceOf(job, run.files)
+        val info = run.control.stoppable { engines.decode(source, tmp, stageProgress()) }
         AtomicFiles.moveInto(tmp, run.files.pcm)
         book.mutate(run.id) { it.copy(audio = info.toRecord()) }
+    }
+
+    /** Копия задачи или сам файл. Без копии доступ к нему проверяется заново: он мог пропасть. */
+    private fun sourceOf(job: JobRecord, files: JobFiles): AudioInput {
+        job.sourceFile?.let { return FileAudioInput(File(files.dir, it)) }
+        if (!job.sourceInPlace) throw EngineFailure(ErrorCode.IMPORT_READ_FAILED, "Нет копии исходного файла")
+        return sources.inPlace(job)?.input
+            ?: throw EngineFailure(ErrorCode.IMPORT_READ_FAILED, "Исходный файл недоступен")
     }
 
     private suspend fun vad(run: Run) {

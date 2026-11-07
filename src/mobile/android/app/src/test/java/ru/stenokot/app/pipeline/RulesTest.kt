@@ -128,6 +128,27 @@ class RulesTest {
     }
 
     @Test
+    fun eightHourFileReadInPlaceNeedsNoRoomForTheFileItself() {
+        val eightHours = 8L * 3600 * 1000
+        val fiveGigabytes = 5_000_000_000L
+        val wavBytes = 8L * 3600 * 32_000
+        val inPlace = PreflightRules.requiredBytes(0, eightHours)
+        assertTrue(inPlace >= wavBytes)
+        assertTrue(inPlace < 2_000_000_000L)
+        assertEquals(fiveGigabytes, PreflightRules.requiredBytes(fiveGigabytes, eightHours) - inPlace)
+    }
+
+    @Test
+    fun onlyLargeFilesAreReadInPlaceAndCopyRemainsTheSaferChoice() {
+        val limit = PreflightRules.COPY_LIMIT_BYTES
+        val roomy = 100_000_000_000L
+        assertFalse(PreflightRules.readsInPlace(limit, lasting = true, freeBytes = roomy))
+        assertTrue(PreflightRules.readsInPlace(limit + 1, lasting = true, freeBytes = roomy))
+        assertFalse(PreflightRules.readsInPlace(limit + 1, lasting = false, freeBytes = roomy))
+        assertTrue(PreflightRules.readsInPlace(limit + 1, lasting = false, freeBytes = limit))
+    }
+
+    @Test
     fun estimateIsHiddenWithoutDurationAndLabelledRoughWithoutMeasurement() {
         val unknown = PreflightRules.record("x", 1, null, null, 10, null)
         assertNull(unknown.estimateMinMs)

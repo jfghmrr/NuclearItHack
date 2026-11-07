@@ -43,6 +43,16 @@ class StorageTest {
     }
 
     @Test
+    fun fileReadInPlaceNeedsNoCopyInTheJobFolder() {
+        val running = record(completed = setOf(Stage.IMPORT), phase = JobPhase.RUNNING, stage = Stage.DECODE)
+            .copy(sourceFile = null, sourceInPlace = true)
+        val result = JobReconciler.reconcile(running, files("job.json"))
+        assertEquals(JobPhase.INTERRUPTED, result.phase)
+        assertEquals(Stage.DECODE, result.stage)
+        assertTrue(Stage.IMPORT in result.completedStages)
+    }
+
+    @Test
     fun atomicReplaceLeavesNoTemporaryFile() {
         val target = File(folder.root, "job.json")
         AtomicFiles.replaceText(target, "старое")

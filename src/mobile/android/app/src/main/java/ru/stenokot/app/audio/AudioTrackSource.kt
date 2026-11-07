@@ -6,6 +6,9 @@ import android.media.MediaFormat
 import java.io.Closeable
 import java.io.File
 import java.io.IOException
+import ru.stenokot.core.audio.AudioInput
+import ru.stenokot.core.audio.FileAudioInput
+import ru.stenokot.core.audio.SeekableInput
 import ru.stenokot.core.model.ErrorCode
 
 /** Открытый файл с выбранной дорожкой. Общая часть быстрой проверки и полного декодирования. */
@@ -13,6 +16,7 @@ internal class AudioTrackSource private constructor(
     val extractor: MediaExtractor,
     val format: MediaFormat,
     val mime: String,
+    private val input: SeekableInput,
     private val unwrapped: File?,
     private val patched: PatchedWavSource?,
 ) : Closeable {
@@ -63,6 +67,7 @@ internal class AudioTrackSource private constructor(
     override fun close() {
         extractor.release()
         patched?.close()
+        input.close()
         unwrapped?.delete()
     }
 
@@ -73,50 +78,73 @@ internal class AudioTrackSource private constructor(
         )
 
         /**
-         * Открывает [file]: берётся первая звуковая дорожка, обложка и видео пропускаются. Временный файл
+         * Открывает [source]: берётся первая звуковая дорожка, обложка и видео пропускаются. Временный файл
          * для Ogg FLAC создаётся в [tempDir] и удаляется в [close]. При [headOnly] распаковывается только начало.
+         * Пути у чужого файла может не быть, поэтому извлекатель всегда получает дескриптор.
          */
-        fun open(file: File, tempDir: File? = null, headOnly: Boolean = false): AudioTrackSource {
-            if (!OggFlac.matches(file)) return openPlain(file, file, null)
+        fun open(source: AudioInput, tempDir: File? = null, headOnly: Boolean = false): AudioTrackSource {
+            val input = source.open()
+            var readable = input
+            var temp: File? = null
+            try {
+                if (OggFlac.matches(input)) {
+                    temp = unwrap(source.name, input, tempDir, headOnly)
+                    readable = FileAudioInput(temp).open()
+                    input.close()
+                }
+                return openPlain(source.name, readable, temp)
+            } catch (error: Exception) {
+                readable.close()
+                input.close()
+                temp?.delete()
+                throw error
+            }
+        }
+
+        private fun unwrap(name: String, input: SeekableInput, tempDir: File?, headOnly: Boolean): File {
             val target = File.createTempFile("ogg", ".flac", tempDir)
             try {
-                OggFlac.unwrap(file, target, if (headOnly) HEAD_BYTES else Long.MAX_VALUE)
-                return openPlain(file, target, target)
+                OggFlac.unwrap(input, target, if (headOnly) HEAD_BYTES else Long.MAX_VALUE)
+                return target
             } catch (error: IOException) {
                 target.delete()
-                throw EngineException(ErrorCode.DECODE_CORRUPT, "Не разобран Ogg FLAC: ${file.name}", error)
+                throw EngineException(ErrorCode.DECODE_CORRUPT, "Не разобран Ogg FLAC: $name", error)
             } catch (error: EngineException) {
                 target.delete()
                 throw error
             }
         }
 
-        private fun openPlain(original: File, readable: File, unwrapped: File?): AudioTrackSource {
+        private fun openPlain(name: String, readable: SeekableInput, unwrapped: File?): AudioTrackSource {
             val extractor = MediaExtractor()
             val patched = WavHeaderPatch.detect(readable)?.let { PatchedWavSource(readable, it) }
             try {
-                if (patched != null) extractor.setDataSource(patched) else extractor.setDataSource(readable.path)
+                if (patched != null) {
+                    extractor.setDataSource(patched)
+                } else {
+                    extractor.setDataSource(readable.descriptor, 0, readable.length())
+                }
             } catch (error: IOException) {
                 release(extractor, patched)
-                throw unreadable(original, error)
+                throw unreadable(name, readable, error)
             } catch (error: IllegalArgumentException) {
                 release(extractor, patched)
-                throw unreadable(original, error)
+                throw unreadable(name, readable, error)
             } catch (error: IllegalStateException) {
                 release(extractor, patched)
-                throw unreadable(original, error)
+                throw unreadable(name, readable, error)
             }
             for (index in 0 until extractor.trackCount) {
                 val format = extractor.getTrackFormat(index)
                 val mime = format.getString(MediaFormat.KEY_MIME).orEmpty()
                 if (mime.startsWith("audio/")) {
                     extractor.selectTrack(index)
-                    return AudioTrackSource(extractor, format, mime, unwrapped, patched)
+                    return AudioTrackSource(extractor, format, mime, readable, unwrapped, patched)
                 }
             }
             val tracks = extractor.trackCount
             release(extractor, patched)
-            if (tracks == 0) throw unreadable(original, IOException("Контейнер без дорожек"))
+            if (tracks == 0) throw unreadable(name, readable, IOException("Контейнер без дорожек"))
             throw unsupported("В файле нет аудиодорожки", null)
         }
 
@@ -126,16 +154,16 @@ internal class AudioTrackSource private constructor(
         }
 
         /** Файл, который не открылся: заявленный как аудио считается повреждённым, остальной чужим. */
-        private fun unreadable(file: File, cause: Exception): EngineException {
-            val code = if (looksLikeAudio(file)) ErrorCode.DECODE_CORRUPT else ErrorCode.DECODE_UNSUPPORTED_FORMAT
-            return EngineException(code, "Контейнер не открылся: ${file.name}", cause)
+        private fun unreadable(name: String, input: SeekableInput, cause: Exception): EngineException {
+            val code = if (looksLikeAudio(name, input)) ErrorCode.DECODE_CORRUPT else ErrorCode.DECODE_UNSUPPORTED_FORMAT
+            return EngineException(code, "Контейнер не открылся: $name", cause)
         }
 
-        private fun looksLikeAudio(file: File): Boolean {
-            if (file.extension.lowercase() in KNOWN_EXTENSIONS) return true
+        private fun looksLikeAudio(name: String, input: SeekableInput): Boolean {
+            if (name.substringAfterLast('.', "").lowercase() in KNOWN_EXTENSIONS) return true
             val head = ByteArray(12)
-            val got = file.inputStream().use { it.read(head) }
-            if (got < 12) return false
+            input.seek(0)
+            if (input.read(head) < head.size) return false
             val start = String(head, 0, 4, Charsets.ISO_8859_1)
             val brand = String(head, 4, 4, Charsets.ISO_8859_1)
             return start == "RIFF" || start == "OggS" || start == "fLaC" || start.startsWith("ID3") || brand == "ftyp"

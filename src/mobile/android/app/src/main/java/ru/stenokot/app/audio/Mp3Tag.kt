@@ -1,8 +1,7 @@
 package ru.stenokot.app.audio
 
-import java.io.File
-import java.io.RandomAccessFile
 import java.nio.ByteBuffer
+import ru.stenokot.core.audio.SeekableInput
 
 /**
  * Служебный кадр Xing, Info или VBRI в начале MP3. Только с ним длительность из заголовка надёжна:
@@ -33,18 +32,18 @@ internal data class Mp3Tag(
         private const val VBRI_OFFSET = 36
         private val RATES_V1 = intArrayOf(44100, 48000, 32000)
 
-        /** Читает служебный кадр из [file]. Значение null: кадра нет или это не MP3. */
-        fun read(file: File): Mp3Tag? = RandomAccessFile(file, "r").use { input ->
+        /** Читает служебный кадр из [input]. Значение null: кадра нет или это не MP3. */
+        fun read(input: SeekableInput): Mp3Tag? {
             val start = skipId3(input)
             val window = ByteArray(SCAN_BYTES)
             input.seek(start)
             val got = input.read(window)
-            if (got < FRAME_PROBE) return@use null
-            val sync = findFrame(window, got) ?: return@use null
-            parseFrame(window, sync, got, start + sync)
+            if (got < FRAME_PROBE) return null
+            val sync = findFrame(window, got) ?: return null
+            return parseFrame(window, sync, got, start + sync)
         }
 
-        private fun skipId3(input: RandomAccessFile): Long {
+        private fun skipId3(input: SeekableInput): Long {
             val head = ByteArray(ID3_HEADER)
             input.seek(0)
             if (input.read(head) < ID3_HEADER) return 0

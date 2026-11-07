@@ -6,12 +6,13 @@ import java.io.DataInputStream
 import java.io.EOFException
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.io.OutputStream
-import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.max
 import kotlin.math.min
+import ru.stenokot.core.audio.SeekableInput
 
 /**
  * FLAC в контейнере Ogg. MediaExtractor читает из Ogg только Vorbis и Opus, поэтому поток FLAC вынимается из
@@ -31,37 +32,47 @@ internal object OggFlac {
     private const val SAMPLE_RATE_OFFSET = 27
     private val PAGE_MAGIC = byteArrayOf('O'.code.toByte(), 'g'.code.toByte(), 'g'.code.toByte(), 'S'.code.toByte())
 
-    /** Проверяет по первому пакету, что в [file] лежит FLAC. */
-    fun matches(file: File): Boolean = RandomAccessFile(file, "r").use { input ->
+    /** Проверяет по первому пакету, что в [input] лежит FLAC. */
+    fun matches(input: SeekableInput): Boolean {
         val head = ByteArray(PAGE_HEADER + SEGMENT_FULL + SIGNATURE_PACKET_BYTES)
+        input.seek(0)
         val got = input.read(head)
-        if (got < PAGE_HEADER || !head.startsWithMagic(0)) return@use false
+        if (got < PAGE_HEADER || !head.startsWithMagic(0)) return false
         val first = PAGE_HEADER + (head[PAGE_HEADER - 1].toInt() and 0xFF)
-        got >= first + 5 && head[first].toInt() == 0x7F && String(head, first + 1, 4, Charsets.US_ASCII) == "FLAC"
+        return got >= first + 5 && head[first].toInt() == 0x7F && String(head, first + 1, 4, Charsets.US_ASCII) == "FLAC"
     }
 
     /** Длительность по метке последней страницы, микросекунды. Значение null: страница не найдена. */
-    fun durationUs(file: File): Long? = RandomAccessFile(file, "r").use { input ->
-        val sampleRate = readSampleRate(input) ?: return@use null
+    fun durationUs(input: SeekableInput): Long? {
+        val sampleRate = readSampleRate(input) ?: return null
         val size = input.length()
         val tail = ByteArray(min(size, TAIL_BYTES.toLong()).toInt())
         input.seek(size - tail.size)
         input.readFully(tail)
-        val last = (tail.size - PAGE_HEADER downTo 0).firstOrNull { tail.startsWithMagic(it) } ?: return@use null
+        val last = (tail.size - PAGE_HEADER downTo 0).firstOrNull { tail.startsWithMagic(it) } ?: return null
         val granule = ByteBuffer.wrap(tail, last + 6, 8).order(ByteOrder.LITTLE_ENDIAN).long
-        if (granule <= 0) null else granule * 1_000_000 / sampleRate
+        return if (granule <= 0) null else granule * 1_000_000 / sampleRate
     }
 
     /** Перекладывает [source] в [target]. При [limitBytes] пишется только начало потока, этого хватает проверке. */
-    fun unwrap(source: File, target: File, limitBytes: Long = Long.MAX_VALUE) {
-        DataInputStream(BufferedInputStream(source.inputStream(), BUFFER_BYTES)).use { input ->
-            BufferedOutputStream(target.outputStream(), BUFFER_BYTES).use { output ->
-                Unwrapper(input, output, limitBytes).run()
-            }
+    fun unwrap(source: SeekableInput, target: File, limitBytes: Long = Long.MAX_VALUE) {
+        source.seek(0)
+        val input = DataInputStream(BufferedInputStream(sequential(source), BUFFER_BYTES))
+        BufferedOutputStream(target.outputStream(), BUFFER_BYTES).use { output ->
+            Unwrapper(input, output, limitBytes).run()
         }
     }
 
-    private fun readSampleRate(input: RandomAccessFile): Int? {
+    /** Поток с текущей позиции. Закрывать его не нужно, файлом владеет вызывающий. */
+    private fun sequential(source: SeekableInput): InputStream = object : InputStream() {
+        private val single = ByteArray(1)
+
+        override fun read(): Int = if (source.read(single) < 0) -1 else single[0].toInt() and 0xFF
+
+        override fun read(target: ByteArray, offset: Int, length: Int): Int = source.read(target, offset, length)
+    }
+
+    private fun readSampleRate(input: SeekableInput): Int? {
         val head = ByteArray(PAGE_HEADER + SEGMENT_FULL + SIGNATURE_PACKET_BYTES)
         input.seek(0)
         val got = input.read(head)

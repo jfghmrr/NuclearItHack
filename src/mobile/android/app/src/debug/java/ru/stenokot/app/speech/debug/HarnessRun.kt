@@ -22,6 +22,7 @@ import ru.stenokot.app.speech.ParakeetAsr
 import ru.stenokot.app.speech.SileroVadEngine
 import ru.stenokot.app.speech.WindowedDiarizer
 import ru.stenokot.core.asr.toWords
+import ru.stenokot.core.audio.FileAudioInput
 import ru.stenokot.core.engine.Asr
 import ru.stenokot.core.engine.Progress
 import ru.stenokot.core.model.AsrSegment
@@ -95,7 +96,8 @@ internal class HarnessRun(private val context: Context, private val request: Har
         return report
     }
 
-    private fun runStages(source: File, wav: File) {
+    private fun runStages(file: File, wav: File) {
+        val source = FileAudioInput(file)
         val probe = stage("preflight", 0.0) { Preflight.probe(source) }
         report.put(
             "preflight",
@@ -107,16 +109,6 @@ internal class HarnessRun(private val context: Context, private val request: Har
                 .put("channels", probe.channels)
                 .put("headerDurationMs", probe.headerDurationMs)
                 .put("headerReliable", probe.headerReliable),
-        )
-        val inspected = Preflight.inspect(source, source.name, context.filesDir)
-        report.put(
-            "preflightInfo",
-            JSONObject()
-                .put("fileName", inspected.fileName)
-                .put("sizeBytes", inspected.sizeBytes)
-                .put("durationMs", inspected.durationMs)
-                .put("freeBytes", inspected.freeBytes)
-                .put("requiredBytes", inspected.requiredBytes),
         )
         if ("decode" !in request.stages) return
         val info = stage("decode", 0.0) {

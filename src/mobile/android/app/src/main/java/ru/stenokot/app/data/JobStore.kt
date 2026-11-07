@@ -156,7 +156,7 @@ object JobReconciler {
     }
 
     private fun artifactExists(stage: Stage, record: JobRecord, files: JobFiles): Boolean = when (stage) {
-        Stage.IMPORT -> record.sourceFile != null && File(files.dir, record.sourceFile).exists()
+        Stage.IMPORT -> record.sourceInPlace || (record.sourceFile != null && File(files.dir, record.sourceFile).exists())
         Stage.DECODE -> files.pcm.exists()
         Stage.VAD -> files.vad.exists()
         Stage.LANG_ID -> record.noSpeech || files.lang.exists()

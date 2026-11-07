@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import ru.stenokot.core.audio.FileAudioInput
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -64,9 +65,9 @@ class OggFlacTest {
 
     @Test
     fun `первый пакет определяет формат`() {
-        assertTrue(OggFlac.matches(file(page(listOf(signaturePacket()), 0))))
-        assertFalse(OggFlac.matches(file(page(listOf(ByteArray(60)), 0))))
-        assertFalse(OggFlac.matches(file(ByteArray(100))))
+        assertTrue(matches(file(page(listOf(signaturePacket()), 0))))
+        assertFalse(matches(file(page(listOf(ByteArray(60)), 0))))
+        assertFalse(matches(file(ByteArray(100))))
     }
 
     @Test
@@ -79,7 +80,7 @@ class OggFlacTest {
         )
         val target = File.createTempFile("out", ".flac")
         target.deleteOnExit()
-        OggFlac.unwrap(source, target)
+        FileAudioInput(source).open().use { OggFlac.unwrap(it, target) }
         val bytes = target.readBytes()
         assertEquals("fLaC", String(bytes, 0, 4, Charsets.US_ASCII))
         assertEquals(0x80, bytes[4].toInt() and 0x80)
@@ -90,7 +91,7 @@ class OggFlacTest {
     @Test
     fun `длительность берётся из метки последней страницы`() {
         val source = file(page(listOf(signaturePacket()), 0), page(listOf(frameA), 32_000))
-        assertEquals(2_000_000L, OggFlac.durationUs(source))
+        assertEquals(2_000_000L, FileAudioInput(source).open().use(OggFlac::durationUs))
     }
 
     @Test(expected = java.io.IOException::class)
@@ -98,6 +99,8 @@ class OggFlacTest {
         val whole = page(listOf(signaturePacket()), 0) + page(listOf(frameB), 4096)
         val target = File.createTempFile("out", ".flac")
         target.deleteOnExit()
-        OggFlac.unwrap(file(whole.copyOf(whole.size - 100)), target)
+        FileAudioInput(file(whole.copyOf(whole.size - 100))).open().use { OggFlac.unwrap(it, target) }
     }
+
+    private fun matches(file: File): Boolean = FileAudioInput(file).open().use(OggFlac::matches)
 }

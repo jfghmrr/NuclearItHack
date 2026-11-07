@@ -1,6 +1,7 @@
 package ru.stenokot.app.pipeline
 
 import ru.stenokot.app.data.JobRecord
+import ru.stenokot.core.audio.AudioInput
 import ru.stenokot.core.model.ErrorCode
 import java.io.File
 
@@ -32,6 +33,12 @@ interface DeviceMonitor {
 /** Сведения о файле, известные до его копирования. Размер равен нулю, если источник его не сообщил. */
 data class SourceInfo(val name: String, val sizeBytes: Long, val mime: String?)
 
+/**
+ * Файл, который можно читать там, где он лежит. [lasting] означает, что доступ переживёт смерть
+ * процесса: это путь или адрес с сохранённым правом, а не временное разрешение.
+ */
+class InPlaceSource(val input: AudioInput, val lasting: Boolean)
+
 /** Доступ к импортируемому файлу. Сбой доступа сообщается через [EngineFailure]. */
 interface SourceGateway {
     /** Узнаёт имя и размер файла и проверяет, что он читается. */
@@ -39,6 +46,9 @@ interface SourceGateway {
 
     /** Копирует файл в [target]. [progress] получает скопированные и общие байты. */
     suspend fun copy(job: JobRecord, target: File, progress: (copied: Long, total: Long) -> Unit)
+
+    /** Возвращает файл для чтения на месте или null, если произвольный доступ к нему невозможен. */
+    fun inPlace(job: JobRecord): InPlaceSource? = null
 
     /** Свободное место в хранилище задач. */
     fun freeBytes(): Long

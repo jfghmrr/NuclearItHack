@@ -12,6 +12,7 @@ import ru.stenokot.app.speech.ModelSource
 import ru.stenokot.app.speech.ParakeetAsr
 import ru.stenokot.app.speech.SileroVadEngine
 import ru.stenokot.app.speech.WindowedDiarizer
+import ru.stenokot.core.audio.AudioInput
 import ru.stenokot.core.contract.DefaultTranscriptValidator
 import ru.stenokot.core.contract.TranscriptValidator
 import ru.stenokot.core.engine.Asr
@@ -48,11 +49,11 @@ interface PipelineEngines {
     /** Отпечаток настроек и моделей. Его смена отменяет всё после декодирования. */
     val configHash: String
 
-    /** Проверяет формат, кодек и читаемость копии файла до загрузки моделей. */
-    fun probe(source: File): SourceProbe
+    /** Проверяет формат, кодек и читаемость записи до загрузки моделей. */
+    fun probe(source: AudioInput): SourceProbe
 
     /** Декодирует [source] в нормализованный WAV 16 кГц моно. */
-    suspend fun decode(source: File, outWav: File, progress: Progress): AudioInfo
+    suspend fun decode(source: AudioInput, outWav: File, progress: Progress): AudioInfo
 
     /** Открывает нормализованный WAV для чтения. */
     fun openPcm(wav: File): PcmReader
@@ -94,10 +95,10 @@ class EngineFactory(context: Context, modelSetVersion: String) : PipelineEngines
 
     override val llm: LlmRunner = RemoteLlmRunner(app)
 
-    override fun probe(source: File): SourceProbe =
+    override fun probe(source: AudioInput): SourceProbe =
         Preflight.probe(source).let { SourceProbe(it.headerDurationMs, it.mime) }
 
-    override suspend fun decode(source: File, outWav: File, progress: Progress): AudioInfo =
+    override suspend fun decode(source: AudioInput, outWav: File, progress: Progress): AudioInfo =
         MediaDecoder().decode(source, outWav, progress)
 
     override fun openPcm(wav: File): PcmReader = WavPcmReader.open(wav)

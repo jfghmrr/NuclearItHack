@@ -7,13 +7,18 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.ParcelFileDescriptor
 import android.os.storage.StorageManager
 import android.provider.OpenableColumns
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import ru.stenokot.app.pipeline.EngineFailure
+import ru.stenokot.app.pipeline.InPlaceSource
 import ru.stenokot.app.pipeline.SourceGateway
 import ru.stenokot.app.pipeline.SourceInfo
+import ru.stenokot.core.audio.AudioInput
+import ru.stenokot.core.audio.FileAudioInput
+import ru.stenokot.core.audio.SeekableInput
 import ru.stenokot.core.model.ErrorCode
 import java.io.File
 import java.io.FileInputStream
@@ -55,6 +60,15 @@ class AndroidSources(
                     output.fd.sync()
                 }
             }
+        }
+    }
+
+    override fun inPlace(job: JobRecord): InPlaceSource? {
+        val uri = Uri.parse(job.sourceUri)
+        if (isFile(uri)) return InPlaceSource(FileAudioInput(File(checkNotNull(uri.path) { "Адрес без пути" })), lasting = true)
+        return guarded {
+            val seekable = app.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize >= 0 } ?: false
+            if (seekable) InPlaceSource(ContentInput(job.title, uri), lasting = holdsAccess(uri)) else null
         }
     }
 
@@ -110,6 +124,9 @@ class AndroidSources(
         }
     }
 
+    private fun holdsAccess(uri: Uri): Boolean =
+        app.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission }
+
     private fun open(uri: Uri): InputStream =
         if (isFile(uri)) {
             FileInputStream(checkNotNull(uri.path))
@@ -138,6 +155,15 @@ class AndroidSources(
         throw EngineFailure(ErrorCode.IMPORT_READ_FAILED, "Файл не найден", failure)
     } catch (failure: IOException) {
         throw EngineFailure(ErrorCode.IMPORT_READ_FAILED, "Файл не прочитан", failure)
+    }
+
+    /** Файл за адресом системы. Пути к нему может не быть, поэтому чтение идёт через дескриптор. */
+    private inner class ContentInput(override val name: String, private val uri: Uri) : AudioInput {
+        override fun open(): SeekableInput = guarded {
+            val descriptor = app.contentResolver.openFileDescriptor(uri, "r")
+                ?: throw EngineFailure(ErrorCode.IMPORT_READ_FAILED, "Источник не открылся")
+            SeekableInput(ParcelFileDescriptor.AutoCloseInputStream(descriptor))
+        }
     }
 
     private companion object {

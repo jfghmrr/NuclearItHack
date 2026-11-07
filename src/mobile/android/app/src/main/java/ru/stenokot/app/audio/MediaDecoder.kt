@@ -16,7 +16,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import ru.stenokot.core.audio.AudioInput
 import ru.stenokot.core.audio.SampleSink
+import ru.stenokot.core.audio.SeekableInput
 import ru.stenokot.core.audio.StreamingResampler
 import ru.stenokot.core.engine.AudioDecoder
 import ru.stenokot.core.engine.Progress
@@ -33,19 +35,17 @@ import ru.stenokot.core.model.ErrorCode
  */
 class MediaDecoder : AudioDecoder {
 
-    override suspend fun decode(source: File, outWav: File, progress: Progress): AudioInfo =
+    override suspend fun decode(source: AudioInput, outWav: File, progress: Progress): AudioInfo =
         withContext(Dispatchers.IO) {
             val probe = Preflight.probe(source)
             val partial = File(outWav.path + ".part")
             try {
-                val outcome = AudioTrackSource.open(source, outWav.parentFile).use { track ->
-                    PcmWavWriter(partial, TARGET_RATE).use { writer ->
-                        val sink = PcmSink(writer)
-                        pumpWithRestarts(track, sink, source.length(), progress)
-                        sink.finish()
-                        writer.finish()
-                        sink
-                    }
+                val outcome = PcmWavWriter(partial, TARGET_RATE).use { writer ->
+                    val sink = PcmSink(writer)
+                    pumpAll(source, outWav, sink, probe.sizeBytes, progress)
+                    sink.finish()
+                    writer.finish()
+                    sink
                 }
                 requireComplete(probe, outcome.durationMs)
                 if (!partial.renameTo(outWav)) throw IOException("Не удалось сохранить ${outWav.name}")
@@ -63,6 +63,39 @@ class MediaDecoder : AudioDecoder {
                 partial.delete()
             }
         }
+
+    private suspend fun pumpAll(source: AudioInput, outWav: File, sink: PcmSink, size: Long, progress: Progress) {
+        val wav = source.open().use(LargeWav::detect)
+        if (wav != null) {
+            source.open().use { input -> pumpLargeWav(wav, input, sink, ProgressPacer(size, progress)) }
+        } else {
+            AudioTrackSource.open(source, outWav.parentFile).use { track ->
+                pumpWithRestarts(track, sink, size, progress)
+            }
+        }
+    }
+
+    /** Отсчёты идут в тот же приёмник, что и от кодека: метки времени считаются по числу кадров. */
+    private suspend fun pumpLargeWav(wav: LargeWav, input: SeekableInput, sink: PcmSink, pacer: ProgressPacer) {
+        val block = ByteArray(LARGE_WAV_BLOCK / wav.frameBytes * wav.frameBytes)
+        val wrapped = ByteBuffer.wrap(block).order(ByteOrder.nativeOrder())
+        sink.onFormat(wav.sampleRate, wav.channels, wav.encoding)
+        var position = wav.dataOffset
+        val end = position + wav.dataBytes
+        var frames = 0L
+        while (position < end) {
+            coroutineContext.ensureActive()
+            val got = input.readAt(position, block, 0, min(end - position, block.size.toLong()).toInt())
+            if (got <= 0) break
+            val whole = got - got % wav.frameBytes
+            if (whole == 0) break
+            wrapped.position(0).limit(whole)
+            sink.accept(wrapped.slice().order(ByteOrder.nativeOrder()), frames * 1_000_000 / wav.sampleRate)
+            pacer.fed(whole)
+            frames += whole / wav.frameBytes
+            position += whole
+        }
+    }
 
     /** Запись оборвалась: при заполненном диске это нехватка места, иначе сбой чтения файла задачи. */
     private fun writeFailure(outWav: File, error: IOException): EngineException {
@@ -167,10 +200,10 @@ class MediaDecoder : AudioDecoder {
         }
     }
 
-    private fun sha256(file: File): String {
+    private fun sha256(source: AudioInput): String {
         val digest = MessageDigest.getInstance("SHA-256")
         val block = ByteArray(HASH_BLOCK)
-        file.inputStream().use { input ->
+        source.open().use { input ->
             while (true) {
                 val read = input.read(block)
                 if (read < 0) break
@@ -227,13 +260,17 @@ class MediaDecoder : AudioDecoder {
 
         /** Реальные частота и каналы приходят только здесь, дорожке верить нельзя. */
         fun onFormat(format: MediaFormat) {
-            val newRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-            val newChannels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-            encoding = if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+            val pcm = if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
                 format.getInteger(MediaFormat.KEY_PCM_ENCODING)
             } else {
                 AudioFormat.ENCODING_PCM_16BIT
             }
+            onFormat(format.getInteger(MediaFormat.KEY_SAMPLE_RATE), format.getInteger(MediaFormat.KEY_CHANNEL_COUNT), pcm)
+        }
+
+        /** Принимает формат отсчётов напрямую. */
+        fun onFormat(newRate: Int, newChannels: Int, pcm: Int) {
+            encoding = pcm
             if (newRate != rate) {
                 resampler?.flush(output)
                 resampler = null
@@ -328,13 +365,6 @@ class MediaDecoder : AudioDecoder {
             }
             else -> throw EngineException(ErrorCode.DECODE_UNSUPPORTED_FORMAT, "Кодировка PCM $encoding")
         }
-
-        private fun bytesPerSample(encoding: Int): Int = when (encoding) {
-            AudioFormat.ENCODING_PCM_8BIT -> 1
-            AudioFormat.ENCODING_PCM_24BIT_PACKED -> 3
-            AudioFormat.ENCODING_PCM_FLOAT, AudioFormat.ENCODING_PCM_32BIT -> 4
-            else -> 2
-        }
     }
 
     private companion object {
@@ -350,6 +380,7 @@ class MediaDecoder : AudioDecoder {
         const val HASH_BLOCK = 1 shl 16
         const val MIN_FREE_BYTES = 1L shl 20
         const val REPORT_EVERY_MS = 500L
+        const val LARGE_WAV_BLOCK = 1 shl 18
         const val MAX_REPORTED = 0.99f
     }
 }
