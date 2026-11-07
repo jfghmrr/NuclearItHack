@@ -326,6 +326,7 @@ class MergerTest {
                 out.forEach { u ->
                     assertTrue("И2", 0 <= u.startMs && u.startMs < u.endMs && u.endMs <= case.duration + 50)
                     assertTrue("И2", u.text.isNotBlank())
+                    assertTrue("длина", u.endMs - u.startMs <= params.maxUtteranceMs + params.maxVoteMs)
                     assertEquals(u.words.joinToString(" ") { it.text }, u.text)
                     assertTrue("И9", !isMarkOnly(u.text))
                     assertTrue("И9", u.words.none { isMarkOnly(it.text) })

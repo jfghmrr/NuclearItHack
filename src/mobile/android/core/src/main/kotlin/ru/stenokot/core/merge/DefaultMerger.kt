@@ -281,7 +281,7 @@ class DefaultMerger(
                     id = position + 1,
                     speaker = number,
                     startMs = own.first().startMs,
-                    endMs = utteranceEnd(range.last, nextStart),
+                    endMs = utteranceEnd(range.first, range.last, nextStart),
                     words = own,
                     text = own.joinToString(" ") { it.text },
                     overlap = range.any { overlap[it] },
@@ -327,11 +327,17 @@ class DefaultMerger(
             return best
         }
 
-        /** Конец реплики учитывает конец сегмента говорящего и среза, но не заходит на следующую реплику. */
-        private fun utteranceEnd(last: Int, nextStartMs: Long?): Long {
+        /**
+         * Конец реплики учитывает конец сегмента говорящего и среза, но не заходит на следующую
+         * реплику и не выводит её за предельную длину.
+         */
+        private fun utteranceEnd(first: Int, last: Int, nextStartMs: Long?): Long {
             val spokenEnd = index.endOfTurnAt(speaker[last], words[last].startMs)
                 ?: return wordEnd[last]
-            val limit = minOf(spokenEnd, chunkEnd[last], nextStartMs ?: Long.MAX_VALUE)
+            val limit = minOf(
+                minOf(spokenEnd, chunkEnd[last]),
+                minOf(nextStartMs ?: Long.MAX_VALUE, words[first].startMs + params.maxUtteranceMs),
+            )
             return minOf(audioDurationMs, maxOf(wordEnd[last], limit))
         }
     }
