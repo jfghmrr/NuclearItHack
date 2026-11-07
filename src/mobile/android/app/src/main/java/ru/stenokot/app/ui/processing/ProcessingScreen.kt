@@ -5,6 +5,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -70,6 +71,7 @@ import ru.stenokot.app.ui.components.StenoDialog
 import ru.stenokot.app.ui.components.StenoIcon
 import ru.stenokot.app.ui.components.StenoProgressBar
 import ru.stenokot.app.ui.components.StenoTopBar
+import ru.stenokot.app.ui.components.denseActionWidth
 import ru.stenokot.app.ui.components.spokenAs
 import ru.stenokot.app.ui.format.formatPercent
 import ru.stenokot.app.ui.format.formatPreflight
@@ -572,7 +574,10 @@ private fun ProcessingDock(cancelled: Boolean, onBack: () -> Unit, onStart: () -
     }
 }
 
-/** Итог обработки: что готово, главный переход к тексту и экспорт на виду. */
+/**
+ * Итог обработки: что готово, главный переход к тексту и экспорт на виду. Экспорт и выход к записям
+ * стоят рядом, только пока подпись экспорта влезает в половину ширины одной строкой.
+ */
 @Composable
 private fun DoneScreen(detail: JobDetailUi, controller: StenoController, actions: AppActions) {
     val layout = LocalWindowLayout.current
@@ -655,40 +660,46 @@ private fun DoneScreen(detail: JobDetailUi, controller: StenoController, actions
             )
             val exportText = stringResource(if (exportFailed) R.string.scr04_export_retry else R.string.common_btn_export)
             val onExport = { export.launch("$stem.json") }
-            if (layout.largeText && !layout.compactHeight) {
-                OutlinedAction(
-                    text = exportText,
-                    onClick = onExport,
-                    modifier = Modifier.padding(top = StenoSpace.s),
-                    icon = R.drawable.ic_download,
-                    tag = Tags.EXPORT,
-                )
-                GhostAction(
-                    text = stringResource(R.string.scr03_to_library),
-                    onClick = actions.back,
-                    modifier = Modifier.padding(top = StenoSpace.xs),
-                    tag = Tags.TO_LIBRARY,
-                )
-            } else {
-                Row(
-                    modifier = Modifier.padding(top = StenoSpace.s),
-                    horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedAction(
-                        text = exportText,
-                        onClick = onExport,
-                        modifier = Modifier.weight(1f),
-                        icon = R.drawable.ic_download,
-                        tag = Tags.EXPORT,
-                        dense = true,
-                    )
-                    GhostAction(
-                        text = stringResource(R.string.scr03_to_library),
-                        onClick = actions.back,
-                        modifier = Modifier.weight(1f),
-                        tag = Tags.TO_LIBRARY,
-                    )
+            val exportWidth = denseActionWidth(exportText, withIcon = true)
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val pairFits = exportWidth <= (maxWidth - StenoSpace.s) / 2
+                if ((layout.largeText && !layout.compactHeight) || !pairFits) {
+                    Column {
+                        OutlinedAction(
+                            text = exportText,
+                            onClick = onExport,
+                            modifier = Modifier.padding(top = StenoSpace.s),
+                            icon = R.drawable.ic_download,
+                            tag = Tags.EXPORT,
+                        )
+                        GhostAction(
+                            text = stringResource(R.string.scr03_to_library),
+                            onClick = actions.back,
+                            modifier = Modifier.padding(top = StenoSpace.xs),
+                            tag = Tags.TO_LIBRARY,
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.padding(top = StenoSpace.s),
+                        horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedAction(
+                            text = exportText,
+                            onClick = onExport,
+                            modifier = Modifier.weight(1f),
+                            icon = R.drawable.ic_download,
+                            tag = Tags.EXPORT,
+                            dense = true,
+                        )
+                        GhostAction(
+                            text = stringResource(R.string.scr03_to_library),
+                            onClick = actions.back,
+                            modifier = Modifier.weight(1f),
+                            tag = Tags.TO_LIBRARY,
+                        )
+                    }
                 }
             }
         }

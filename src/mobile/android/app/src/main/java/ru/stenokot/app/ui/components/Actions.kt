@@ -17,8 +17,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -27,7 +29,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ru.stenokot.app.ui.layout.LocalWindowLayout
 import ru.stenokot.app.ui.theme.StenoRadius
@@ -54,6 +58,20 @@ private fun RowScope.ActionContent(text: String, @DrawableRes icon: Int?, dense:
         style = StenoTheme.type.labelLarge,
         textAlign = TextAlign.Center,
     )
+}
+
+/**
+ * Ширина плотной кнопки, при которой подпись [text] встаёт в одну строку: поля, значок и текст по
+ * текущему масштабу шрифта. По ней пара кнопок решает, стоять рядом или столбиком.
+ */
+@Composable
+fun denseActionWidth(text: String, withIcon: Boolean): Dp {
+    val measurer = rememberTextMeasurer()
+    val style = StenoTheme.type.labelLarge
+    val density = LocalDensity.current
+    val label = remember(text, style, density) { measurer.measure(text, style, maxLines = 1).size.width }
+    val icon = if (withIcon && !LocalWindowLayout.current.largeText) StenoSize.icon + DenseIconGap else 0.dp
+    return with(density) { label.toDp() } + icon + StenoSpace.s * 2 + StenoSize.hairline * 2
 }
 
 /** Главное действие экрана. На экране такое одно. [dense] для пары кнопок в одну строку. */
