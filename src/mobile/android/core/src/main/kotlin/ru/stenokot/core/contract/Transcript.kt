@@ -17,12 +17,14 @@ data class TranscriptItem(
     val text: String,
 )
 
-/** Настройки сериализации контракта. Служебные значения в файл не попадают. */
+/** Настройки сериализации контракта: компактная форма, кириллица без экранирования. */
 val ContractJson: Json = Json {
-    prettyPrint = true
     encodeDefaults = true
     explicitNulls = false
 }
+
+/** Строит идентификатор контракта из внутреннего номера говорящего, начинающегося с нуля. */
+fun speakerId(speaker: Int): String = "speaker_${speaker + 1}"
 
 /** Результат проверки реальных байтов файла. */
 sealed interface ValidationResult {
