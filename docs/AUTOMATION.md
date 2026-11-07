@@ -62,7 +62,8 @@ adb shell ls /sdcard/Download/Stenokot/
 | Главная | `btn_import`, `btn_import_all`, `txt_models`, `btn_start`, `btn_resume`, `card_file`, `card_job`, `list_audio`, `row_audio_<n>`, `row_audio_permission`, `list_queue`, `row_queue_<n>`, `list_history`, `row_history_<n>`, `btn_delete_<n>` |
 | Обработка | `txt_file_name`, `txt_preflight`, `txt_stage`, `txt_stage_index`, `txt_stage_percent`, `txt_stage_counter`, `progress_stage`, `txt_elapsed`, `txt_remaining`, `txt_status_hint`, `list_stages`, `row_stage_<STAGE>`, `btn_start`, `btn_cancel` |
 | Результат | `tab_transcript`, `tab_protocol`, `list_transcript`, `row_utt_<n>`, `btn_play`, `slider_player`, `txt_output_path`, `btn_export`, `btn_export_protocol`, `btn_import` |
-| Проверка | `btn_export_meta` |
+| Ошибка | `txt_error_title`, `txt_error_body`, `btn_models`, `btn_start`, `btn_import` |
+| Проверка | `txt_offline`, `list_models`, `row_model_<n>`, `txt_rtf_core`, `txt_rtf_full`, `list_stage_metrics`, `btn_export_meta` |
 
 Индекс `<n>` начинается с нуля.
 
