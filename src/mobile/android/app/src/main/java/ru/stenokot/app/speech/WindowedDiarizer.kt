@@ -87,7 +87,7 @@ class WindowedDiarizer(
         return finished ?: finishRestored(book.finish(linked), lines, pcm, progress)
     }
 
-    /** Монолог из одного окна с одним кластером остаётся как есть: вторая модель ему не нужна. */
+    /** Модель отпечатков загружается, только если уточнению понадобится отпечаток. */
     private fun finish(
         turns: List<SpeakerTurn>,
         lines: List<DiarJournalLine>,
@@ -95,10 +95,9 @@ class WindowedDiarizer(
         extractor: Lazy<SpeakerEmbeddingExtractor>,
         progress: Progress,
     ): List<SpeakerTurn> {
-        val monologue = lines.size == 1 && lines.single().turns.map { it.cluster }.distinct().size == 1
-        if (turns.isEmpty() || monologue) return turns
+        if (turns.isEmpty()) return turns
         val rest = Progress { value, note -> progress.report(WINDOWS_SHARE + (1f - WINDOWS_SHARE) * value, note) }
-        return journal.finish.apply(turns, lines, PhrasePrinter(pcm, extractor.value, isCancelled), rest)
+        return journal.finish.apply(turns, lines, PhrasePrinter(pcm, extractor, isCancelled), rest)
     }
 
     /** Все окна уже в журнале: нужна только модель отпечатков. */

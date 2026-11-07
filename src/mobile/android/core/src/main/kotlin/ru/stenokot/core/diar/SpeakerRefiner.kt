@@ -49,12 +49,21 @@ data class Phrase(val startMs: Long, val endMs: Long, val speaker: Int, val clea
 fun interface VoicePrinter {
     /** Возвращает отпечаток склеенных отрезков [spans]. */
     fun print(spans: List<TimeSpan>): FloatArray?
+
+    /** Уровень речи на отрезке, дБ. Модель для него не нужна. Null значит, что уровень неизвестен. */
+    fun levelDb(span: TimeSpan): Float? = null
 }
 
 /** Настоящее уточнение для конвейера: слова берутся теми же решениями, что и в слиянии. */
+/**
+ * Настоящее уточнение для конвейера: слова берутся теми же решениями, что и в слиянии. Монолог из одного
+ * окна с одним кластером пересборку говорящих не проходит, ему не нужна модель отпечатков, но тихие
+ * ответы ищутся и в нём.
+ */
 class PhraseTurnRefiner(
     private val audioDurationMs: Long,
     private val params: RefineParams = RefineParams(),
+    private val quiet: QuietParams? = QuietParams(),
 ) : TurnRefiner {
     override fun refine(
         asr: List<AsrSegment>,
@@ -63,10 +72,18 @@ class PhraseTurnRefiner(
         printer: VoicePrinter,
         progress: Progress,
     ): List<SpeakerTurn> {
-        val refiner = SpeakerRefiner(params)
-        val overlaps = SpeakerRefiner.overlaps(lines)
-        val phrases = refiner.phrases(DefaultMerger(audioDurationMs).assignWords(asr, turns), overlaps)
-        return if (phrases.isEmpty()) turns else refiner.refine(phrases, turns, overlaps, printer, progress)
+        val merger = DefaultMerger(audioDurationMs)
+        val monologue = lines.size == 1 && lines.single().turns.map { it.cluster }.distinct().size == 1
+        val refined = if (monologue) {
+            turns
+        } else {
+            val refiner = SpeakerRefiner(params)
+            val overlaps = SpeakerRefiner.overlaps(lines)
+            val phrases = refiner.phrases(merger.assignWords(asr, turns), overlaps)
+            if (phrases.isEmpty()) turns else refiner.refine(phrases, turns, overlaps, printer, progress)
+        }
+        val settings = quiet ?: return refined
+        return QuietReplies(settings).apply(merger.assignWords(asr, refined), refined, LevelMeter(printer::levelDb))
     }
 }
 
