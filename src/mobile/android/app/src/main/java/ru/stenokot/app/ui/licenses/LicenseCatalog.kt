@@ -68,9 +68,22 @@ object LicenseCatalog {
         ),
     )
 
+    /**
+     * Запись перечня для модели с именем из `models.lock`. Имена там и здесь записаны по-разному,
+     * а первое слово совпадает всегда.
+     */
+    fun forModel(name: String): LicenseEntry? {
+        val models = groups.first { it.title == R.string.licenses_group_models }.entries
+        return models.firstOrNull { nameStart(it.name) == nameStart(name) }
+    }
+
     /** Запись по номеру или null, если такой нет. */
     fun entry(id: String): LicenseEntry? = groups.firstNotNullOfOrNull { group -> group.entries.firstOrNull { it.id == id } }
 }
+
+private val FirstWord = Regex("[\\p{L}\\p{N}]+")
+
+private fun nameStart(name: String): String = FirstWord.find(name)?.value.orEmpty().lowercase()
 
 private val RuleLine = Regex("^[-=_*]{5,}$")
 

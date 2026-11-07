@@ -3,8 +3,11 @@ package ru.stenokot.app.ui.licenses
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import ru.stenokot.app.pipeline.ModelLedger
 
 class LicenseCatalogTest {
     private val entries = LicenseCatalog.groups.flatMap { it.entries }
@@ -21,6 +24,14 @@ class LicenseCatalogTest {
     fun everyLicenseFileIsUsed() {
         val used = entries.map { it.file }.toSet()
         File("src/main/assets/licenses").list().orEmpty().forEach { assertTrue("лишний файл $it", it in used) }
+    }
+
+    @Test
+    fun everyModelLeadsToItsLicense() {
+        ModelLedger.Cards.forEach { assertNotNull("нет лицензии для ${it.name}", LicenseCatalog.forModel(it.name)) }
+        assertEquals("pyannote", LicenseCatalog.forModel("pyannote-segmentation-3-0 int8")?.id)
+        assertEquals("titanet", LicenseCatalog.forModel("TitaNet-small fp32")?.id)
+        assertNull(LicenseCatalog.forModel("sherpa-onnx"))
     }
 
     @Test

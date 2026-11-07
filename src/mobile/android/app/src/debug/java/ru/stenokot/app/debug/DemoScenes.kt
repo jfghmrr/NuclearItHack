@@ -4,6 +4,7 @@ import ru.stenokot.app.domain.AudioFileUi
 import ru.stenokot.app.domain.HomeUi
 import ru.stenokot.app.domain.JobDetailUi
 import ru.stenokot.app.domain.JobSummaryUi
+import ru.stenokot.app.domain.ModelCheckUi
 import ru.stenokot.app.domain.ModelsUi
 import ru.stenokot.app.domain.OutputFileUi
 import ru.stenokot.app.domain.ProcessingUi
@@ -42,6 +43,7 @@ internal data class DemoScene(
     val route: Route,
     val verification: VerificationUi = DemoData.verificationEmpty,
     val recording: RecordingUi = RecordingUi.Idle,
+    val modelCheck: ModelCheckUi = ModelCheckUi(),
 )
 
 /** Обработка DS-1 с параметрами конкретного состояния. */
@@ -257,9 +259,20 @@ private fun failureScene(
 private fun verificationScene(models: ModelsUi, verification: VerificationUi, status: String = STATUS_IDLE) = DemoScene(
     home = home(models = models, status = status),
     jobs = emptyList(),
-    route = Route.Verification,
+    route = Route.Diagnostics,
     verification = verification,
 )
+
+private fun modelsScene(models: ModelsUi, check: ModelCheckUi = ModelCheckUi()) = DemoScene(
+    home = home(models = models),
+    jobs = emptyList(),
+    route = Route.Models,
+    verification = DemoData.verificationEmpty,
+    modelCheck = check,
+)
+
+private fun verdicts(models: ModelsUi, failed: String? = null) =
+    models.items.associate { it.name to (it.name != failed) }
 
 /** Состояния главного экрана, включая статусы очереди. */
 private fun homeScene(id: String): DemoScene? {
@@ -595,13 +608,35 @@ private fun otherScene(id: String): DemoScene? = when (id) {
     "S07-G2" -> failureScene(JobState.Failed(Stage.DIARIZE, ErrorCode.LANG_ID_FAILED, "demo: пустой ответ стадии"))
     "S07-H" -> failureScene(JobState.Interrupted(Stage.DIARIZE, ErrorCode.FGS_TIMEOUT))
     "S08-A" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty)
-    "S08-B" -> verificationScene(DemoData.modelsCopying, DemoData.verificationCopying)
+    "S08-B" -> modelsScene(DemoData.modelsCopying)
     "S08-C" -> verificationScene(DemoData.modelsReady, DemoData.verificationMetrics, "DONE")
-    "S08-D" -> verificationScene(DemoData.modelsNoLlm, DemoData.verificationCopying)
-    "S08-D2" -> verificationScene(DemoData.modelsNoSpace, DemoData.verificationCopying)
+    "S08-D" -> modelsScene(DemoData.modelsNoLlm)
+    "S08-D2" -> modelsScene(DemoData.modelsNoSpace)
+    "S08-D3" -> modelsScene(DemoData.modelsNoAsr)
     "S08-E" -> verificationScene(DemoData.modelsReady, DemoData.verificationPartial, "DONE")
     "S08-L" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.Licenses)
     "S08-T" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.LicenseText("noto"))
+    "S08-T2" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.LicenseText("gigaam"))
+    "S09-M" -> modelsScene(DemoData.modelsReady)
+    "S09-M2" -> modelsScene(DemoData.modelsReady, ModelCheckUi(verdicts = verdicts(DemoData.modelsReady)))
+    "S09-M3" -> modelsScene(
+        DemoData.modelsReady,
+        ModelCheckUi(verdicts = verdicts(DemoData.modelsReady, DemoData.modelsReady.items[2].name)),
+    )
+    "S09-M4" -> modelsScene(
+        DemoData.modelsReady,
+        ModelCheckUi(running = true, checkedBytes = DemoData.mib(214.0), totalBytes = DemoData.mib(640.0)),
+    )
+    "S09-K" -> modelsScene(DemoData.modelsReady).copy(route = Route.ModelCard(DemoData.modelsReady.items[0].name))
+    "S09-K2" -> modelsScene(DemoData.modelsReady, ModelCheckUi(verdicts = verdicts(DemoData.modelsReady)))
+        .copy(route = Route.ModelCard(DemoData.modelsReady.items[0].name))
+    "S09-K3" -> modelsScene(
+        DemoData.modelsReady,
+        ModelCheckUi(verdicts = verdicts(DemoData.modelsReady, DemoData.modelsReady.items[0].name)),
+    ).copy(route = Route.ModelCard(DemoData.modelsReady.items[0].name))
+    "S09-P" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.Privacy)
+    "S09-R" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.Permissions)
+    "S09-O" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.About)
     else -> null
 }
 

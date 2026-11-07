@@ -21,10 +21,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,6 +49,8 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -59,9 +61,9 @@ import ru.stenokot.app.ui.AppActions
 import ru.stenokot.app.ui.Tags
 import ru.stenokot.app.ui.components.ActionDock
 import ru.stenokot.app.ui.components.DiagnosticsCopy
-import ru.stenokot.app.ui.components.FileCard
-import ru.stenokot.app.ui.components.MascotAtStart
-import ru.stenokot.app.ui.components.OutlinedAction
+import ru.stenokot.app.ui.components.CenteredState
+import ru.stenokot.app.ui.components.MascotPlate
+import ru.stenokot.app.ui.components.StateTextWidth
 import ru.stenokot.app.ui.components.PrimaryAction
 import ru.stenokot.app.ui.components.QuietAction
 import ru.stenokot.app.ui.components.StenoIcon
@@ -73,10 +75,10 @@ import ru.stenokot.app.ui.format.formatSpaceNeeded
 import ru.stenokot.app.ui.format.formatTimecode
 import ru.stenokot.app.ui.format.stageLabel
 import ru.stenokot.app.ui.format.statusCode
-import ru.stenokot.app.ui.layout.CenteredContent
 import ru.stenokot.app.ui.layout.LocalWindowLayout
 import ru.stenokot.app.ui.nav.Route
 import ru.stenokot.app.ui.nav.routeForJob
+import ru.stenokot.app.ui.theme.EnterMotion
 import ru.stenokot.app.ui.theme.StenoMotion
 import ru.stenokot.app.ui.theme.StenoRadius
 import ru.stenokot.app.ui.theme.StenoSize
@@ -86,9 +88,7 @@ import ru.stenokot.core.model.ErrorCode
 import ru.stenokot.core.model.JobState
 
 private const val META_DOT = " · "
-private val ArtShort = 88.dp
-private val ArtWide = 160.dp
-private val IconCircle = 72.dp
+private val IconCircle = 96.dp
 
 /** Подпись и значок одной кнопки. */
 private class ActionLook(@StringRes val label: Int, @DrawableRes val icon: Int, val tag: String)
@@ -102,13 +102,24 @@ private fun actionLook(action: FailureAction, kind: FailureKind): ActionLook = w
         icon = R.drawable.ic_upload_file,
         tag = Tags.IMPORT,
     )
-    FailureAction.DIAGNOSTICS -> ActionLook(R.string.scr07_action_diagnostics, R.drawable.ic_chevron_right, Tags.OPEN_MODELS)
+    FailureAction.MODELS -> ActionLook(R.string.scr07_action_models, R.drawable.ic_memory, Tags.OPEN_MODELS)
     FailureAction.RETRY -> when (kind) {
         FailureKind.STORAGE -> ActionLook(R.string.scr07_action_recheck, R.drawable.ic_replay, Tags.START)
         FailureKind.MEMORY -> ActionLook(R.string.scr07_action_safe_retry, R.drawable.ic_replay, Tags.START)
         FailureKind.INTERRUPTED -> ActionLook(R.string.common_btn_resume, R.drawable.ic_play_arrow_fill, Tags.START)
         else -> ActionLook(R.string.common_btn_start, R.drawable.ic_play_arrow_fill, Tags.START)
     }
+}
+
+/** Подпись верхней панели: где находится человек, сам заголовок экрана говорит, что делать. */
+@StringRes
+private fun barTitle(kind: FailureKind): Int = when (kind) {
+    FailureKind.MODEL -> R.string.scr07_bar_model
+    FailureKind.FORMAT, FailureKind.CORRUPT, FailureKind.READ, FailureKind.NO_PERMISSION -> R.string.scr07_bar_file
+    FailureKind.STORAGE -> R.string.scr07_bar_storage
+    FailureKind.MEMORY -> R.string.scr07_bar_memory
+    FailureKind.PROCESSING -> R.string.scr07_title
+    FailureKind.INTERRUPTED -> R.string.scr07_bar_interrupted
 }
 
 /** Заголовок и причина. */
@@ -200,10 +211,11 @@ fun FailureRoute(jobId: String, controller: StenoController, actions: AppActions
         kind = kind,
         copy = copy,
         onBack = actions.back,
+        onLibrary = { actions.navigator.resetTo(Route.Home) },
         onAction = { action ->
             when (action) {
                 FailureAction.IMPORT -> actions.importAudio()
-                FailureAction.DIAGNOSTICS -> actions.navigator.push(Route.Verification)
+                FailureAction.MODELS -> actions.navigator.push(Route.Models)
                 FailureAction.RETRY ->
                     if (state is JobState.Interrupted) controller.resume(jobId) else controller.start(jobId)
             }
@@ -211,83 +223,65 @@ fun FailureRoute(jobId: String, controller: StenoController, actions: AppActions
     )
 }
 
+/** Кнопки причины: главная внизу экрана, тихие под ней. Куда что встанет, решает окно. */
+private class FailureCallbacks(val onAction: (FailureAction) -> Unit, val onLibrary: () -> Unit)
+
 @Composable
 private fun FailureScreen(
     detail: JobDetailUi,
     kind: FailureKind,
     copy: DiagnosticsCopy,
     onBack: () -> Unit,
+    onLibrary: () -> Unit,
     onAction: (FailureAction) -> Unit,
 ) {
     val layout = LocalWindowLayout.current
     val colors = StenoTheme.colors
-    val state = detail.summary.state
     val pane = stringResource(R.string.scr07_title)
-    val barTitle = stringResource(if (state is JobState.Interrupted) R.string.scr03_title else R.string.scr07_title)
+    val bar = stringResource(barTitle(kind))
     val text = failureText(kind, detail)
+    val callbacks = remember(onAction, onLibrary) { FailureCallbacks(onAction, onLibrary) }
     val rootModifier = Modifier.fillMaxSize().semantics { paneTitle = pane }
-    val artSize = when {
-        layout.short || layout.largeText -> ArtShort
-        layout.width == WindowWidthSizeClass.Expanded -> ArtWide
-        else -> StenoSize.mascot
-    }
-    val dockBoth = !layout.short && !layout.largeText
-    val file: @Composable () -> Unit = { FailureFile(detail) }
-    val art: @Composable () -> Unit = { FailureArt(kind, artSize) }
-    val message: @Composable ColumnScope.() -> Unit = {
-        FailureMessage(text)
-        DetailsBlock(detail, copy)
-    }
+    val plate = if (layout.short || layout.largeText) StenoSize.mascotPlateSmall else StenoSize.mascotPlate
+    val quietInDock = !layout.hintsInContent
     val dock: @Composable () -> Unit = {
         if (!layout.tiny) {
             ActionDock(centered = !layout.twoPane) {
                 FailureButtons(
                     kind = kind,
                     primary = true,
-                    secondary = dockBoth,
-                    modifier = Modifier.padding(horizontal = layout.gutter, vertical = StenoSpace.m),
-                    onAction = onAction,
+                    quiet = quietInDock,
+                    modifier = Modifier.padding(horizontal = layout.gutter).padding(top = StenoSpace.m, bottom = StenoSpace.s),
+                    callbacks = callbacks,
                 )
             }
         }
     }
     val inlineActions: @Composable () -> Unit = {
-        if (layout.tiny || !dockBoth) {
+        if (layout.tiny || !quietInDock) {
             FailureButtons(
                 kind = kind,
                 primary = layout.tiny,
-                secondary = true,
+                quiet = true,
                 modifier = Modifier.padding(top = StenoSpace.s),
-                onAction = onAction,
+                callbacks = callbacks,
             )
         }
     }
     if (layout.twoPane) {
         Row(rootModifier) {
             Column(Modifier.weight(0.42f).fillMaxHeight()) {
-                StenoTopBar(barTitle, onBack = onBack)
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = layout.gutter)
-                        .padding(bottom = StenoSpace.l),
-                    verticalArrangement = Arrangement.spacedBy(StenoSpace.m),
-                ) {
-                    art()
-                    file()
+                StenoTopBar(bar, onBack = onBack)
+                CenteredState(Modifier.weight(1f).fillMaxWidth()) {
+                    FailureArt(kind, plate)
+                    FailureFile(detail)
                 }
             }
             Spacer(Modifier.width(StenoSize.hairline).fillMaxHeight().background(colors.outlineVariant))
             Column(Modifier.weight(0.58f).fillMaxHeight()) {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = layout.gutter, vertical = StenoSpace.l),
-                    verticalArrangement = Arrangement.spacedBy(StenoSpace.s),
-                ) {
-                    message()
+                CenteredState(Modifier.weight(1f).fillMaxWidth()) {
+                    FailureMessage(text)
+                    DetailsBlock(detail, copy)
                     inlineActions()
                 }
                 dock()
@@ -295,59 +289,64 @@ private fun FailureScreen(
         }
     } else {
         Column(rootModifier) {
-            StenoTopBar(barTitle, onBack = onBack)
-            CenteredContent(Modifier.weight(1f)) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = layout.gutter)
-                        .padding(bottom = StenoSpace.l),
-                    verticalArrangement = Arrangement.spacedBy(StenoSpace.s),
-                ) {
-                    file()
-                    Spacer(Modifier.padding(top = if (layout.short) 0.dp else StenoSpace.s))
-                    art()
-                    message()
-                    inlineActions()
-                }
+            StenoTopBar(bar, onBack = onBack)
+            CenteredState(Modifier.weight(1f).fillMaxWidth()) {
+                FailureArt(kind, plate)
+                FailureMessage(text)
+                FailureFile(detail)
+                DetailsBlock(detail, copy)
+                inlineActions()
             }
             dock()
         }
     }
 }
 
+/** Имя файла и его данные: что именно не получилось обработать. */
 @Composable
 private fun FailureFile(detail: JobDetailUi) {
+    val colors = StenoTheme.colors
+    val type = StenoTheme.type
     val preflight = detail.processing?.preflight
     val duration = (preflight?.durationMs ?: detail.summary.durationMs)?.let(::formatTimecode)
     val size = preflight?.sizeBytes?.let(::formatMib)
-    FileCard(
-        name = preflight?.fileName ?: detail.summary.title,
-        meta = listOfNotNull(duration, size).joinToString(META_DOT).ifEmpty { null },
-    )
+    val meta = listOfNotNull(duration, size).joinToString(META_DOT)
+    Column(
+        modifier = Modifier.widthIn(max = StateTextWidth).padding(top = StenoSpace.xs).testTag(Tags.CARD_FILE),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = preflight?.fileName ?: detail.summary.title,
+            modifier = Modifier.testTag(Tags.FILE_NAME),
+            style = type.bodySmall,
+            color = colors.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.MiddleEllipsis,
+        )
+        if (meta.isNotEmpty()) Text(meta, style = type.bodySmall, color = colors.onSurfaceVariant)
+    }
 }
 
 /** Иллюстрация причины. Сбой модели и проверки показывается значком: коту там нечего делать. */
 @Composable
-private fun FailureArt(kind: FailureKind, size: Dp) {
+private fun FailureArt(kind: FailureKind, plate: Dp) {
     val colors = StenoTheme.colors
     val mascot = kind.mascot
     if (mascot != null) {
-        MascotAtStart(mascot, size = size)
+        MascotPlate(mascot, Modifier.padding(bottom = StenoSpace.s), plate = plate, motion = EnterMotion.ERROR)
         return
     }
     val critical = kind == FailureKind.PROCESSING
     Box(
         modifier = Modifier
-            .padding(top = StenoSpace.s, bottom = StenoSpace.xs)
+            .padding(bottom = StenoSpace.s)
             .size(IconCircle)
             .background(colors.surfaceContainerHigh, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         StenoIcon(
-            icon = if (critical) R.drawable.ic_error else R.drawable.ic_report,
-            tint = if (critical) colors.error else colors.onSurfaceVariant,
+            icon = if (critical) R.drawable.ic_error else R.drawable.ic_memory,
+            tint = if (critical) colors.error else colors.primary,
             size = StenoSize.iconLarge,
         )
     }
@@ -365,16 +364,19 @@ private fun FailureMessage(text: FailureText) {
         modifier = Modifier
             .focusRequester(focus)
             .focusable()
+            .widthIn(max = StateTextWidth)
             .semantics { heading() }
             .testTag(Tags.ERROR_TITLE),
-        style = type.titleLarge,
+        style = if (LocalWindowLayout.current.largeText) type.titleLarge else type.headline,
         color = colors.onSurface,
+        textAlign = TextAlign.Center,
     )
     Text(
         text = text.body,
-        modifier = Modifier.testTag(Tags.ERROR_BODY),
+        modifier = Modifier.widthIn(max = StateTextWidth).testTag(Tags.ERROR_BODY),
         style = type.bodyLarge,
         color = colors.onSurfaceVariant,
+        textAlign = TextAlign.Center,
     )
 }
 
@@ -382,10 +384,9 @@ private fun FailureMessage(text: FailureText) {
 @Composable
 private fun DetailsBlock(detail: JobDetailUi, copy: DiagnosticsCopy) {
     var open by rememberSaveable(key = "failure_details") { mutableStateOf(false) }
-    Column {
+    Column(Modifier.widthIn(max = StateTextWidth), horizontalAlignment = Alignment.CenterHorizontally) {
         FlowRow(
-            modifier = Modifier.offset(x = -StenoSpace.s),
-            horizontalArrangement = Arrangement.spacedBy(StenoSpace.m),
+            horizontalArrangement = Arrangement.spacedBy(StenoSpace.m, Alignment.CenterHorizontally),
             itemVerticalAlignment = Alignment.CenterVertically,
         ) {
             QuietAction(
@@ -441,39 +442,43 @@ private fun DetailLine(label: String, value: String) {
     }
 }
 
-@Composable
-private fun DockButton(action: FailureAction, kind: FailureKind, primary: Boolean, modifier: Modifier, onAction: (FailureAction) -> Unit) {
-    val look = actionLook(action, kind)
-    if (primary) {
-        PrimaryAction(stringResource(look.label), { onAction(action) }, modifier, icon = look.icon, tag = look.tag)
-    } else {
-        OutlinedAction(stringResource(look.label), { onAction(action) }, modifier, icon = look.icon, tag = look.tag)
-    }
-}
-
-/** Кнопки причины. На тесном экране запасная уходит в прокрутку, чтобы текст остался на виду. */
+/**
+ * Главное действие и тихие под ним: запасное действие причины и возврат к записям. На тесном экране
+ * тихие уходят в прокрутку, чтобы текст остался на виду.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FailureButtons(
     kind: FailureKind,
     primary: Boolean,
-    secondary: Boolean,
+    quiet: Boolean,
     modifier: Modifier,
-    onAction: (FailureAction) -> Unit,
+    callbacks: FailureCallbacks,
 ) {
-    val layout = LocalWindowLayout.current
     val pair = kind.actions
-    val spare = pair.secondary.takeIf { secondary }
-    val first = pair.primary.takeIf { primary }
-    if (first == null && spare == null) return
-    if (first != null && spare != null && !layout.compactWidth && !layout.largeText) {
-        Row(modifier, horizontalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
-            DockButton(first, kind, true, Modifier.weight(1f), onAction)
-            DockButton(spare, kind, false, Modifier.weight(1f), onAction)
+    val spare = pair.secondary?.let { it to actionLook(it, kind) }
+    Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (primary) {
+            val look = actionLook(pair.primary, kind)
+            PrimaryAction(
+                text = stringResource(look.label),
+                onClick = { callbacks.onAction(pair.primary) },
+                modifier = Modifier.fillMaxWidth().widthIn(max = StateTextWidth),
+                icon = look.icon,
+                tag = look.tag,
+            )
         }
-    } else {
-        Column(modifier, verticalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
-            first?.let { DockButton(it, kind, true, Modifier, onAction) }
-            spare?.let { DockButton(it, kind, false, Modifier, onAction) }
+        if (quiet) {
+            FlowRow(
+                modifier = Modifier.padding(top = StenoSpace.xs),
+                horizontalArrangement = Arrangement.spacedBy(StenoSpace.m, Alignment.CenterHorizontally),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                spare?.let { (action, look) ->
+                    QuietAction(stringResource(look.label), { callbacks.onAction(action) }, tag = look.tag)
+                }
+                QuietAction(stringResource(R.string.scr03_to_library), callbacks.onLibrary, tag = Tags.TO_LIBRARY)
+            }
         }
     }
 }

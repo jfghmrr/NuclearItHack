@@ -207,7 +207,7 @@ fun HomeRoute(controller: StenoController, actions: AppActions) {
         HomeCallbacks(
             onImport = actions.importAudio,
             onImportAll = actions.importAny,
-            onModels = { actions.navigator.push(Route.Verification) },
+            onModels = { actions.navigator.push(Route.Models) },
             onSettings = { actions.navigator.push(Route.Settings) },
             onAudio = { audio -> actions.importFiles(listOf(Uri.parse(audio.uri))) },
             onJob = { job -> actions.navigator.push(routeForJob(job.id, job.state)) },

@@ -35,8 +35,23 @@ sealed interface Route {
     /** SCR-07. */
     data class Failure(val jobId: String) : Route
 
-    /** SCR-08. */
-    data object Verification : Route
+    /** Модели на устройстве. */
+    data object Models : Route
+
+    /** Сведения о модели [name]. */
+    data class ModelCard(val name: String) : Route
+
+    /** Что и где происходит с разговором, с проверкой пакета на месте. */
+    data object Privacy : Route
+
+    /** Разрешения приложения: назначение и технический список. */
+    data object Permissions : Route
+
+    /** SCR-08: замеры последней записи. */
+    data object Diagnostics : Route
+
+    /** Версия приложения и переходы к правовым сведениям. */
+    data object About : Route
 
     /** Шрифты, модели и библиотеки с их лицензиями. */
     data object Licenses : Route
@@ -75,7 +90,12 @@ internal fun Route.encode(): String = when (this) {
     Route.Record -> "record"
     Route.MicPermission -> "mic"
     Route.Settings -> "settings"
-    Route.Verification -> "verification"
+    Route.Models -> "models"
+    is Route.ModelCard -> "model|$name"
+    Route.Privacy -> "privacy"
+    Route.Permissions -> "permissions"
+    Route.Diagnostics -> "diagnostics"
+    Route.About -> "about"
     Route.Licenses -> "licenses"
     is Route.LicenseText -> "license|$entryId"
     is Route.Processing -> "processing|$jobId"
@@ -90,7 +110,12 @@ internal fun decodeRoute(value: String): Route {
         "record" -> Route.Record
         "mic" -> Route.MicPermission
         "settings" -> Route.Settings
-        "verification" -> Route.Verification
+        "models" -> Route.Models
+        "model" -> Route.ModelCard(parts[1])
+        "privacy" -> Route.Privacy
+        "permissions" -> Route.Permissions
+        "diagnostics" -> Route.Diagnostics
+        "about" -> Route.About
         "licenses" -> Route.Licenses
         "license" -> Route.LicenseText(parts[1])
         "processing" -> Route.Processing(parts[1])

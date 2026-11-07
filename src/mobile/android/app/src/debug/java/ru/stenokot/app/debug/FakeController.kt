@@ -22,6 +22,7 @@ import ru.stenokot.app.domain.HomeUi
 import ru.stenokot.app.domain.JobDetailUi
 import ru.stenokot.app.domain.ProcessingUi
 import ru.stenokot.app.domain.RecordingUi
+import ru.stenokot.app.domain.ModelCheckUi
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.domain.UserStage
 import ru.stenokot.app.domain.VerificationUi
@@ -71,7 +72,14 @@ internal class FakeController(private val context: Context? = null) : StenoContr
     override val verification: StateFlow<VerificationUi> = verificationState
     override val recording = MutableStateFlow<RecordingUi>(RecordingUi.Idle)
     override val micLevel = MutableStateFlow(DemoMicLevels[0])
+    override val modelCheck = MutableStateFlow(ModelCheckUi())
     private var micFeed: Job? = null
+
+    /** Демо-сверка: все модели совпадают. Настоящая живёт в конвейере и считает хэши файлов. */
+    override fun checkModels() {
+        val names = homeState.value.models.items.map { it.name }
+        modelCheck.value = ModelCheckUi(verdicts = names.associateWith { true })
+    }
 
     override fun startRecording() {
         recording.value = RecordingUi.Active(DEMO_RECORDING_MS, micBusy = false)
@@ -119,6 +127,7 @@ internal class FakeController(private val context: Context? = null) : StenoContr
         jobs.value = scene.jobs.associateBy { it.summary.id }
         homeState.value = scene.home
         verificationState.value = scene.verification
+        modelCheck.value = scene.modelCheck
         recording.value = scene.recording
         if (scene.recording is RecordingUi.Active) feedMicLevel()
     }
@@ -128,6 +137,7 @@ internal class FakeController(private val context: Context? = null) : StenoContr
     }
 
     override fun import(uris: List<Uri>): String? {
+        if (uris.isEmpty()) return null
         counter += 1
         val id = "live$counter"
         val name = uris.firstOrNull()?.lastPathSegment?.substringAfterLast('/')?.ifBlank { null } ?: DemoData.FILE_DS1

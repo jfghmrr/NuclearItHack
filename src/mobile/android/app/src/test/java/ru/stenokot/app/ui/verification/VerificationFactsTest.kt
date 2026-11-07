@@ -61,7 +61,6 @@ class VerificationFactsTest {
 
     @Test
     fun textHelpers() {
-        assertEquals("369f35a71bf2", hashPrefix("369f35a71bf288d3b8e0391fabd8dba5"))
         assertEquals("zapis.metadata.json", metadataFileName("zapis.mp3"))
         assertEquals("WAKE_LOCK", shortPermission("android.permission.WAKE_LOCK"))
         assertEquals("ru.app.CUSTOM", shortPermission("ru.app.CUSTOM"))

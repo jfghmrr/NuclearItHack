@@ -7,6 +7,7 @@ import ru.stenokot.app.domain.ExportKind
 import ru.stenokot.app.domain.HomeUi
 import ru.stenokot.app.domain.JobDetailUi
 import ru.stenokot.app.domain.MicProblem
+import ru.stenokot.app.domain.ModelCheckUi
 import ru.stenokot.app.domain.ModelReadiness
 import ru.stenokot.app.domain.ModelsUi
 import ru.stenokot.app.domain.RecordingUi
@@ -69,6 +70,10 @@ internal class InertController : StenoController {
     override val recording: MutableStateFlow<RecordingUi> = MutableStateFlow(RecordingUi.Idle)
 
     override val micLevel: StateFlow<Float> = MutableStateFlow(0f)
+
+    override val modelCheck: StateFlow<ModelCheckUi> = MutableStateFlow(ModelCheckUi())
+
+    override fun checkModels() = Unit
 
     override fun startRecording() {
         recording.value = RecordingUi.Failed(MicProblem.UNAVAILABLE)

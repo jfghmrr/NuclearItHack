@@ -83,6 +83,13 @@ fun formatDecimal(value: Double): String {
     return if (fraction == 0L) whole.toString() else "$whole,$fraction"
 }
 
+/**
+ * Время этапа в замерах. Короткий этап показывается в секундах с десятыми: таймкод округлил бы
+ * его до «00:00», и настоящий замер выглядел бы как его отсутствие.
+ */
+fun formatStageTime(ms: Long): String =
+    if (ms in 0 until MINUTE_MS) "${formatDecimal(ms / 1000.0)}$NBSP" + "с" else formatTimecode(ms)
+
 /** Размер файла или модели в МиБ. */
 fun formatMib(bytes: Long): String = "${formatDecimal(bytes / MEBIBYTE)}$NBSP" + "МиБ"
 

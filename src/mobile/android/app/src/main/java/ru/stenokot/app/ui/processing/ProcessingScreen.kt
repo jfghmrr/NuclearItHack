@@ -169,7 +169,7 @@ fun ProcessingRoute(jobId: String, controller: StenoController, actions: AppActi
                 icon = R.drawable.ic_chart,
                 onClick = {
                     menuOpen = false
-                    actions.navigator.push(Route.Verification)
+                    actions.navigator.push(Route.Diagnostics)
                 },
             )
             ActionSheetRow(

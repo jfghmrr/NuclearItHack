@@ -21,7 +21,7 @@ enum class FailureKind(val mascot: MascotKind?) {
 }
 
 /** Что делает кнопка экрана ошибки. */
-enum class FailureAction { RETRY, IMPORT, DIAGNOSTICS }
+enum class FailureAction { RETRY, IMPORT, MODELS }
 
 /** Главное действие экрана и необязательное запасное. */
 @Immutable
@@ -30,7 +30,7 @@ data class FailureActions(val primary: FailureAction, val secondary: FailureActi
 /** Кнопки для причины: главной всегда назначается то действие, что устраняет именно её. */
 val FailureKind.actions: FailureActions
     get() = when (this) {
-        FailureKind.MODEL -> FailureActions(FailureAction.DIAGNOSTICS, FailureAction.RETRY)
+        FailureKind.MODEL -> FailureActions(FailureAction.MODELS, FailureAction.RETRY)
         FailureKind.FORMAT,
         FailureKind.CORRUPT,
         FailureKind.READ,

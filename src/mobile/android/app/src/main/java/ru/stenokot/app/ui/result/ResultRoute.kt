@@ -417,7 +417,7 @@ private fun ResultContent(
 
     val transcriptPane: @Composable (Modifier) -> Unit = { modifier ->
         if (noSpeech) {
-            NoSpeech(onImport, modifier)
+            NoSpeech(onImport, { actions.navigator.resetTo(Route.Home) }, modifier)
         } else if (prep != null && currentView != null) {
             TranscriptPane(
                 model = prep.model,

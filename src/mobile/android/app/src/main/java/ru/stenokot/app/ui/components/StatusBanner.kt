@@ -58,6 +58,7 @@ fun StatusBanner(
     title: String? = null,
     body: String? = null,
     tag: String? = null,
+    bodyTag: String? = null,
     polite: Boolean = false,
     action: (@Composable () -> Unit)? = null,
 ) {
@@ -79,7 +80,7 @@ fun StatusBanner(
             title?.let {
                 Text(it, style = type.bodySmall.copy(fontWeight = FontWeight.W700), color = palette.content)
             }
-            body?.let { Text(it, style = type.bodySmall, color = palette.content) }
+            body?.let { Text(it, Modifier.tagged(bodyTag), style = type.bodySmall, color = palette.content) }
             action?.invoke()
         }
     }

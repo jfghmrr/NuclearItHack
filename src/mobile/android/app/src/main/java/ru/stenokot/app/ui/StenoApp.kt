@@ -56,7 +56,12 @@ import ru.stenokot.app.ui.theme.StenoMotion
 import ru.stenokot.app.ui.theme.StenoTheme
 import ru.stenokot.app.ui.theme.appearanceSettings
 import ru.stenokot.app.ui.theme.rememberSystemMotion
-import ru.stenokot.app.ui.verification.VerificationRoute
+import ru.stenokot.app.ui.verification.AboutRoute
+import ru.stenokot.app.ui.verification.DiagnosticsRoute
+import ru.stenokot.app.ui.verification.ModelCardRoute
+import ru.stenokot.app.ui.verification.ModelsRoute
+import ru.stenokot.app.ui.verification.PermissionsRoute
+import ru.stenokot.app.ui.verification.PrivacyRoute
 import ru.stenokot.core.model.JobState
 import ru.stenokot.core.model.Stage
 
@@ -67,7 +72,8 @@ private val Route.jobId: String?
         is Route.Result -> jobId
         is Route.Failure -> jobId
         Route.Home, Route.Record, Route.MicPermission, Route.Settings,
-        Route.Verification, Route.Licenses, is Route.LicenseText,
+        Route.Models, is Route.ModelCard, Route.Privacy, Route.Permissions,
+        Route.Diagnostics, Route.About, Route.Licenses, is Route.LicenseText,
         -> null
     }
 
@@ -166,7 +172,12 @@ private fun StenoShell(
                     is Route.Processing -> ProcessingRoute(route.jobId, controller, actions)
                     is Route.Result -> ResultRoute(route, controller, actions)
                     is Route.Failure -> FailureRoute(route.jobId, controller, actions)
-                    Route.Verification -> VerificationRoute(controller, actions)
+                    Route.Models -> ModelsRoute(controller, actions)
+                    is Route.ModelCard -> ModelCardRoute(route.name, controller, actions)
+                    Route.Privacy -> PrivacyRoute(controller, actions)
+                    Route.Permissions -> PermissionsRoute(controller, actions)
+                    Route.Diagnostics -> DiagnosticsRoute(controller, actions)
+                    Route.About -> AboutRoute(actions)
                     Route.Licenses -> LicensesRoute(actions)
                     is Route.LicenseText -> LicenseTextRoute(route.entryId, actions)
                 }

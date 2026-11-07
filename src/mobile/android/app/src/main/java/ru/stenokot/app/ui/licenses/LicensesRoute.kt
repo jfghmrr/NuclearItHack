@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,12 +16,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import ru.stenokot.app.R
 import ru.stenokot.app.ui.AppActions
 import ru.stenokot.app.ui.Tags
 import ru.stenokot.app.ui.components.LinkRow
+import ru.stenokot.app.ui.components.ListBlock
 import ru.stenokot.app.ui.components.SectionHeader
 import ru.stenokot.app.ui.components.StenoTopBar
 import ru.stenokot.app.ui.layout.CenteredContent
@@ -33,10 +35,7 @@ import ru.stenokot.app.ui.theme.StenoTheme
 
 private const val LICENSE_DIR = "licenses/"
 
-/** Строка перечня с её порядковым номером во всём списке. */
-private data class NumberedEntry(val index: Int, val entry: LicenseEntry)
-
-/** Перечень шрифтов, моделей и библиотек. Открывается с экрана проверки. */
+/** Перечень шрифтов, моделей и библиотек. Открывается из сведений о приложении. */
 @Composable
 fun LicensesRoute(actions: AppActions) {
     val layout = LocalWindowLayout.current
@@ -47,24 +46,40 @@ fun LicensesRoute(actions: AppActions) {
         CenteredContent(Modifier.weight(1f)) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().testTag(Tags.LIST_LICENSES),
-                contentPadding = PaddingValues(start = layout.gutter, end = layout.gutter, bottom = StenoSpace.l),
+                contentPadding = PaddingValues(start = layout.gutter, end = layout.gutter, bottom = StenoSpace.xl),
             ) {
                 item(key = "intro", contentType = "intro") {
                     Text(
                         text = stringResource(R.string.licenses_intro),
-                        modifier = Modifier.padding(bottom = StenoSpace.s),
+                        modifier = Modifier.padding(top = StenoSpace.s),
                         style = type.bodyMedium,
                         color = colors.onSurfaceVariant,
                     )
                 }
                 var offset = 0
                 LicenseCatalog.groups.forEach { group ->
-                    item(key = group.title, contentType = "header") { SectionHeader(stringResource(group.title)) }
-                    val rows = group.entries.mapIndexed { index, entry -> NumberedEntry(offset + index, entry) }
-                    items(rows, key = { it.entry.id }, contentType = { "row" }) { (index, entry) ->
-                        LicenseRow(index, entry) { actions.navigator.push(Route.LicenseText(entry.id)) }
+                    val first = offset
+                    item(key = group.title, contentType = "group") {
+                        Column {
+                            SectionHeader(stringResource(group.title), Modifier.padding(top = StenoSpace.s))
+                            ListBlock(
+                                rows = group.entries.mapIndexed { index, entry ->
+                                    @Composable {
+                                        LicenseRow(first + index, entry) { actions.navigator.push(Route.LicenseText(entry.id)) }
+                                    }
+                                },
+                            )
+                        }
                     }
                     offset += group.entries.size
+                }
+                item(key = "note", contentType = "note") {
+                    Text(
+                        text = stringResource(R.string.licenses_note),
+                        modifier = Modifier.padding(top = StenoSpace.l),
+                        style = type.bodySmall,
+                        color = colors.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -98,7 +113,7 @@ fun LicenseTextRoute(entryId: String, actions: AppActions) {
         value = entry?.let { found -> withContext(Dispatchers.IO) { readLicense(context, found.file) } }.orEmpty()
     }
     Column(Modifier.fillMaxSize()) {
-        StenoTopBar(entry?.name ?: stringResource(R.string.licenses_title), onBack = actions.back)
+        StenoTopBar(stringResource(R.string.licenses_text_title), onBack = actions.back)
         CenteredContent(Modifier.weight(1f)) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().testTag(Tags.LICENSE_TEXT),
@@ -107,7 +122,16 @@ fun LicenseTextRoute(entryId: String, actions: AppActions) {
             ) {
                 if (entry != null) {
                     item(key = "head", contentType = "head") {
-                        Column(verticalArrangement = Arrangement.spacedBy(StenoSpace.xs)) {
+                        Column(
+                            modifier = Modifier.padding(top = StenoSpace.s, bottom = StenoSpace.s),
+                            verticalArrangement = Arrangement.spacedBy(StenoSpace.xs),
+                        ) {
+                            Text(
+                                text = entry.name,
+                                modifier = Modifier.semantics { heading() },
+                                style = type.headline,
+                                color = colors.onSurface,
+                            )
                             Text("${entry.license}, ${entry.holder}", style = type.labelMedium, color = colors.onSurface)
                             Text(stringResource(R.string.licenses_text_note), style = type.bodySmall, color = colors.onSurfaceVariant)
                         }

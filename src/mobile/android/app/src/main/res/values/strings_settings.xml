@@ -8,6 +8,9 @@
     <string name="settings_privacy">Приватность и разрешения</string>
     <string name="settings_privacy_hint">Аудио обрабатывается локально</string>
     <string name="settings_section_comfort">Удобство</string>
+    <string name="settings_notifications">Прогресс в уведомлении</string>
+    <string name="settings_notifications_on">Включён</string>
+    <string name="settings_notifications_off">Выключен. Обработка от него не зависит</string>
     <string name="settings_theme">Оформление</string>
     <string name="settings_theme_hint">Тема приложения</string>
     <string name="settings_theme_system">Как в системе</string>

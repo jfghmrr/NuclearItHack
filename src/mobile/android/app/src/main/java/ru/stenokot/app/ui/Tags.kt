@@ -116,6 +116,14 @@ object Tags {
     const val DIAGNOSTICS_ROW = "row_diagnostics"
     const val ABOUT_ROW = "row_about"
     const val MODELS_ROW = "row_models"
+    const val PRIVACY_ROW = "row_privacy"
+    const val CHECK_MODELS = "btn_check_models"
+    const val MODEL_INTEGRITY = "txt_model_integrity"
+    const val MODEL_SHA256 = "txt_model_sha256"
+    const val MODEL_LICENSE = "btn_model_license"
+    const val LIST_PERMISSIONS = "list_permissions"
+    const val APP_VERSION = "txt_app_version"
+    const val APP_PACKAGE = "txt_app_package"
 
     /** Строка найденного аудио. */
     fun rowAudio(index: Int) = "row_audio_$index"
@@ -129,7 +137,7 @@ object Tags {
     /** Кнопка удаления строки истории. */
     fun rowDelete(index: Int) = "btn_delete_$index"
 
-    /** Строка модели на экране проверки. */
+    /** Строка модели в списке моделей. */
     fun rowModel(index: Int) = "row_model_$index"
 
     /** Строка лицензии. */

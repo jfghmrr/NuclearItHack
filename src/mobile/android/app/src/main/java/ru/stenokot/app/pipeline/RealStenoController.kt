@@ -31,6 +31,7 @@ import ru.stenokot.app.domain.AudioFileUi
 import ru.stenokot.app.domain.ExportKind
 import ru.stenokot.app.domain.HomeUi
 import ru.stenokot.app.domain.JobDetailUi
+import ru.stenokot.app.domain.ModelCheckUi
 import ru.stenokot.app.domain.ModelsUi
 import ru.stenokot.app.domain.RecordingUi
 import ru.stenokot.app.domain.StenoController
@@ -97,6 +98,10 @@ class RealStenoController(
     override val recording: StateFlow<RecordingUi> get() = recorder.state
 
     override val micLevel: StateFlow<Float> get() = recorder.level
+
+    override val modelCheck: StateFlow<ModelCheckUi> get() = models.check
+
+    override fun checkModels() = models.startCheck()
 
     /** Первичные проверки, которым нужен диск или обращение к системе. */
     fun start() {

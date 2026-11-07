@@ -15,7 +15,12 @@ class NavigatorTest {
         val routes = listOf(
             Route.Home,
             Route.Record,
-            Route.Verification,
+            Route.Diagnostics,
+            Route.Models,
+            Route.ModelCard("GigaAM v3 e2e RNNT int8"),
+            Route.Privacy,
+            Route.Permissions,
+            Route.About,
             Route.Processing("job-1"),
             Route.Failure("job-2"),
             Route.Result("job-3", ResultTab.PROTOCOL, 12),
@@ -40,8 +45,8 @@ class NavigatorTest {
     @Test
     fun pushIgnoresSameScreen() {
         val navigator = Navigator(listOf(Route.Home))
-        navigator.push(Route.Verification)
-        navigator.push(Route.Verification)
+        navigator.push(Route.Diagnostics)
+        navigator.push(Route.Diagnostics)
         navigator.back()
         assertEquals(Route.Home, navigator.current)
     }

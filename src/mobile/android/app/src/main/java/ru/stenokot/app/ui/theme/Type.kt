@@ -70,6 +70,7 @@ data class StenoType(
     val monoMedium: TextStyle = style(400, 13, 18, features = TABULAR),
     val monoSmall: TextStyle = style(400, 12, 16, features = TABULAR),
     val numeral: TextStyle = style(400, 34, 40, features = TABULAR),
+    val metric: TextStyle = style(700, 26, 34, features = TABULAR),
     val numeralUnit: TextStyle = style(400, 15, 22),
     val timer: TextStyle = style(400, 67, 80, features = TABULAR),
 )

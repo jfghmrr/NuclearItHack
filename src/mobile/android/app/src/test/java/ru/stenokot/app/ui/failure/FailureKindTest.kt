@@ -70,7 +70,7 @@ class FailureKindTest {
 
     @Test
     fun primaryActionFixesTheCause() {
-        assertEquals(FailureAction.DIAGNOSTICS, FailureKind.MODEL.actions.primary)
+        assertEquals(FailureAction.MODELS, FailureKind.MODEL.actions.primary)
         assertEquals(FailureAction.IMPORT, FailureKind.CORRUPT.actions.primary)
         assertNull(FailureKind.CORRUPT.actions.secondary)
         assertEquals(FailureAction.RETRY, FailureKind.STORAGE.actions.primary)

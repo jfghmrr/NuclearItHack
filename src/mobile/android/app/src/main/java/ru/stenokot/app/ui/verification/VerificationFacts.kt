@@ -6,22 +6,30 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import ru.stenokot.app.domain.JobSummaryUi
+import ru.stenokot.app.domain.ModelCheckUi
 import ru.stenokot.app.domain.ModelItemUi
 import ru.stenokot.app.domain.ModelReadiness
 import ru.stenokot.app.domain.VerificationUi
 
 private const val BYTES_IN_MIB = 1_048_576L
-private const val HASH_PREFIX = 12
 private const val ANDROID_PERMISSION = "android.permission."
 
-/** Что экран проверки читает прямо из установленного пакета, мимо конвейера. */
+/** Что экраны проверки читают прямо из установленного пакета, мимо конвейера. */
 @Immutable
 data class PackageFacts(
     val packageName: String,
@@ -61,11 +69,67 @@ fun rememberPackageFacts(): State<PackageFacts?> {
     }
 }
 
+/** Что приложению сейчас разрешено системой. */
+@Immutable
+data class DeviceAccess(val microphone: Boolean, val notifications: Boolean, val audioFiles: Boolean)
+
+private fun granted(context: Context, permission: String): Boolean =
+    ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+
+private fun readDeviceAccess(context: Context): DeviceAccess {
+    val audio = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_AUDIO
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+    return DeviceAccess(
+        microphone = granted(context, Manifest.permission.RECORD_AUDIO),
+        notifications = NotificationManagerCompat.from(context).areNotificationsEnabled(),
+        audioFiles = granted(context, audio),
+    )
+}
+
+/** Разрешения перечитываются при каждом возврате на экран: их могли поменять в настройках системы. */
+@Composable
+fun rememberDeviceAccess(): State<DeviceAccess> {
+    val context = LocalContext.current
+    val owner = LocalLifecycleOwner.current
+    val access = remember { mutableStateOf(readDeviceAccess(context)) }
+    DisposableEffect(owner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) access.value = readDeviceAccess(context)
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+    return access
+}
+
 /** Имя разрешения без общего системного префикса. */
 fun shortPermission(name: String): String = name.removePrefix(ANDROID_PERMISSION)
 
-/** Начало хэша: полный хэш открывается по нажатию на строку. */
-fun hashPrefix(sha256: String): String = sha256.take(HASH_PREFIX)
+/** Название модели без формата весов и сам формат, если он указан. */
+@Immutable
+data class ModelTitle(val name: String, val format: String?)
+
+private val WeightFormat = Regex("(?i)int\\d+|fp\\d+|q\\d+(_[a-z0-9]+)*")
+
+/** Разбирает полное имя вида «GigaAM v3 e2e RNNT int8»: формат всегда стоит последним словом. */
+fun modelTitle(full: String): ModelTitle {
+    val last = full.substringAfterLast(' ', "")
+    return if (WeightFormat.matches(last)) ModelTitle(full.substringBeforeLast(' '), last) else ModelTitle(full, null)
+}
+
+/** Итог сверки одной модели с хэшами сборки. */
+enum class ModelIntegrity { NOT_CHECKED, CHECKING, PASSED, FAILED }
+
+/** Состояние сверки для модели [name]. Без настоящей сверки итога нет. */
+fun modelIntegrity(name: String, check: ModelCheckUi): ModelIntegrity = when {
+    check.running -> ModelIntegrity.CHECKING
+    check.verdicts[name] == true -> ModelIntegrity.PASSED
+    check.verdicts[name] == false -> ModelIntegrity.FAILED
+    else -> ModelIntegrity.NOT_CHECKED
+}
 
 /** Имя файла служебных данных для системного окна сохранения. */
 fun metadataFileName(title: String): String = "${title.substringBeforeLast('.')}.metadata.json"

@@ -11,7 +11,7 @@
     <string name="scr04_player_failed">Не удалось воспроизвести запись</string>
     <string name="scr04_timeline_spoken">Позиция в записи</string>
     <string name="scr04_no_speech_title">В файле не обнаружена речь</string>
-    <string name="scr04_no_speech_body">Файл JSON сохранён с пустым списком реплик</string>
+    <string name="scr04_no_speech_body">Файл JSON сохранён с пустым списком реплик. Проверьте звук или выберите другое аудио</string>
     <string name="scr04_pick_other">Выбрать другой файл</string>
     <string name="scr04_saved_fallback">Сохранено в папке приложения: %1$s</string>
     <string name="scr04_export_done">Файл сохранён</string>

@@ -2,7 +2,6 @@ package ru.stenokot.app.ui.result
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,13 +46,19 @@ import androidx.compose.ui.unit.sp
 import ru.stenokot.app.R
 import ru.stenokot.app.ui.Tags
 import ru.stenokot.app.ui.components.OutlinedAction
+import ru.stenokot.app.ui.components.CenteredState
+import ru.stenokot.app.ui.components.MascotKind
+import ru.stenokot.app.ui.components.MascotPlate
 import ru.stenokot.app.ui.components.PrimaryAction
+import ru.stenokot.app.ui.components.QuietAction
+import ru.stenokot.app.ui.components.StateTextWidth
 import ru.stenokot.app.ui.components.StenoIcon
 import ru.stenokot.app.ui.layout.ContentMaxWidth
 import ru.stenokot.app.ui.layout.LocalWindowLayout
 import ru.stenokot.app.ui.layout.WindowLayout
 import ru.stenokot.app.ui.nav.ResultTab
 import ru.stenokot.app.ui.theme.StenoMotion
+import ru.stenokot.app.ui.theme.EnterMotion
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
@@ -282,28 +287,26 @@ internal fun ActionButtons(
 
 /** Нет речи: честный результат, а не ошибка. JSON уже сохранён с пустым списком. */
 @Composable
-internal fun NoSpeech(onPickOther: () -> Unit, modifier: Modifier = Modifier) {
+internal fun NoSpeech(onPickOther: () -> Unit, onLibrary: () -> Unit, modifier: Modifier = Modifier) {
     val colors = StenoTheme.colors
-    val gutter = LocalWindowLayout.current.gutter
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = gutter, vertical = StenoSpace.xl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(StenoSpace.m, Alignment.CenterVertically),
-    ) {
-        Image(painterResource(R.drawable.mascot_no_speech), null, Modifier.size(StenoSize.mascot))
+    val layout = LocalWindowLayout.current
+    CenteredState(modifier.fillMaxSize()) {
+        MascotPlate(
+            MascotKind.NO_SPEECH,
+            Modifier.padding(bottom = StenoSpace.s),
+            plate = if (layout.hintsInContent) StenoSize.mascotPlateSmall else StenoSize.mascotPlate,
+            motion = EnterMotion.EMPTY,
+        )
         Text(
             text = stringResource(R.string.scr04_no_speech_title),
-            modifier = Modifier.semantics { heading() },
-            style = StenoTheme.type.titleLarge,
+            modifier = Modifier.widthIn(max = StateTextWidth).semantics { heading() },
+            style = if (layout.largeText) StenoTheme.type.titleLarge else StenoTheme.type.headline,
             color = colors.onSurface,
             textAlign = TextAlign.Center,
         )
         Text(
             text = stringResource(R.string.scr04_no_speech_body),
-            modifier = Modifier.widthIn(max = 420.dp),
+            modifier = Modifier.widthIn(max = StateTextWidth),
             style = StenoTheme.type.bodyLarge,
             color = colors.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -311,9 +314,11 @@ internal fun NoSpeech(onPickOther: () -> Unit, modifier: Modifier = Modifier) {
         PrimaryAction(
             text = stringResource(R.string.scr04_pick_other),
             onClick = onPickOther,
-            modifier = Modifier.widthIn(max = 420.dp),
+            modifier = Modifier.padding(top = StenoSpace.m).fillMaxWidth().widthIn(max = StateTextWidth),
+            icon = R.drawable.ic_upload_file,
             tag = Tags.PICK_OTHER,
         )
+        QuietAction(stringResource(R.string.scr03_to_library), onLibrary, tag = Tags.TO_LIBRARY)
     }
 }
 

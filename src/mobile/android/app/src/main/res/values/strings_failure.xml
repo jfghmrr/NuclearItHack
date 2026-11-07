@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="scr07_title">Ошибка</string>
+    <string name="scr07_bar_model">Модель недоступна</string>
+    <string name="scr07_bar_file">Не удалось открыть аудио</string>
+    <string name="scr07_bar_storage">Недостаточно места</string>
+    <string name="scr07_bar_memory">Недостаточно памяти</string>
+    <string name="scr07_bar_interrupted">Обработка прервана</string>
     <string name="scr07_model_title">Модель не прошла проверку целостности</string>
-    <string name="scr07_model_body">Не удалось загрузить модель распознавания речи. Запустите обработку ещё раз. Если ошибка повторится, переустановите приложение</string>
+    <string name="scr07_model_body">Не удалось загрузить модель распознавания речи. Проверьте файлы моделей и запустите обработку ещё раз</string>
     <string name="scr07_format_title">Формат не поддерживается</string>
     <string name="scr07_format_body">Файл %1$s не удалось открыть как аудио. Подходят MP3, WAV, M4A, OGG и FLAC</string>
     <string name="scr07_corrupt_title">Не удалось прочитать аудио</string>
@@ -19,12 +24,12 @@
     <string name="scr07_processing_title">Ошибка обработки</string>
     <string name="scr07_processing_body">Результат не прошёл проверку, поэтому файл JSON не сохранён. Запустите обработку ещё раз</string>
     <string name="scr07_stage_body">Обработка остановилась на этапе «%1$s», поэтому файл JSON не сохранён. Запустите её ещё раз</string>
-    <string name="scr07_interrupted_title">Обработка прервалась</string>
+    <string name="scr07_interrupted_title">Продолжим с места остановки</string>
     <string name="scr07_interrupted_body">Система остановила обработку на этапе «%1$s». Готовые этапы сохранены</string>
     <string name="scr07_action_other_file">Открыть другой файл</string>
     <string name="scr07_action_recheck">Повторить проверку</string>
     <string name="scr07_action_safe_retry">Повторить безопасно</string>
-    <string name="scr07_action_diagnostics">Открыть диагностику</string>
+    <string name="scr07_action_models">Открыть модели</string>
     <string name="scr07_more">Подробнее</string>
     <string name="scr07_less">Свернуть</string>
     <string name="scr07_copy">Скопировать диагностику</string>

@@ -39,6 +39,10 @@ class FormattersTest {
         assertEquals("1:24:07", formatTimecode(5_047_000))
         assertEquals("2:48:36", formatTimecode(10_116_000))
         assertEquals("00:00", formatTimecode(-5))
+        assertEquals("0,4\u00A0с", formatStageTime(420))
+        assertEquals("6\u00A0с", formatStageTime(6_000))
+        assertEquals("59,9\u00A0с", formatStageTime(59_900))
+        assertEquals("01:08", formatStageTime(68_000))
         assertEquals("00:04 - 00:09", formatTimeRange(4_120, 9_480))
     }
 
