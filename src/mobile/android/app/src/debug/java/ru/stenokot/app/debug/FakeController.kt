@@ -36,7 +36,8 @@ private const val TICK_MS = 1_000L
 private const val CANCEL_MS = 1_500L
 private const val QUEUE_MS = 1_200L
 private const val DEMO_JSON = "{\"transcript\":[]}"
-private const val DEMO_MIC_LEVEL = 0.62f
+private const val LEVEL_TICK_MS = 120L
+private val DemoMicLevels = floatArrayOf(0.34f, 0.72f, 0.5f, 0.9f, 0.28f, 0.62f, 0.82f, 0.42f, 0.56f, 0.76f, 0.3f)
 private const val DEMO_RECORDING_MS = 754_000L
 
 /** Шаг имитации: стадия конвейера, её счётчик и этап пользователя. */
@@ -69,10 +70,25 @@ internal class FakeController(private val context: Context? = null) : StenoContr
     override val home: StateFlow<HomeUi> = homeState
     override val verification: StateFlow<VerificationUi> = verificationState
     override val recording = MutableStateFlow<RecordingUi>(RecordingUi.Idle)
-    override val micLevel = MutableStateFlow(DEMO_MIC_LEVEL)
+    override val micLevel = MutableStateFlow(DemoMicLevels[0])
+    private var micFeed: Job? = null
 
     override fun startRecording() {
         recording.value = RecordingUi.Active(DEMO_RECORDING_MS, micBusy = false)
+        feedMicLevel()
+    }
+
+    /** Шевелит волну только пока идёт запись: постоянное значение рисовало бы один столбик. */
+    private fun feedMicLevel() {
+        if (micFeed?.isActive == true) return
+        micFeed = scope.launch {
+            var index = 0
+            while (recording.value is RecordingUi.Active) {
+                micLevel.value = DemoMicLevels[index % DemoMicLevels.size]
+                index += 1
+                delay(LEVEL_TICK_MS)
+            }
+        }
     }
 
     override fun stopRecording() {
@@ -103,6 +119,8 @@ internal class FakeController(private val context: Context? = null) : StenoContr
         jobs.value = scene.jobs.associateBy { it.summary.id }
         homeState.value = scene.home
         verificationState.value = scene.verification
+        recording.value = scene.recording
+        if (scene.recording is RecordingUi.Active) feedMicLevel()
     }
 
     override fun job(id: String): StateFlow<JobDetailUi?> = flows.getOrPut(id) {

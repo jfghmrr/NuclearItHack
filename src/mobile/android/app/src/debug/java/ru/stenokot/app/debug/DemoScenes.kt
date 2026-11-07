@@ -8,6 +8,7 @@ import ru.stenokot.app.domain.ModelsUi
 import ru.stenokot.app.domain.OutputFileUi
 import ru.stenokot.app.domain.ProcessingUi
 import ru.stenokot.app.domain.ProtocolUi
+import ru.stenokot.app.domain.RecordingUi
 import ru.stenokot.app.domain.ResultUi
 import ru.stenokot.app.domain.StageStatus
 import ru.stenokot.app.domain.StageUi
@@ -40,6 +41,7 @@ internal data class DemoScene(
     val jobs: List<JobDetailUi>,
     val route: Route,
     val verification: VerificationUi = DemoData.verificationEmpty,
+    val recording: RecordingUi = RecordingUi.Idle,
 )
 
 /** Обработка DS-1 с параметрами конкретного состояния. */
@@ -53,6 +55,7 @@ internal data class StageSnapshot(
 )
 
 private const val MIN = 60_000L
+private const val DEMO_RECORDING_MS = 754_000L
 
 private val TookPrepare = UserStage.PREPARE_AUDIO to 20_000L
 private val TookAsr = UserStage.RECOGNIZE to 232_000L
@@ -212,6 +215,18 @@ private fun resultScene(
         route = Route.Result(id, tab, focus),
     )
 }
+
+/** Итог обработки: та же задача, что в результате, открытая на экране обработки. */
+private fun doneScene(state: JobState, res: ResultUi): DemoScene =
+    resultScene(state, res).copy(route = Route.Processing("ds1"))
+
+/** Запись идёт: экран записи открывается сам, как в рабочем приложении. */
+private fun recordingScene(micBusy: Boolean) = DemoScene(
+    home = home(),
+    jobs = emptyList(),
+    route = Route.Home,
+    recording = RecordingUi.Active(DEMO_RECORDING_MS, micBusy),
+)
 
 private fun protocolStateScene(transcriptState: DemoScene): DemoScene {
     val route = transcriptState.route as Route.Result
@@ -392,6 +407,15 @@ private fun processingScene(id: String): DemoScene? = when (id) {
         running(Stage.ASR, 19f / 45f),
         processing(AsrSnapshot, 117_000, 3 * MIN, 5 * MIN, powerSave = true),
     )
+    "S03-X" -> doneScene(
+        done(LlmStatus.APPLIED),
+        ds1Result(protocol(LlmStatus.APPLIED, windowsDone = 8, document = DemoData.protocolDs1)),
+    )
+    "S03-X2" -> doneScene(JobState.TranscriptReady("Download/Stenokot/x.json"), ds1Result(protocol(null)))
+    "S03-X3" -> doneScene(
+        done(LlmStatus.APPLIED),
+        ds1Result(protocol(LlmStatus.APPLIED, windowsDone = 8, document = DemoData.protocolDs1), exportFailed = true),
+    )
     "S03-R" -> processingScene(
         running(Stage.DIARIZE, 1f / 3f),
         processing(
@@ -547,8 +571,12 @@ private fun resultScene(id: String): DemoScene? {
     }
 }
 
-/** Состояния ошибок и экрана проверки. */
+/** Состояния ошибок, записи, настроек и экрана проверки. */
 private fun otherScene(id: String): DemoScene? = when (id) {
+    "S02-A" -> recordingScene(micBusy = false)
+    "S02-B" -> recordingScene(micBusy = true)
+    "S02-P" -> DemoScene(home(), emptyList(), Route.MicPermission)
+    "S09-A" -> DemoScene(home(), emptyList(), Route.Settings)
     "S07-A" -> failureScene(JobState.Failed(Stage.ASR, ErrorCode.MODEL_LOAD_FAILED, null))
     "S07-B" -> failureScene(
         JobState.Failed(Stage.DECODE, ErrorCode.DECODE_UNSUPPORTED_FORMAT, null),
@@ -573,7 +601,7 @@ private fun otherScene(id: String): DemoScene? = when (id) {
     "S08-D2" -> verificationScene(DemoData.modelsNoSpace, DemoData.verificationCopying)
     "S08-E" -> verificationScene(DemoData.modelsReady, DemoData.verificationPartial, "DONE")
     "S08-L" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.Licenses)
-    "S08-T" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.LicenseText("mono"))
+    "S08-T" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.LicenseText("noto"))
     else -> null
 }
 
