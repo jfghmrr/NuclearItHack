@@ -56,6 +56,7 @@ private fun style(
 data class StenoType(
     val display: TextStyle = style(700, 34, 42),
     val headline: TextStyle = style(700, 26, 34),
+    val sheetTitle: TextStyle = style(700, 23, 30),
     val titleLarge: TextStyle = style(700, 18, 24),
     val titleMedium: TextStyle = style(700, 16, 22),
     val cardTitle: TextStyle = style(700, 15, 21),

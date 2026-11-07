@@ -45,7 +45,7 @@ fun SheetHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifie
         Text(
             text = title,
             modifier = Modifier.weight(1f).semantics { heading() },
-            style = StenoTheme.type.headline,
+            style = StenoTheme.type.sheetTitle,
             color = colors.onBackground,
         )
         IconButton(onClick = onClose, modifier = Modifier.testTag(Tags.SHEET_CLOSE)) {
@@ -96,7 +96,7 @@ fun ActionSheet(title: String, onDismiss: () -> Unit, content: @Composable Colum
             Text(
                 text = title,
                 modifier = Modifier.padding(bottom = StenoSpace.s).semantics { heading() },
-                style = StenoTheme.type.headline,
+                style = StenoTheme.type.sheetTitle,
                 color = colors.onBackground,
             )
             content()

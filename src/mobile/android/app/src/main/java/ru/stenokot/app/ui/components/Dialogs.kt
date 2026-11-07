@@ -21,7 +21,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogWindowProvider
 import ru.stenokot.app.ui.theme.StenoRadius
@@ -31,8 +30,6 @@ import ru.stenokot.app.ui.theme.StenoTheme
 
 private val DialogMaxWidth = 356.dp
 private val DialogPadding = 24.dp
-private val DialogTitleSize = 23.sp
-private val DialogTitleLine = 30.sp
 private const val SCRIM_LIGHT = 0.33f
 private const val SCRIM_DARK = 0.55f
 
@@ -75,7 +72,7 @@ fun StenoDialog(
             Text(
                 text = title,
                 modifier = Modifier.semantics { heading() },
-                style = type.headline.copy(fontSize = DialogTitleSize, lineHeight = DialogTitleLine),
+                style = type.sheetTitle,
                 color = colors.onSurface,
             )
             body?.let {
