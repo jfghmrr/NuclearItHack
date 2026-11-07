@@ -1,37 +1,43 @@
 # Автоматический запуск
 
-Приложение рассчитано на проверку без участия человека: нет онбординга, диалогов и запросов разрешений при запуске, импорт сразу запускает обработку.
+Приложение рассчитано на проверку без участия человека: нет онбординга, диалогов и запросов разрешений при запуске, импорт сразу запускает обработку, а следующий файл принимается в том же запущенном приложении.
 
 ## Запуск
 
 ```bash
-adb install -r -g app-full-release.apk
+adb install -r -g stenokot-<commit>.apk
 adb push dialog1.mp3 /sdcard/Download/
 adb shell am start -a android.intent.action.VIEW -t audio/mpeg \
   -d file:///sdcard/Download/dialog1.mp3 -n ru.stenokot.app/.MainActivity
 ```
 
-- Ключ `-g` выдаёт разрешение на чтение аудио: без него адрес `file://` не открыть, задача завершится `FAILED:IMPORT_NO_PERMISSION`
+- Ключ `-g` выдаёт разрешение на чтение аудио. Без него адрес `file://` не открыть, и задача завершится `FAILED:IMPORT_NO_PERMISSION`
 - Для других форматов укажите свой тип: `audio/wav`, `audio/mp4`, `audio/ogg`, `audio/flac`
 - Несколько файлов можно отправить подряд: они встанут в очередь и пройдут по порядку
-- Тот же путь через интерфейс: нажатие `btn_import`, затем файл в системном окне выбора. Запускать обработку отдельно не нужно
-- Папка `/sdcard/Android/data/ru.stenokot.app/files/inbox/` видна приложению без разрешений. Файл, положенный туда через `adb push`, появляется в списке «Найденные аудио» с подписью «Папка приложения»
+- Тот же путь через интерфейс: `btn_import`, затем файл в системном окне выбора. Окно открывается в `Download`, можно выбрать несколько файлов. Запускать обработку отдельно не нужно
+- Папка `/sdcard/Android/data/ru.stenokot.app/files/inbox/` видна приложению без разрешений. Файл, положенный туда через `adb push`, появляется на Главной в разделе «Аудио на устройстве» с подписью «Папка приложения». Нажатие на строку запускает обработку
 
 ## Результат
 
-Контрактный файл: `/sdcard/Download/Stenokot/dialog1.json`. Имя берётся из имени исходного файла без расширения. Если записать в `Download` не удалось, тот же файл появляется в `Android/data/ru.stenokot.app/files/export/`, и этот путь показывает `txt_output_path`. Служебные данные лежат отдельно в `/sdcard/Download/Stenokot/meta/`, поэтому поиск `*.json` в основной папке находит только контрактные файлы.
+Контрактный файл: `/sdcard/Download/Stenokot/dialog1.json`. Имя берётся из имени исходного файла без расширения. Повторная обработка того же файла заменяет свой результат, другой файл с тем же именем получает имя с расширением, например `dialog1.wav.json`.
 
-Файл появляется автоматически, экспорт вручную не нужен.
+Если записать в `Download` не удалось, тот же файл появляется в `/sdcard/Android/data/ru.stenokot.app/files/export/`, и этот путь показывает `txt_output_path`. Служебные данные лежат отдельно в `/sdcard/Download/Stenokot/meta/`, поэтому поиск `*.json` в основной папке находит только контрактные файлы.
+
+Файл публикуется целиком: пока запись не закончена, в папке его не видно. Экспорт вручную не нужен.
+
+```bash
+adb shell ls /sdcard/Download/Stenokot/
+```
 
 ## Признаки готовности
 
-Строка `txt_status` видна на каждом экране и дублируется в logcat с тегом `PIPELINE`:
+Строка `txt_status` есть на каждом экране и дублируется в logcat с тегом `PIPELINE`:
 
 ```bash
 adb logcat -s PIPELINE:I
 ```
 
-| Значение | Что значит | Файл готов |
+| Значение | Что значит | JSON готов |
 |---|---|---|
 | `IDLE` | Задачи нет | - |
 | `QUEUED` | Файл принят и ждёт очереди | Нет |
@@ -39,33 +45,33 @@ adb logcat -s PIPELINE:I
 | `TRANSCRIPT_READY` | JSON записан, до старта языковой модели 3 с | Да |
 | `WAITING_MODEL` | JSON записан, файл языковой модели ещё копируется | Да |
 | `RUNNING:LLM` | JSON записан, идёт протокол | Да |
-| `DONE` | Всё закончено | Да |
+| `DONE` | Всё закончено, протокол и замеры лежат в `meta/` | Да |
 | `DONE_LLM_FAILED` | Стенограмма готова, протокол не создан | Да |
-| `FAILED:<CODE>` | Ошибка или прерывание до появления файла | Нет |
+| `DONE_META_FAILED` | Стенограмма готова, протокол или замеры не сохранились в `meta/` | Да |
+| `FAILED:<CODE>` | Ошибка или прерывание до появления JSON | Нет |
 | `CANCELLED` | Обработка отменена | Нет |
 
-Контрактный файл готов при `TRANSCRIPT_READY`. Пауза из-за перегрева остаётся `RUNNING:<STAGE>`: работа продолжится сама. Прогресс обновляется не чаще раза в секунду, бесконечных анимаций нет: они не мешают `uiautomator` дождаться простоя интерфейса.
-
-Файл публикуется целиком: пока запись не закончена, в папке его не видно. Проверка в обход статуса:
-
-```bash
-adb shell ls /sdcard/Download/Stenokot/
-```
+Контрактный файл готов при `TRANSCRIPT_READY`. Пауза из-за перегрева остаётся `RUNNING:<STAGE>`: работа продолжится сама. Значения внутри этапа обновляются не чаще раза в секунду. Маскот на экране обработки слегка «дышит» только пока экран виден, редким таймером, и это движение выключается в настройках.
 
 ## Идентификаторы для UiAutomator
 
-`testTag` доступны как `resource-id` и не зависят от локали устройства.
+`testTag` доступны как `resource-id` и не зависят от языка устройства. Индекс `<n>` начинается с нуля.
 
-| Экран | Идентификаторы |
+| Экран | Основные идентификаторы |
 |---|---|
 | Все | `txt_status`, `btn_back` |
-| Главная | `btn_import`, `btn_import_all`, `txt_models`, `btn_start`, `btn_resume`, `card_file`, `card_job`, `list_audio`, `row_audio_<n>`, `row_audio_permission`, `list_queue`, `row_queue_<n>`, `list_history`, `row_history_<n>`, `btn_delete_<n>` |
-| Обработка | `txt_file_name`, `txt_preflight`, `txt_stage`, `txt_stage_index`, `txt_stage_percent`, `txt_stage_counter`, `progress_stage`, `txt_elapsed`, `txt_remaining`, `txt_status_hint`, `list_stages`, `row_stage_<STAGE>`, `btn_start`, `btn_cancel` |
-| Результат | `tab_transcript`, `tab_protocol`, `list_transcript`, `row_utt_<n>`, `btn_play`, `slider_player`, `txt_output_path`, `btn_export`, `btn_export_protocol`, `btn_import` |
-| Ошибка | `txt_error_title`, `txt_error_body`, `btn_models`, `btn_start`, `btn_import` |
-| Проверка | `txt_offline`, `list_models`, `row_model_<n>`, `txt_rtf_core`, `txt_rtf_full`, `list_stage_metrics`, `btn_export_meta` |
-
-Индекс `<n>` начинается с нуля.
+| Главная | `btn_import`, `btn_import_all`, `btn_record`, `btn_settings`, `txt_models`, `txt_library_search`, `list_audio`, `row_audio_<n>`, `row_audio_permission`, `list_queue`, `row_queue_<n>`, `list_history`, `row_history_<n>`, `card_job`, `btn_start`, `btn_resume`, `btn_delete_<n>` |
+| Обработка | `card_file`, `txt_file_name`, `txt_preflight`, `list_stages`, `row_stage_<STAGE>`, `txt_stage`, `txt_stage_index`, `txt_stage_percent`, `txt_stage_counter`, `progress_stage`, `txt_elapsed`, `txt_remaining`, `txt_status_hint`, `btn_start`, `btn_processing_menu`, `btn_cancel`, `btn_cancel_confirm` |
+| Итог обработки | `txt_done_title`, `btn_open_transcript`, `btn_export`, `txt_output_path`, `btn_to_library` |
+| Результат | `tab_transcript`, `tab_protocol`, `btn_export`, `btn_result_menu`, `list_transcript`, `row_utt_<n>`, `list_speakers`, `btn_search`, `txt_search`, `btn_play`, `slider_player`, `txt_player_time`, `banner_llm`, `btn_import` |
+| Экспорт | `sheet_export`, `row_export_transcript`, `btn_export_protocol`, `btn_export_save`, `btn_share` |
+| Файл результата | `panel_export`, `txt_output_path`, `txt_output_meta`, `btn_copy_path`, `btn_open_folder`, `btn_share` |
+| Протокол | `txt_llm_draft`, `list_chapters`, `row_chapter_<n>`, `list_protocol`, `row_protocol_<n>`, `txt_protocol_state`, `btn_goto_utterance` |
+| Ошибка | `txt_error_title`, `txt_error_body`, `btn_error_details`, `btn_copy_diagnostics`, `btn_models`, `btn_start`, `btn_import` |
+| Модели | `list_models`, `row_model_<n>`, `btn_check_models`, `txt_model_integrity` |
+| Приватность | `txt_offline`, `btn_permissions`, `list_permissions` |
+| Диагностика | `txt_rtf_core`, `txt_rtf_full`, `list_stage_metrics`, `txt_json_valid`, `txt_json_path`, `btn_copy_diagnostics`, `btn_export_meta` |
+| Запись | `txt_rec_elapsed`, `progress_rec_level`, `btn_rec_stop`, `btn_rec_cancel` |
 
 ## Ошибки
 
@@ -77,10 +83,14 @@ adb shell ls /sdcard/Download/Stenokot/
 | `IMPORT_READ_FAILED`, `IMPORT_NO_PERMISSION` | Файл не читается или нет доступа |
 | `DECODE_UNSUPPORTED_FORMAT` | Не аудио или нет декодера |
 | `DECODE_CORRUPT` | Файл повреждён или обрезан |
-| `MODEL_LOAD_FAILED` | Модель не загрузилась |
+| `MODEL_LOAD_FAILED` | Модель речи не загрузилась |
 | `LOW_MEMORY` | Система остановила обработку из-за памяти |
 | `CONTRACT_INVALID` | Результат не прошёл проверку, файл не записан |
 | `FGS_TIMEOUT` | Система остановила службу, чекпойнт сохранён |
 | `INTERRUPTED` | Прерывание без известной причины |
 
-Тишина не считается ошибкой: файл `{"transcript":[]}` записывается, статус `DONE`.
+Тишина не считается ошибкой: записывается `{"transcript":[]}`, статус `DONE`.
+
+## Что проверено на устройстве
+
+Запуск через `am start` с `VIEW` проверен на эмуляторе и на Honor. Повреждённый MP3 и тишина проверены на эмуляторе. Пути с `inbox`, папкой `export` и записью в logcat есть в коде, но на последней сборке отдельно не прогонялись. Подробно в [TEST_RESULTS.md](TEST_RESULTS.md).

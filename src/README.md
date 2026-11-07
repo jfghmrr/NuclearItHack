@@ -31,21 +31,32 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 
 Результат: `app/build/outputs/apk/full/release/app-full-release.apk`.
 
-- Подмодуль `third_party/llama.cpp` закреплён на тег v0.9.0. Если клон сделан без `--recurse-submodules`, выполните `git submodule update --init --depth 1`
-- Модели и нативные библиотеки sherpa-onnx не хранятся в Git. Скрипт скачивает их и сверяет SHA-256 по `config/models.lock`. Для скачивания нужна сеть, для работы приложения нет
+- Подмодуль `third_party/llama.cpp` описан в `.gitmodules` и закреплён на теге v0.9.0. Если клон сделан без `--recurse-submodules`, выполните `git submodule update --init --depth 1`
+- Модели и нативные библиотеки sherpa-onnx не хранятся в Git. Скрипт скачивает их, модели занимают 1270,7 МиБ, и сверяет SHA-256 по `config/models.lock`. Сеть нужна сборке, приложению нет
 - Каталог моделей задаёт переменная `STENOKOT_MODELS_DIR`, по умолчанию `models` в корне репозитория
 - Без `keystore.properties` release-сборка подписывается отладочным ключом
+
+## Сборка в CI
+
+Тот же путь из чистого клона выполняет GitHub Actions: [.github/workflows/release.yml](../.github/workflows/release.yml). Запуск по тегу `v*` или вручную.
+
+1. Подмодуль, JDK 21, компоненты Android SDK
+2. `scripts/fetch_models.sh` с кэшем по `config/models.lock`
+3. Тесты `:core:test` и `:app:testDevDebugUnitTest`
+4. `:app:assembleFullRelease`, подпись ключом команды из секретов репозитория
+5. Проверка `aapt2 dump permissions`: сборка падает, если в APK есть `INTERNET` или `ACCESS_NETWORK_STATE`
+6. Публикация APK `stenokot-<commit>.apk` в Releases, SHA-256 в описании релиза
+
+Пробный запуск 42394754449 на коммите `f0bba51` собрал APK из чистого клона примерно за 17 минут.
 
 ## Варианты сборки
 
 | Вариант | Назначение |
 |---|---|
 | `full` | Итоговый APK, модели внутри `assets/models` без сжатия |
-| `dev` | Разработка: модели читаются из `Android/data/<пакет>/files/models` |
+| `dev` | Разработка: модели читаются из `Android/data/<пакет>/files/models`, APK маленький и ставится быстро |
 
 ## Запуск
-
-Команды выполняются из `src/mobile/android`.
 
 ```bash
 adb install -r -g app/build/outputs/apk/full/release/app-full-release.apk
@@ -60,7 +71,7 @@ adb shell am start -a android.intent.action.VIEW -t audio/mpeg \
 
 ```bash
 cd src/mobile/android
-./gradlew :core:test
+./gradlew :core:test :app:testDevDebugUnitTest
 ```
 
-Тесты `:core` идут на JVM и не требуют устройства. Результаты - в [docs/TEST_RESULTS.md](../docs/TEST_RESULTS.md).
+Тесты идут на JVM и не требуют устройства. Результаты в [docs/TEST_RESULTS.md](../docs/TEST_RESULTS.md).
