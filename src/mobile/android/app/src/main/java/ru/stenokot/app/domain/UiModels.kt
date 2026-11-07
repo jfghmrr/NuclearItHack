@@ -68,7 +68,12 @@ enum class UserStage(val stages: Set<Stage>) {
 /** Положение этапа в обработке. */
 enum class StageStatus { PENDING, ACTIVE, DONE, SKIPPED, FAILED }
 
-/** Строка этапа. Счётчик и доля есть только там, где они реально известны. */
+/**
+ * Строка этапа. Счётчик и доля есть только там, где они реально известны.
+ * Единица счётчика зависит от стадии конвейера: при копировании файла это КиБ, при декодировании
+ * и поиске речи секунды записи, при определении языка и распознавании фрагменты, при определении
+ * говорящих окна.
+ */
 @Immutable
 data class StageUi(
     val stage: UserStage,
@@ -89,6 +94,8 @@ data class ProcessingUi(
     val remainingMaxMs: Long?,
     val lowMemory: Boolean,
     val cancelling: Boolean,
+    val powerSave: Boolean = false,
+    val resumed: Boolean = false,
 )
 
 /** Сведения о сохранённом контрактном файле. */

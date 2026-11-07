@@ -9,7 +9,10 @@ data class AudioInfo(
     val sourceSha256: String,
 )
 
-/** Итог предварительной проверки файла. Показывается пользователю и не требует подтверждения. */
+/**
+ * Итог предварительной проверки файла. Показывается пользователю и не требует подтверждения.
+ * Признак [estimateMeasured] означает, что оценка времени опирается на замер этого устройства.
+ */
 data class PreflightInfo(
     val fileName: String,
     val sizeBytes: Long,
@@ -19,6 +22,7 @@ data class PreflightInfo(
     val requiredBytes: Long,
     val estimateMinMs: Long?,
     val estimateMaxMs: Long?,
+    val estimateMeasured: Boolean = false,
 )
 
 /** Непрерывный срез записи в отсчётах 16 кГц. */
