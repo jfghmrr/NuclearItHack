@@ -14,6 +14,7 @@ class NavigatorTest {
     fun routesSurviveEncoding() {
         val routes = listOf(
             Route.Home,
+            Route.Record,
             Route.Verification,
             Route.Processing("job-1"),
             Route.Failure("job-2"),

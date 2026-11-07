@@ -8,6 +8,9 @@ import ru.stenokot.core.model.Stage
 /** Машинный код без активной задачи. */
 const val STATUS_IDLE = "IDLE"
 
+/** Машинный код экрана записи с микрофона. В автоматическом проходе не встречается. */
+const val STATUS_RECORDING = "RECORDING"
+
 /** Код задачи для строки `txt_status`. Значения являются договором с автоматикой и не переводятся. */
 fun statusCode(state: JobState): String = when (state) {
     JobState.Queued -> "QUEUED"
@@ -38,6 +41,7 @@ fun stageLabel(stage: Stage): String = when (stage) {
 /** Озвучивание кода для TalkBack. Видимый текст строки остаётся кодом. */
 fun statusSpoken(code: String): String = when {
     code == STATUS_IDLE -> "Состояние: ожидание файла"
+    code == STATUS_RECORDING -> "Состояние: идёт запись с микрофона"
     code == "QUEUED" -> "Состояние: файл в очереди"
     code.startsWith("RUNNING:") -> {
         val stage = Stage.entries.firstOrNull { it.name == code.substringAfter(':') }

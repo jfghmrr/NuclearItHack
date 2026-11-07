@@ -13,6 +13,9 @@ sealed interface Route {
     /** SCR-01. */
     data object Home : Route
 
+    /** Запись с микрофона. */
+    data object Record : Route
+
     /** SCR-03. */
     data class Processing(val jobId: String) : Route
 
@@ -63,6 +66,7 @@ internal val Route.stateKey: String
 /** Запись маршрута в строку для сохранения между пересозданиями активности. */
 internal fun Route.encode(): String = when (this) {
     Route.Home -> "home"
+    Route.Record -> "record"
     Route.Verification -> "verification"
     Route.Licenses -> "licenses"
     is Route.LicenseText -> "license|$entryId"
@@ -75,6 +79,7 @@ internal fun Route.encode(): String = when (this) {
 internal fun decodeRoute(value: String): Route {
     val parts = value.split('|')
     return when (parts[0]) {
+        "record" -> Route.Record
         "verification" -> Route.Verification
         "licenses" -> Route.Licenses
         "license" -> Route.LicenseText(parts[1])

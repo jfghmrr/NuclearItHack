@@ -23,11 +23,13 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import ru.stenokot.app.domain.RecordingUi
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.ui.components.StatusLine
 import ru.stenokot.app.ui.components.resourceTags
 import ru.stenokot.app.ui.failure.FailureRoute
 import ru.stenokot.app.ui.format.STATUS_IDLE
+import ru.stenokot.app.ui.format.STATUS_RECORDING
 import ru.stenokot.app.ui.format.statusCode
 import ru.stenokot.app.ui.home.HomeRoute
 import ru.stenokot.app.ui.layout.ProvideWindowLayout
@@ -38,7 +40,9 @@ import ru.stenokot.app.ui.nav.Route
 import ru.stenokot.app.ui.nav.rememberNavigator
 import ru.stenokot.app.ui.nav.routeForJob
 import ru.stenokot.app.ui.nav.stateKey
+import ru.stenokot.app.ui.nav.Navigator
 import ru.stenokot.app.ui.processing.ProcessingRoute
+import ru.stenokot.app.ui.record.RecordRoute
 import ru.stenokot.app.ui.result.ResultRoute
 import ru.stenokot.app.ui.theme.StenoMotion
 import ru.stenokot.app.ui.theme.StenoTheme
@@ -52,7 +56,7 @@ private val Route.jobId: String?
         is Route.Processing -> jobId
         is Route.Result -> jobId
         is Route.Failure -> jobId
-        Route.Home, Route.Verification, Route.Licenses, is Route.LicenseText -> null
+        Route.Home, Route.Record, Route.Verification, Route.Licenses, is Route.LicenseText -> null
     }
 
 /**
@@ -96,6 +100,10 @@ fun StenoApp(
                 awaitedJob = null
             }
 
+            LaunchedEffect(controller, navigator) {
+                controller.recording.collect { followRecording(it, controller, navigator) }
+            }
+
             BackHandler(enabled = navigator.canGoBack) { navigator.back() }
 
             Column(
@@ -116,6 +124,7 @@ fun StenoApp(
                     screens.SaveableStateProvider(route.stateKey) {
                         when (route) {
                             Route.Home -> HomeRoute(controller, actions)
+                            Route.Record -> RecordRoute(controller)
                             is Route.Processing -> ProcessingRoute(route.jobId, controller, actions)
                             is Route.Result -> ResultRoute(route, controller, actions)
                             is Route.Failure -> FailureRoute(route.jobId, controller, actions)
@@ -131,6 +140,23 @@ fun StenoApp(
     }
 }
 
+/**
+ * Пока идёт запись, её экран всегда сверху: с него есть стоп, и случайно потерять запись негде. Экран
+ * может быть восстановлен и без записи, тогда он сам закрывается. Готовая запись ведёт на свою задачу.
+ */
+private fun followRecording(state: RecordingUi, controller: StenoController, navigator: Navigator) {
+    val onRecord = navigator.current == Route.Record
+    when (state) {
+        RecordingUi.Starting, is RecordingUi.Active -> navigator.push(Route.Record)
+        is RecordingUi.Saved -> {
+            val target = Route.Processing(state.jobId)
+            if (onRecord) navigator.replaceTop(target) else navigator.push(target)
+            controller.acknowledgeRecording()
+        }
+        RecordingUi.Idle, is RecordingUi.Failed -> if (onRecord) navigator.back()
+    }
+}
+
 /** Единственная стадия, ради которой новый файл встаёт в очередь: тяжёлый конвейер уже занят. */
 private fun JobState.isHeavy(): Boolean = when (this) {
     is JobState.Running -> stage != Stage.LLM
@@ -142,6 +168,7 @@ private fun JobState.isHeavy(): Boolean = when (this) {
 @Composable
 private fun rememberStatusCode(controller: StenoController, route: Route): String {
     val home by controller.home.collectAsStateWithLifecycle()
+    if (route == Route.Record) return STATUS_RECORDING
     val id = route.jobId ?: return home.statusCode.ifEmpty { STATUS_IDLE }
     val job by remember(id) { controller.job(id) }.collectAsStateWithLifecycle()
     return job?.summary?.state?.let(::statusCode) ?: home.statusCode.ifEmpty { STATUS_IDLE }

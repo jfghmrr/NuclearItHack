@@ -1,8 +1,12 @@
 package ru.stenokot.app.ui.home
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -45,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -56,13 +61,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.stenokot.app.R
 import ru.stenokot.app.domain.AudioFileUi
 import ru.stenokot.app.domain.HomeUi
 import ru.stenokot.app.domain.JobSummaryUi
+import ru.stenokot.app.domain.MicProblem
 import ru.stenokot.app.domain.ModelReadiness
 import ru.stenokot.app.domain.ModelsUi
+import ru.stenokot.app.domain.RecordingUi
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.ui.AppActions
 import ru.stenokot.app.ui.Tags
@@ -108,6 +117,8 @@ import ru.stenokot.core.model.Stage
 
 private const val META_DOT = " · "
 private const val SPOKEN_SEPARATOR = ", "
+private const val IMPORT_WEIGHT = 3f
+private const val RECORD_WEIGHT = 2f
 
 /** Действия главного экрана. Один объект на экран, чтобы строки списка не пересоздавали лямбды. */
 @Stable
@@ -121,7 +132,13 @@ private class HomeCallbacks(
     val onResume: (String) -> Unit,
     val onDelete: (JobSummaryUi) -> Unit,
     val onPermission: () -> Unit,
+    val onRecord: () -> Unit,
+    val onMicSettings: () -> Unit,
+    val onMicNoticeDismiss: () -> Unit,
 )
+
+/** Спокойное сообщение о микрофоне над кнопками. */
+private enum class MicNotice { DENIED, UNAVAILABLE, EMPTY, NO_SPACE }
 
 /** Всё, что нужно экрану для отрисовки. */
 @Immutable
@@ -129,6 +146,7 @@ private data class HomeState(
     val home: HomeUi,
     val sections: HomeSections,
     val preflight: PreflightInfo?,
+    val micNotice: MicNotice?,
 ) {
     val isEmpty: Boolean
         get() = home.audio.isEmpty() && home.jobs.isEmpty()
@@ -141,6 +159,31 @@ private fun audioPermission(): String =
         Manifest.permission.READ_EXTERNAL_STORAGE
     }
 
+/**
+ * Вместе с микрофоном просим уведомления: без них служба записи работает невидимо, а кнопка
+ * остановки в шторке пропадает. Запись от второго ответа не зависит.
+ */
+private fun recordPermissions(): Array<String> =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS)
+    } else {
+        arrayOf(Manifest.permission.RECORD_AUDIO)
+    }
+
+private fun micGranted(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+private fun openAppSettings(context: Context) {
+    val uri = Uri.fromParts("package", context.packageName, null)
+    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri))
+}
+
+private fun MicProblem.notice(): MicNotice = when (this) {
+    MicProblem.UNAVAILABLE -> MicNotice.UNAVAILABLE
+    MicProblem.EMPTY -> MicNotice.EMPTY
+    MicProblem.NO_SPACE -> MicNotice.NO_SPACE
+}
+
 /** SCR-01. Импорт доступен всегда и не блокируется состоянием моделей. */
 @Composable
 fun HomeRoute(controller: StenoController, actions: AppActions) {
@@ -152,12 +195,25 @@ fun HomeRoute(controller: StenoController, actions: AppActions) {
         detail?.processing?.preflight
     }
     var deletingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var micDenied by rememberSaveable { mutableStateOf(false) }
+    val recording by controller.recording.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val listState = rememberLazyListState()
 
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) controller.refreshAudio()
     }
-    val callbacks = remember(controller, actions) {
+    /** Разрешение запрашивается только здесь, по нажатию. Отказ не повторяется сам: решает пользователь. */
+    val microphone = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+        val granted = results[Manifest.permission.RECORD_AUDIO] == true
+        micDenied = !granted
+        if (granted) controller.startRecording()
+    }
+    LifecycleResumeEffect(context) {
+        if (micGranted(context)) micDenied = false
+        onPauseOrDispose {}
+    }
+    val callbacks = remember(controller, actions, context) {
         HomeCallbacks(
             onImport = actions.importAudio,
             onImportAll = actions.importAny,
@@ -168,9 +224,23 @@ fun HomeRoute(controller: StenoController, actions: AppActions) {
             onResume = controller::resume,
             onDelete = { job -> deletingId = job.id },
             onPermission = { permission.launch(audioPermission()) },
+            onRecord = {
+                controller.acknowledgeRecording()
+                if (micGranted(context)) {
+                    controller.startRecording()
+                } else {
+                    microphone.launch(recordPermissions())
+                }
+            },
+            onMicSettings = { openAppSettings(context) },
+            onMicNoticeDismiss = {
+                micDenied = false
+                controller.acknowledgeRecording()
+            },
         )
     }
-    val state = HomeState(home, sections, preflight)
+    val notice = (recording as? RecordingUi.Failed)?.problem?.notice() ?: MicNotice.DENIED.takeIf { micDenied }
+    val state = HomeState(home, sections, preflight, notice)
     if (LocalWindowLayout.current.twoPane) {
         HomeTwoPanes(state, callbacks, listState)
     } else {
@@ -362,22 +432,9 @@ private fun HomeDock(state: HomeState, callbacks: HomeCallbacks) {
                 .padding(top = StenoSpace.m, bottom = if (layout.hintsInContent) StenoSpace.m else StenoSpace.xs),
             verticalArrangement = Arrangement.spacedBy(StenoSpace.s),
         ) {
-            if (selected != null) {
-                if (!layout.tiny) StartAction(selected.id, callbacks)
-                OutlinedAction(
-                    text = stringResource(R.string.common_btn_import),
-                    onClick = callbacks.onImport,
-                    icon = R.drawable.ic_upload_file,
-                    tag = Tags.IMPORT,
-                )
-            } else {
-                PrimaryAction(
-                    text = stringResource(R.string.common_btn_import),
-                    onClick = callbacks.onImport,
-                    icon = R.drawable.ic_upload_file,
-                    tag = Tags.IMPORT,
-                )
-            }
+            state.micNotice?.let { MicNoticeBanner(it, callbacks) }
+            if (selected != null && !layout.tiny) StartAction(selected.id, callbacks)
+            ImportActions(primary = selected == null, callbacks)
             if (!layout.hintsInContent) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -399,6 +456,78 @@ private fun HomeDock(state: HomeState, callbacks: HomeCallbacks) {
             }
         }
     }
+}
+
+/** Импорт и запись. Импорт главный: он шире и в заливке. Крупному шрифту нужны две строки. */
+@Composable
+private fun ImportActions(primary: Boolean, callbacks: HomeCallbacks) {
+    val spacing = Arrangement.spacedBy(StenoSpace.s)
+    if (LocalWindowLayout.current.largeText) {
+        Column(verticalArrangement = spacing) {
+            ImportAction(primary, dense = false, callbacks.onImport)
+            RecordAction(dense = false, callbacks.onRecord)
+        }
+    } else {
+        Row(horizontalArrangement = spacing) {
+            ImportAction(primary, dense = true, callbacks.onImport, Modifier.weight(IMPORT_WEIGHT))
+            RecordAction(dense = true, callbacks.onRecord, Modifier.weight(RECORD_WEIGHT))
+        }
+    }
+}
+
+@Composable
+private fun ImportAction(primary: Boolean, dense: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val text = stringResource(R.string.common_btn_import)
+    if (primary) {
+        PrimaryAction(text, onClick, modifier, R.drawable.ic_upload_file, tag = Tags.IMPORT, dense = dense)
+    } else {
+        OutlinedAction(text, onClick, modifier, R.drawable.ic_upload_file, tag = Tags.IMPORT, dense = dense)
+    }
+}
+
+@Composable
+private fun RecordAction(dense: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    OutlinedAction(
+        text = stringResource(R.string.common_btn_record),
+        onClick = onClick,
+        modifier = modifier,
+        icon = R.drawable.ic_mic,
+        tag = Tags.RECORD,
+        dense = dense,
+    )
+}
+
+@Composable
+private fun MicNoticeBanner(notice: MicNotice, callbacks: HomeCallbacks) {
+    val text = when (notice) {
+        MicNotice.DENIED -> R.string.rec_denied
+        MicNotice.UNAVAILABLE -> R.string.rec_unavailable
+        MicNotice.EMPTY -> R.string.rec_empty
+        MicNotice.NO_SPACE -> R.string.rec_no_space
+    }
+    StatusBanner(
+        tone = BannerTone.NEUTRAL,
+        icon = R.drawable.ic_info,
+        body = stringResource(text),
+        tag = Tags.MIC_NOTICE,
+        polite = true,
+        action = {
+            Row(Modifier.offset(x = -StenoSpace.s), horizontalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
+                if (notice == MicNotice.DENIED) {
+                    QuietAction(
+                        text = stringResource(R.string.rec_open_settings),
+                        onClick = callbacks.onMicSettings,
+                        tag = Tags.MIC_SETTINGS,
+                    )
+                }
+                QuietAction(
+                    text = stringResource(R.string.rec_dismiss),
+                    onClick = callbacks.onMicNoticeDismiss,
+                    tag = Tags.MIC_DISMISS,
+                )
+            }
+        },
+    )
 }
 
 @Composable
