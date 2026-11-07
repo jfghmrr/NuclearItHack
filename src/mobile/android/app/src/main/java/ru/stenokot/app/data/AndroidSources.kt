@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.storage.StorageManager
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -67,8 +68,7 @@ class AndroidSources(
         val uri = Uri.parse(job.sourceUri)
         if (isFile(uri)) return InPlaceSource(FileAudioInput(File(checkNotNull(uri.path) { "Адрес без пути" })), lasting = true)
         return guarded {
-            val seekable = app.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize >= 0 } ?: false
-            if (seekable) InPlaceSource(ContentInput(job.title, uri), lasting = holdsAccess(uri)) else null
+            if (seekable(uri)) InPlaceSource(ContentInput(job.title, uri), lasting = holdsAccess(uri)) else null
         }
     }
 
@@ -124,8 +124,17 @@ class AndroidSources(
         }
     }
 
+    /** Виртуальный файл не даёт дескриптора, а источник с потоком даёт канал без размера: их можно только копировать. */
+    private fun seekable(uri: Uri): Boolean = try {
+        app.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize >= 0 } ?: false
+    } catch (failure: FileNotFoundException) {
+        false
+    }
+
+    /** Адрес из индекса звука читается по разрешению приложения, сохранять право на него не нужно. */
     private fun holdsAccess(uri: Uri): Boolean =
-        app.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission }
+        (uri.authority == MediaStore.AUTHORITY && audioPermissionGranted()) ||
+            app.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission }
 
     private fun open(uri: Uri): InputStream =
         if (isFile(uri)) {
