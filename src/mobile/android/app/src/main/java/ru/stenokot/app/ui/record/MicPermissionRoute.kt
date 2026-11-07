@@ -34,6 +34,7 @@ import ru.stenokot.app.R
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.ui.AppActions
 import ru.stenokot.app.ui.Tags
+import ru.stenokot.app.ui.components.ActionPair
 import ru.stenokot.app.ui.components.BottomActions
 import ru.stenokot.app.ui.components.GhostAction
 import ru.stenokot.app.ui.components.MascotKind
@@ -129,28 +130,36 @@ fun MicPermissionRoute(controller: StenoController, actions: AppActions) {
             )
         }
         BottomActions {
-            if (denied) {
-                PrimaryAction(
-                    text = stringResource(R.string.rec_open_settings),
-                    onClick = { openAppSettings(context) },
-                    tag = Tags.MIC_SETTINGS,
-                )
-            } else {
-                PrimaryAction(
-                    text = stringResource(R.string.mic_continue),
-                    onClick = { microphone.launch(recordPermissions()) },
-                    icon = R.drawable.ic_mic,
-                    tag = Tags.MIC_CONTINUE,
-                )
-            }
-            GhostAction(
-                text = stringResource(R.string.mic_import),
-                onClick = {
-                    actions.back()
-                    actions.importAudio()
+            ActionPair(
+                first = {
+                    if (denied) {
+                        PrimaryAction(
+                            text = stringResource(R.string.rec_open_settings),
+                            onClick = { openAppSettings(context) },
+                            modifier = it,
+                            tag = Tags.MIC_SETTINGS,
+                        )
+                    } else {
+                        PrimaryAction(
+                            text = stringResource(R.string.mic_continue),
+                            onClick = { microphone.launch(recordPermissions()) },
+                            modifier = it,
+                            icon = R.drawable.ic_mic,
+                            tag = Tags.MIC_CONTINUE,
+                        )
+                    }
                 },
-                modifier = Modifier.padding(top = StenoSpace.xs),
-                tag = Tags.IMPORT,
+                second = {
+                    GhostAction(
+                        text = stringResource(R.string.mic_import),
+                        onClick = {
+                            actions.back()
+                            actions.importAudio()
+                        },
+                        modifier = it,
+                        tag = Tags.IMPORT,
+                    )
+                },
             )
         }
     }

@@ -125,6 +125,9 @@ private val TightDock = 320.dp
 private val EmptyTextWidth = 310.dp
 private val BrandMarkSize = 25.sp
 private val ModelsTop = 2.dp
+private val ChipPadding = 20.dp
+private val ChipPaddingNarrow = 16.dp
+private const val NARROW_CHIPS_DP = 380
 
 /** Спокойное сообщение о микрофоне над кнопками. */
 private enum class MicNotice { UNAVAILABLE, EMPTY, NO_SPACE }
@@ -477,6 +480,7 @@ private fun FilterChip(
 ) {
     val colors = StenoTheme.colors
     val selected = filter == current
+    val narrow = LocalWindowLayout.current.widthDp < NARROW_CHIPS_DP
     val shape = RoundedCornerShape(StenoRadius.field)
     Box(
         modifier = Modifier
@@ -486,7 +490,7 @@ private fun FilterChip(
             .background(if (selected) colors.primaryContainer else colors.background, shape)
             .testTag(Tags.chipFilter(filter.name.lowercase()))
             .selectable(selected = selected, role = Role.Tab, onClick = { onSelect(filter) })
-            .padding(horizontal = 20.dp, vertical = StenoSpace.s),
+            .padding(horizontal = if (narrow) ChipPaddingNarrow else ChipPadding, vertical = StenoSpace.s),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -722,7 +726,8 @@ private fun HomeDock(state: HomeState, callbacks: HomeCallbacks) {
 private fun ImportActions(callbacks: HomeCallbacks) {
     val importText = stringResource(R.string.common_btn_import)
     val recordText = stringResource(R.string.common_btn_record)
-    if (LocalWindowLayout.current.largeText) {
+    val layout = LocalWindowLayout.current
+    if (layout.largeText && !layout.compactHeight) {
         Column(verticalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
             OutlinedAction(importText, callbacks.onImport, icon = R.drawable.ic_upload_file, tag = Tags.IMPORT)
             PrimaryAction(recordText, callbacks.onRecord, icon = R.drawable.ic_mic, tag = Tags.RECORD)

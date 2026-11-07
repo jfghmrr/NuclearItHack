@@ -267,7 +267,7 @@ private fun LevelWave(level: StateFlow<Float>, modifier: Modifier, height: Dp) {
 @Composable
 private fun RecordDock(enabled: Boolean, onStop: () -> Unit, onCancel: () -> Unit) {
     val layout = LocalWindowLayout.current
-    val wide = layout.compactHeight && !layout.largeText
+    val wide = layout.compactHeight
     BottomActions {
         if (wide) {
             Row(horizontalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
