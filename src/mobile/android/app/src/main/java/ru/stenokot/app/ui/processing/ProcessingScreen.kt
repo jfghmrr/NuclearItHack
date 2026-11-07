@@ -291,8 +291,13 @@ private fun ProcessingScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(StenoSpace.m),
                 ) {
-                    hero()
-                    work()
+                    if (layout.tiny) {
+                        work()
+                        hero()
+                    } else {
+                        hero()
+                        work()
+                    }
                 }
             }
             dock()
@@ -581,11 +586,13 @@ private fun DoneScreen(detail: JobDetailUi, controller: StenoController, actions
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            MascotPlate(
-                kind = MascotKind.DONE,
-                plate = if (layout.short) StenoSize.mascotPlateSmall else StenoSize.mascotPlate,
-                motion = EnterMotion.SUCCESS,
-            )
+            if (!layout.tiny) {
+                MascotPlate(
+                    kind = MascotKind.DONE,
+                    plate = if (layout.short) StenoSize.mascotPlateSmall else StenoSize.mascotPlate,
+                    motion = EnterMotion.SUCCESS,
+                )
+            }
             Text(
                 text = stringResource(R.string.scr03_done_headline),
                 modifier = Modifier.padding(top = StenoSpace.l).testTag(Tags.DONE_TITLE).semantics { heading() },

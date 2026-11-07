@@ -555,11 +555,13 @@ private fun EmptyLibrary(state: HomeState, callbacks: HomeCallbacks, viewport: D
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        MascotPlate(
-            kind = MascotKind.EMPTY,
-            plate = if (layout.short) StenoSize.mascotPlateSmall else StenoSize.mascotPlate,
-            motion = EnterMotion.EMPTY,
-        )
+        if (!layout.tiny) {
+            MascotPlate(
+                kind = MascotKind.EMPTY,
+                plate = if (layout.short) StenoSize.mascotPlateSmall else StenoSize.mascotPlate,
+                motion = EnterMotion.EMPTY,
+            )
+        }
         Text(
             text = stringResource(R.string.scr01_empty_title),
             modifier = Modifier.padding(top = StenoSpace.l).semantics { heading() },
