@@ -15,4 +15,26 @@
     <string name="scr03_cancelled_title">Обработка отменена</string>
     <string name="scr03_cancelled_body">Запись осталась в приложении. Можно запустить её снова или импортировать другую</string>
     <string name="scr03_progress_spoken">%1$s, %2$s</string>
+    <string name="scr03_headline">Стенокот слушает.</string>
+    <string name="scr03_on_device">Всё происходит на вашем устройстве.</string>
+    <string name="scr03_percent_unit">%% этапа</string>
+    <string name="scr03_stage_done">Готово</string>
+    <string name="scr03_stage_skipped">Пропущено</string>
+    <string name="scr03_stage_failed">Ошибка</string>
+    <string name="scr03_to_library">К записям</string>
+    <string name="scr03_menu">Действия обработки</string>
+    <string name="scr03_menu_diagnostics">Диагностика</string>
+    <string name="scr03_menu_diagnostics_hint">Подробности обработки</string>
+    <string name="scr03_menu_stop">Остановить обработку</string>
+    <string name="scr03_menu_stop_hint">Запись останется в библиотеке</string>
+    <string name="scr03_stop_title">Остановить обработку?</string>
+    <string name="scr03_stop_body">Запись останется в библиотеке. Её можно будет запустить снова.</string>
+    <string name="scr03_stop_confirm">Остановить</string>
+    <string name="scr03_stop_dismiss">Продолжить обработку</string>
+    <string name="scr03_done_title">Результат готов</string>
+    <string name="scr03_done_headline">Всё по полочкам.</string>
+    <string name="scr03_done_body">Разговор расшифрован. Можно читать текст и проверять протокол по исходной записи.</string>
+    <string name="scr03_done_body_forming">Разговор расшифрован и сохранён. Стенограмму можно читать сейчас, протокол ещё формируется.</string>
+    <string name="scr03_done_open">Открыть стенограмму</string>
+    <string name="scr03_done_exported">Файл сохранён: %1$s</string>
 </resources>

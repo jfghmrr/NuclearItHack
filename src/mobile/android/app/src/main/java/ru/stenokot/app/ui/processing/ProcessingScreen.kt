@@ -1,6 +1,9 @@
 package ru.stenokot.app.ui.processing
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -13,75 +16,101 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import ru.stenokot.app.R
+import ru.stenokot.app.domain.ExportKind
 import ru.stenokot.app.domain.JobDetailUi
 import ru.stenokot.app.domain.ProcessingUi
+import ru.stenokot.app.domain.StageStatus
 import ru.stenokot.app.domain.StageUi
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.ui.AppActions
 import ru.stenokot.app.ui.Tags
+import ru.stenokot.app.ui.components.ActionSheet
+import ru.stenokot.app.ui.components.ActionSheetRow
 import ru.stenokot.app.ui.components.BannerTone
-import ru.stenokot.app.ui.components.FileCard
+import ru.stenokot.app.ui.components.BottomActions
+import ru.stenokot.app.ui.components.DangerAction
+import ru.stenokot.app.ui.components.GhostAction
 import ru.stenokot.app.ui.components.KeepScreenOn
+import ru.stenokot.app.ui.components.MascotKind
+import ru.stenokot.app.ui.components.MascotPlate
 import ru.stenokot.app.ui.components.OutlinedAction
 import ru.stenokot.app.ui.components.PrimaryAction
+import ru.stenokot.app.ui.components.QuietAction
 import ru.stenokot.app.ui.components.StageRail
 import ru.stenokot.app.ui.components.StatusBanner
+import ru.stenokot.app.ui.components.StenoDialog
 import ru.stenokot.app.ui.components.StenoIcon
 import ru.stenokot.app.ui.components.StenoProgressBar
 import ru.stenokot.app.ui.components.StenoTopBar
-import ru.stenokot.app.ui.components.TonalAction
-import ru.stenokot.app.ui.format.formatMib
+import ru.stenokot.app.ui.components.spokenAs
 import ru.stenokot.app.ui.format.formatPercent
 import ru.stenokot.app.ui.format.formatPreflight
 import ru.stenokot.app.ui.format.formatRemaining
 import ru.stenokot.app.ui.format.formatStageCounter
 import ru.stenokot.app.ui.format.formatTimecode
 import ru.stenokot.app.ui.format.percentSpoken
+import ru.stenokot.app.ui.format.percentValue
+import ru.stenokot.app.ui.format.speakersLabel
 import ru.stenokot.app.ui.format.stageLabel
+import ru.stenokot.app.ui.format.userStageAction
 import ru.stenokot.app.ui.format.userStageLabel
 import ru.stenokot.app.ui.layout.CenteredContent
 import ru.stenokot.app.ui.layout.LocalWindowLayout
 import ru.stenokot.app.ui.nav.Route
+import ru.stenokot.app.ui.nav.ResultTab
 import ru.stenokot.app.ui.nav.routeForJob
+import ru.stenokot.app.ui.theme.EnterMotion
+import ru.stenokot.app.ui.theme.StenoRadius
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
-import ru.stenokot.app.ui.theme.StenoType
 import ru.stenokot.core.model.JobState
 import ru.stenokot.core.model.PauseReason
 import ru.stenokot.core.model.Stage
 
 private const val HINT_VISIBLE_MS = 4_000L
 private const val META_DOT = " · "
+private const val MIME_JSON = "application/json"
+private val StageShape = RoundedCornerShape(StenoRadius.stage)
+private val DoneTextWidth = 310.dp
 
-/** SCR-03. Сам уходит на результат или на ошибку, когда этого требует состояние задачи. */
+/** Обработка закончена, остался только показ: стенограмма сохранена, протокол идёт сам. */
+private fun JobState.hasResult(): Boolean = routeForJob("", this) is Route.Result
+
+/** В записи нет речи: у такого итога свой экран в результате, а не «Всё по полочкам». */
+private fun JobState.isSilent(): Boolean = this is JobState.Done && warnings.contains("AUDIO_EMPTY")
+
+/**
+ * SCR-03. Показывает ход обработки, а на готовой записи её итог. Сам уходит на ошибку, когда этого
+ * требует состояние задачи. Результат открывается кнопкой: итог не прячется автоматическим переходом.
+ */
 @Composable
 fun ProcessingRoute(jobId: String, controller: StenoController, actions: AppActions) {
     val job by remember(jobId) { controller.job(jobId) }.collectAsStateWithLifecycle()
@@ -90,7 +119,14 @@ fun ProcessingRoute(jobId: String, controller: StenoController, actions: AppActi
     LaunchedEffect(state) {
         if (state == null) return@LaunchedEffect
         val target = routeForJob(jobId, state)
-        if (target !is Route.Processing) actions.navigator.replaceTop(target)
+        when {
+            target is Route.Failure -> actions.navigator.replaceTop(target)
+            state.isSilent() -> actions.navigator.replaceTop(target)
+        }
+    }
+    if (detail != null && state != null && state.hasResult() && !state.isSilent()) {
+        DoneScreen(detail, controller, actions)
+        return
     }
     if (detail?.processing == null) {
         Column(Modifier.fillMaxSize()) {
@@ -106,6 +142,8 @@ fun ProcessingRoute(jobId: String, controller: StenoController, actions: AppActi
             hintTick = 0
         }
     }
+    var menuOpen by rememberSaveable { mutableStateOf(false) }
+    var stopping by rememberSaveable { mutableStateOf(false) }
     ProcessingScreen(
         detail = detail,
         processing = detail.processing,
@@ -115,8 +153,54 @@ fun ProcessingRoute(jobId: String, controller: StenoController, actions: AppActi
         onStart = {
             if (state == JobState.Cancelled) controller.start(jobId) else hintTick += 1
         },
-        onCancel = { controller.cancel(jobId) },
+        onMenu = { menuOpen = true },
     )
+    if (menuOpen) {
+        ActionSheet(title = stringResource(R.string.scr03_title), onDismiss = { menuOpen = false }) {
+            ActionSheetRow(
+                title = stringResource(R.string.scr03_menu_diagnostics),
+                subtitle = stringResource(R.string.scr03_menu_diagnostics_hint),
+                icon = R.drawable.ic_chart,
+                onClick = {
+                    menuOpen = false
+                    actions.navigator.push(Route.Verification)
+                },
+            )
+            ActionSheetRow(
+                title = stringResource(R.string.scr03_menu_stop),
+                subtitle = stringResource(R.string.scr03_menu_stop_hint),
+                icon = R.drawable.ic_stop_fill,
+                enabled = state != JobState.Cancelled && !detail.processing.cancelling,
+                tag = Tags.CANCEL,
+                onClick = {
+                    menuOpen = false
+                    stopping = true
+                },
+            )
+        }
+    }
+    if (stopping) {
+        StenoDialog(
+            title = stringResource(R.string.scr03_stop_title),
+            onDismiss = { stopping = false },
+            icon = R.drawable.ic_stop_fill,
+            body = stringResource(R.string.scr03_stop_body),
+        ) {
+            PrimaryAction(
+                text = stringResource(R.string.scr03_stop_dismiss),
+                onClick = { stopping = false },
+                tag = Tags.CANCEL_DISMISS,
+            )
+            DangerAction(
+                text = stringResource(R.string.scr03_stop_confirm),
+                onClick = {
+                    stopping = false
+                    controller.cancel(jobId)
+                },
+                tag = Tags.CANCEL_CONFIRM,
+            )
+        }
+    }
 }
 
 @Composable
@@ -127,213 +211,243 @@ private fun ProcessingScreen(
     onBack: () -> Unit,
     onImport: () -> Unit,
     onStart: () -> Unit,
-    onCancel: () -> Unit,
+    onMenu: () -> Unit,
 ) {
     val layout = LocalWindowLayout.current
     val colors = StenoTheme.colors
-    val cancelled = detail.summary.state == JobState.Cancelled
     val state = detail.summary.state
+    val cancelled = state == JobState.Cancelled
     val paused = state is JobState.Paused && state.reason == PauseReason.THERMAL
     val pipelineStage = when (state) {
         is JobState.Running -> state.stage
         is JobState.Paused -> state.stage
         else -> null
     }
-    val rail: @Composable () -> Unit = {
-        StageRail(processing.stages, paused = paused) { stage ->
-            ActiveStage(stage, processing.stages, pipelineStage)
-        }
+    val active = processing.stages.firstOrNull { it.status == StageStatus.ACTIVE }
+    val bar: @Composable () -> Unit = {
+        StenoTopBar(
+            title = stringResource(R.string.scr03_title),
+            onBack = onBack,
+            actions = {
+                IconButton(onClick = onMenu, modifier = Modifier.testTag(Tags.PROCESSING_MENU)) {
+                    StenoIcon(
+                        icon = R.drawable.ic_more,
+                        tint = colors.onSurface,
+                        size = StenoSize.icon,
+                        description = stringResource(R.string.scr03_menu),
+                    )
+                }
+            },
+        )
     }
-    val file: @Composable () -> Unit = {
-        ProcessingFile(detail, processing, withPreflight = !layout.short)
-    }
-    val status: @Composable () -> Unit = {
+    val hero: @Composable () -> Unit = { ProcessingHero(detail, processing, cancelled) }
+    val work: @Composable () -> Unit = {
         if (cancelled) {
             CancelledSummary()
         } else {
-            ProcessingStatus(processing, paused, showAlreadyRunning)
+            active?.let { StageCard(it, processing, pipelineStage) }
+            ProcessingHint(processing, paused, showAlreadyRunning)
         }
-        if (layout.short) PreflightNote(processing)
+        StageRail(processing.stages, paused = paused)
     }
-    val dock: @Composable () -> Unit = {
-        ProcessingDock(cancelled, processing.cancelling, onStart, onCancel, onImport)
-    }
-    val dockUnderPanes = layout.compactHeight
+    val dock: @Composable () -> Unit = { ProcessingDock(cancelled, onBack, onStart, onImport) }
     if (layout.twoPane) {
         Column(Modifier.fillMaxSize()) {
+            bar()
             Row(Modifier.weight(1f).fillMaxWidth()) {
-                Column(Modifier.weight(0.42f).fillMaxHeight()) {
-                    StenoTopBar(stringResource(R.string.scr03_title), onBack = onBack)
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = layout.gutter)
-                            .padding(bottom = StenoSpace.l),
-                        verticalArrangement = Arrangement.spacedBy(StenoSpace.m),
-                    ) {
-                        file()
-                        status()
-                        if (layout.tiny) dock()
-                    }
-                    if (!dockUnderPanes && !layout.tiny) dock()
-                }
+                Column(
+                    modifier = Modifier
+                        .weight(0.42f)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = layout.gutter)
+                        .padding(bottom = StenoSpace.l),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) { hero() }
                 Spacer(Modifier.width(StenoSize.hairline).fillMaxHeight().background(colors.outlineVariant))
                 Column(
                     modifier = Modifier
                         .weight(0.58f)
                         .fillMaxHeight()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = layout.gutter, vertical = StenoSpace.s),
-                ) {
-                    rail()
-                }
+                        .padding(horizontal = layout.gutter)
+                        .padding(bottom = StenoSpace.l),
+                    verticalArrangement = Arrangement.spacedBy(StenoSpace.m),
+                ) { work() }
             }
-            if (dockUnderPanes && !layout.tiny) dock()
+            dock()
         }
     } else {
         Column(Modifier.fillMaxSize()) {
-            StenoTopBar(stringResource(R.string.scr03_title), onBack = onBack)
+            bar()
             CenteredContent(Modifier.weight(1f)) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = layout.gutter)
-                        .padding(bottom = StenoSpace.l),
-                    verticalArrangement = Arrangement.spacedBy(if (layout.short) StenoSpace.s else StenoSpace.l),
+                        .padding(bottom = StenoSpace.m),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(StenoSpace.m),
                 ) {
-                    file()
-                    rail()
-                    status()
-                    if (layout.tiny) dock()
+                    hero()
+                    work()
                 }
             }
-            if (!layout.tiny) dock()
+            dock()
         }
     }
 }
 
+/** Кот, заголовок и сведения о файле. На коротком экране кот уступает место прогрессу. */
 @Composable
-private fun ProcessingFile(detail: JobDetailUi, processing: ProcessingUi, withPreflight: Boolean) {
-    val preflight = processing.preflight
-    val duration = (preflight?.durationMs ?: detail.summary.durationMs)?.let(::formatTimecode)
-    val size = preflight?.sizeBytes?.let(::formatMib)
-    FileCard(
-        name = preflight?.fileName ?: detail.summary.title,
-        meta = listOfNotNull(duration, size).joinToString(META_DOT).ifEmpty { null },
-        preflight = if (withPreflight) preflight?.let(::formatPreflight) else null,
-    )
-}
-
-/** Строка проверки файла под рельсом: на коротком экране она не должна отодвигать прогресс. */
-@Composable
-private fun PreflightNote(processing: ProcessingUi) {
-    val line = processing.preflight?.let(::formatPreflight) ?: return
-    Text(
-        text = line,
-        modifier = Modifier.testTag(Tags.PREFLIGHT),
-        style = StenoTheme.type.bodySmall,
-        color = StenoTheme.colors.onSurfaceVariant,
-    )
-}
-
-/** Число крупно, а знак процента мельче: так значение читается сразу и не разъезжается в строке. */
-private fun percentAnnotated(percent: String, type: StenoType): AnnotatedString = buildAnnotatedString {
-    val digits = percent.takeWhile(Char::isDigit)
-    append(digits)
-    withStyle(type.numeralUnit.toSpanStyle()) { append(percent.drop(digits.length)) }
-}
-
-/** Строки этапа без счётчика: здесь процент был бы выдумкой. */
-private fun hasNoCounter(stage: StageUi): Boolean = stage.fraction == null
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ActiveStage(stage: StageUi, stages: List<StageUi>, pipelineStage: Stage?) {
+private fun ProcessingHero(detail: JobDetailUi, processing: ProcessingUi, cancelled: Boolean) {
+    val layout = LocalWindowLayout.current
     val colors = StenoTheme.colors
     val type = StenoTheme.type
-    val label = userStageLabel(stage.stage)
-    Column(Modifier.padding(top = StenoSpace.xs), verticalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
+    val preflight = processing.preflight
+    val name = preflight?.fileName ?: detail.summary.title
+    val duration = (preflight?.durationMs ?: detail.summary.durationMs)?.let(::formatTimecode)
+    val line = listOfNotNull(name, duration).joinToString(META_DOT)
+    Column(
+        modifier = Modifier.fillMaxWidth().testTag(Tags.CARD_FILE),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (!layout.short && !layout.largeText) {
+            MascotPlate(MascotKind.WAITING, plate = StenoSize.mascotPlate * 0.8f, breathing = !cancelled)
+        }
         Text(
-            text = stringResource(R.string.scr03_stage_index, stages.indexOf(stage) + 1, stages.size),
-            modifier = Modifier.testTag(Tags.STAGE_INDEX),
+            text = stringResource(R.string.scr03_headline),
+            modifier = Modifier.padding(top = StenoSpace.s).semantics { heading() },
+            style = type.headline.copy(fontSize = type.display.fontSize * 0.7f),
+            color = colors.onBackground,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = line,
+            modifier = Modifier.padding(top = StenoSpace.s).testTag(Tags.FILE_NAME),
             style = type.bodySmall,
             color = colors.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = preflight?.let(::formatPreflight) ?: stringResource(R.string.scr03_on_device),
+            modifier = Modifier.then(if (preflight != null) Modifier.testTag(Tags.PREFLIGHT) else Modifier),
+            style = type.bodySmall,
+            color = colors.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** Карточка текущего этапа. Процент относится к этапу и появляется только там, где есть счётчик. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun StageCard(stage: StageUi, processing: ProcessingUi, pipelineStage: Stage?) {
+    val colors = StenoTheme.colors
+    val type = StenoTheme.type
+    val index = processing.stages.indexOf(stage) + 1
+    val indexText = stringResource(R.string.scr03_stage_index, index, processing.stages.size)
+    val label = userStageLabel(stage.stage)
+    val fraction = stage.fraction
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.surface, StageShape)
+            .border(StenoSize.hairline, colors.outlineVariant, StageShape)
+            .padding(horizontal = StenoSpace.l + StenoSpace.xs, vertical = StenoSpace.l),
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = indexText.uppercase(),
+                modifier = Modifier.weight(1f).testTag(Tags.STAGE_INDEX).spokenAs(indexText, indexText),
+                style = type.eyebrow,
+                color = colors.onSurfaceVariant,
+            )
+            Text(
+                text = formatTimecode(processing.elapsedMs),
+                modifier = Modifier
+                    .testTag(Tags.ELAPSED)
+                    .spokenAs(
+                        stringResource(R.string.scr03_elapsed, formatTimecode(processing.elapsedMs)),
+                        formatTimecode(processing.elapsedMs),
+                    ),
+                style = type.eyebrow,
+                color = colors.onSurfaceVariant,
+            )
+        }
+        Text(
+            text = userStageAction(stage.stage),
+            modifier = Modifier.padding(top = StenoSpace.s),
+            style = type.titleMedium,
+            color = colors.onSurface,
         )
         val detailLabel = pipelineStage?.let(::stageLabel)
         if (detailLabel != null && detailLabel != label) {
-            Text(detailLabel, style = type.bodyMedium, color = colors.onSurfaceVariant)
+            Text(detailLabel, style = type.meta, color = colors.onSurfaceVariant)
         }
-        if (hasNoCounter(stage)) {
+        if (fraction == null) {
             Text(
                 text = stringResource(R.string.scr03_no_counter),
-                style = type.bodyMedium,
+                modifier = Modifier.padding(top = StenoSpace.s),
+                style = type.bodySmall,
                 color = colors.onSurfaceVariant,
             )
         } else {
-            val fraction = stage.fraction ?: 0f
             FlowRow(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = StenoSpace.m),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 itemVerticalAlignment = Alignment.Bottom,
             ) {
-                val percent = formatPercent(fraction)
-                Text(
-                    text = remember(percent, type) { percentAnnotated(percent, type) },
-                    modifier = Modifier.testTag(Tags.STAGE_PERCENT),
-                    style = type.numeral,
-                    color = colors.onSurface,
-                    maxLines = 1,
-                )
+                StagePercent(fraction)
                 val done = stage.counterDone
                 val total = stage.counterTotal
                 if (done != null && total != null && pipelineStage != null) {
                     Text(
                         text = formatStageCounter(pipelineStage, done, total),
-                        modifier = Modifier
-                            .padding(bottom = StenoSpace.s)
-                            .testTag(Tags.STAGE_COUNTER),
-                        style = type.bodyMedium,
+                        modifier = Modifier.padding(bottom = StenoSpace.xs).testTag(Tags.STAGE_COUNTER),
+                        style = type.meta,
                         color = colors.onSurfaceVariant,
                     )
                 }
             }
             StenoProgressBar(
                 fraction = fraction,
+                modifier = Modifier.padding(top = StenoSpace.s),
                 description = stringResource(R.string.scr03_progress_spoken, label, percentSpoken(fraction)),
                 tag = Tags.STAGE_PROGRESS,
+            )
+        }
+        formatRemaining(processing.remainingMinMs, processing.remainingMaxMs)?.let {
+            Text(
+                text = it,
+                modifier = Modifier.padding(top = StenoSpace.s).testTag(Tags.REMAINING),
+                style = type.meta,
+                color = colors.onSurfaceVariant,
             )
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ProcessingStatus(processing: ProcessingUi, paused: Boolean, showAlreadyRunning: Boolean) {
-    val type = StenoTheme.type
+private fun StagePercent(fraction: Float) {
     val colors = StenoTheme.colors
-    Column(verticalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = stringResource(R.string.scr03_elapsed, formatTimecode(processing.elapsedMs)),
-                modifier = Modifier.testTag(Tags.ELAPSED),
-                style = type.monoMedium,
-                color = colors.onSurface,
-            )
-            formatRemaining(processing.remainingMinMs, processing.remainingMaxMs)?.let {
-                Text(
-                    text = it,
-                    modifier = Modifier.testTag(Tags.REMAINING),
-                    style = type.bodyMedium,
-                    color = colors.onSurfaceVariant,
-                )
-            }
-        }
-        ProcessingHint(processing, paused, showAlreadyRunning)
+    val type = StenoTheme.type
+    val value = percentValue(fraction).toString()
+    val unit = stringResource(R.string.scr03_percent_unit)
+    Row(
+        modifier = Modifier.testTag(Tags.STAGE_PERCENT).spokenAs("${percentSpoken(fraction)} этапа", formatPercent(fraction)),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
+    ) {
+        Text(value, style = type.numeral, color = colors.primary, maxLines = 1)
+        Text(
+            text = unit,
+            modifier = Modifier.padding(bottom = StenoSpace.xs / 2),
+            style = type.numeralUnit,
+            color = colors.primary,
+            maxLines = 1,
+        )
     }
 }
 
@@ -369,11 +483,11 @@ private fun ProcessingHint(processing: ProcessingUi, paused: Boolean, showAlread
                 text = stringResource(hint),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 40.dp)
                     .semantics { liveRegion = LiveRegionMode.Polite }
                     .testTag(Tags.STATUS_HINT),
-                style = type.bodyMedium,
+                style = type.meta,
                 color = colors.onSurfaceVariant,
+                textAlign = TextAlign.Center,
             )
         }
     }
@@ -384,6 +498,7 @@ private fun CancelledSummary() {
     val colors = StenoTheme.colors
     val type = StenoTheme.type
     Row(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.m),
         verticalAlignment = Alignment.Top,
     ) {
@@ -397,74 +512,179 @@ private fun CancelledSummary() {
             )
             Text(
                 text = stringResource(R.string.scr03_cancelled_body),
-                style = type.bodyMedium,
+                style = type.bodySmall,
                 color = colors.onSurfaceVariant,
             )
         }
     }
 }
 
+/** Выход к записям и идемпотентный запуск. Запуск виден всегда: на него рассчитана автоматика. */
 @Composable
-private fun ProcessingDock(
-    cancelled: Boolean,
-    cancelling: Boolean,
-    onStart: () -> Unit,
-    onCancel: () -> Unit,
-    onImport: () -> Unit,
-) {
-    val layout = LocalWindowLayout.current
-    val colors = StenoTheme.colors
+private fun ProcessingDock(cancelled: Boolean, onBack: () -> Unit, onStart: () -> Unit, onImport: () -> Unit) {
     val start = stringResource(R.string.common_btn_start)
-    val sideBySide = !layout.twoPane || layout.compactHeight
-    val inRow = sideBySide && !layout.compactWidth && !layout.largeText
-    val first: @Composable (Modifier) -> Unit = { modifier ->
+    BottomActions {
         if (cancelled) {
-            PrimaryAction(start, onStart, modifier, icon = R.drawable.ic_play_arrow_fill, tag = Tags.START)
-        } else {
-            TonalAction(start, onStart, modifier, icon = R.drawable.ic_play_arrow_fill, tag = Tags.START)
-        }
-    }
-    val second: @Composable (Modifier) -> Unit = { modifier ->
-        if (cancelled) {
+            PrimaryAction(start, onStart, icon = R.drawable.ic_play_arrow_fill, tag = Tags.START)
             OutlinedAction(
                 text = stringResource(R.string.common_btn_import),
                 onClick = onImport,
-                modifier = modifier,
+                modifier = Modifier.padding(top = StenoSpace.s),
                 icon = R.drawable.ic_upload_file,
                 tag = Tags.IMPORT,
             )
         } else {
             OutlinedAction(
-                text = stringResource(R.string.common_btn_cancel),
-                onClick = onCancel,
-                modifier = modifier,
-                enabled = !cancelling,
-                tag = Tags.CANCEL,
+                text = stringResource(R.string.scr03_to_library),
+                onClick = onBack,
+                icon = R.drawable.ic_arrow_back,
+                tag = Tags.TO_LIBRARY,
+            )
+            QuietAction(
+                text = start,
+                onClick = onStart,
+                modifier = Modifier.fillMaxWidth(),
+                tag = Tags.START,
             )
         }
     }
-    val actions: @Composable (Modifier) -> Unit = { modifier ->
-        if (inRow || layout.width == WindowWidthSizeClass.Expanded) {
-            Row(modifier, horizontalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
-                first(Modifier.weight(1.55f))
-                second(Modifier.weight(1f))
+}
+
+/** Итог обработки: что готово, главный переход к тексту и экспорт на виду. */
+@Composable
+private fun DoneScreen(detail: JobDetailUi, controller: StenoController, actions: AppActions) {
+    val layout = LocalWindowLayout.current
+    val colors = StenoTheme.colors
+    val type = StenoTheme.type
+    val jobId = detail.summary.id
+    val result = detail.result
+    val forming = detail.summary.state !is JobState.Done
+    val exportFailed = result?.output?.exportFailed == true
+    val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(MIME_JSON)) { target ->
+        if (target != null) controller.export(jobId, ExportKind.TRANSCRIPT, target)
+    }
+    val stem = (result?.title ?: detail.summary.title).substringBeforeLast('.')
+    Column(Modifier.fillMaxSize()) {
+        StenoTopBar(stringResource(R.string.scr03_done_title), onBack = actions.back)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = StenoSpace.xl, vertical = StenoSpace.l),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            MascotPlate(
+                kind = MascotKind.DONE,
+                plate = if (layout.short) StenoSize.mascotPlateSmall else StenoSize.mascotPlate,
+                motion = EnterMotion.SUCCESS,
+            )
+            Text(
+                text = stringResource(R.string.scr03_done_headline),
+                modifier = Modifier.padding(top = StenoSpace.l).testTag(Tags.DONE_TITLE).semantics { heading() },
+                style = type.headline,
+                color = colors.onBackground,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = stringResource(if (forming) R.string.scr03_done_body_forming else R.string.scr03_done_body),
+                modifier = Modifier.padding(top = StenoSpace.m).widthIn(max = DoneTextWidth),
+                style = type.bodyMedium,
+                color = colors.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            DoneFacts(detail)
+            result?.output?.let { output ->
+                if (exportFailed) {
+                    StatusBanner(
+                        tone = BannerTone.ERROR,
+                        icon = R.drawable.ic_error,
+                        modifier = Modifier.padding(top = StenoSpace.m),
+                        body = stringResource(R.string.scr04_export_failed_title),
+                        tag = Tags.EXPORT_ERROR,
+                        polite = true,
+                    )
+                } else {
+                    Text(
+                        text = stringResource(R.string.scr03_done_exported, output.path),
+                        modifier = Modifier.padding(top = StenoSpace.m).testTag(Tags.OUTPUT_PATH),
+                        style = type.meta,
+                        color = colors.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
-        } else {
-            Column(modifier, verticalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
-                first(Modifier)
-                second(Modifier)
+        }
+        BottomActions {
+            PrimaryAction(
+                text = stringResource(R.string.scr03_done_open),
+                onClick = { actions.navigator.replaceTop(Route.Result(jobId, ResultTab.TRANSCRIPT)) },
+                icon = R.drawable.ic_description,
+                tag = Tags.OPEN_TRANSCRIPT,
+            )
+            val exportText = stringResource(if (exportFailed) R.string.scr04_export_retry else R.string.common_btn_export)
+            val onExport = { export.launch("$stem.json") }
+            if (layout.largeText) {
+                OutlinedAction(
+                    text = exportText,
+                    onClick = onExport,
+                    modifier = Modifier.padding(top = StenoSpace.s),
+                    icon = R.drawable.ic_download,
+                    tag = Tags.EXPORT,
+                )
+                GhostAction(
+                    text = stringResource(R.string.scr03_to_library),
+                    onClick = actions.back,
+                    modifier = Modifier.padding(top = StenoSpace.xs),
+                    tag = Tags.TO_LIBRARY,
+                )
+            } else {
+                Row(
+                    modifier = Modifier.padding(top = StenoSpace.s),
+                    horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedAction(
+                        text = exportText,
+                        onClick = onExport,
+                        modifier = Modifier.weight(1f),
+                        icon = R.drawable.ic_download,
+                        tag = Tags.EXPORT,
+                        dense = true,
+                    )
+                    GhostAction(
+                        text = stringResource(R.string.scr03_to_library),
+                        onClick = actions.back,
+                        modifier = Modifier.weight(1f),
+                        tag = Tags.TO_LIBRARY,
+                    )
+                }
             }
         }
     }
-    if (layout.tiny) {
-        actions(Modifier)
-        return
-    }
-    CenteredContent(
-        Modifier.drawBehind {
-            drawLine(colors.outlineVariant, Offset.Zero, Offset(size.width, 0f), StenoSize.hairline.toPx())
-        },
+}
+
+/** Длительность и число говорящих. Значок всегда рядом со значением, цвет ничего не решает один. */
+@Composable
+private fun DoneFacts(detail: JobDetailUi) {
+    val colors = StenoTheme.colors
+    val type = StenoTheme.type
+    val duration = (detail.result?.durationMs ?: detail.summary.durationMs)?.let(::formatTimecode)
+    val speakers = (detail.result?.speakers ?: detail.summary.speakers)?.let(::speakersLabel)
+    Row(
+        modifier = Modifier.padding(top = StenoSpace.l),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
     ) {
-        actions(Modifier.padding(horizontal = layout.gutter, vertical = StenoSpace.m))
+        duration?.let {
+            StenoIcon(R.drawable.ic_schedule, colors.primary, size = StenoSize.iconMedium)
+            Text(it, style = type.meta, color = colors.primary)
+        }
+        if (duration != null && speakers != null) Spacer(Modifier.width(StenoSpace.l))
+        speakers?.let {
+            StenoIcon(R.drawable.ic_users, colors.primary, size = StenoSize.iconMedium)
+            Text(it, style = type.meta, color = colors.primary)
+        }
     }
 }
