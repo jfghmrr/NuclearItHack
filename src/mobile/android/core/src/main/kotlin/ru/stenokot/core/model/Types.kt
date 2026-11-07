@@ -99,7 +99,7 @@ data class LlmBudget(val nCtx: Int, val maxChunkTokens: Int, val deadlineMs: Lon
 /** Результат стадии языковой модели. */
 data class LlmResult(val status: LlmStatus, val protocolPath: String?, val detail: String?)
 
-/** Состояние задачи. Переходы описаны в docs/LOGIC.md. */
+/** Состояние задачи. Переходы описаны в docs/ARCHITECTURE.md. */
 sealed interface JobState {
     /** Задача ждёт своей очереди. */
     data object Queued : JobState

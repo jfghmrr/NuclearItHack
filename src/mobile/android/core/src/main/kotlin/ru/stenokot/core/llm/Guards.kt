@@ -37,7 +37,7 @@ private const val MIN_ITEM_WORDS = 3
 
 private val WORD = Regex("[0-9]+|[а-яёa-z]+(?:['’-][а-яёa-z]+)*")
 private val TOPIC_LINE = Regex("T: (.{3,80})")
-private val ITEM_LINE = Regex("([DAQ]) (\\d{1,5})")
+private val ITEM_LINE = Regex("([DAQ]) ([0-9]{1,5})")
 
 /** Слова текста в нижнем регистре, ё приведена к е. Используются только для сравнения. */
 internal fun normalizedWords(text: String): List<String> =
@@ -91,14 +91,12 @@ fun parseWindowOutput(raw: String, window: LlmWindow): WindowExtract {
     if (detectScript(text) == Script.UNKNOWN) return WindowExtract(WindowOutcome.SKIPPED_SCRIPT, null, emptyList())
     val byId = window.utterances.associateBy { it.id }
     var topic: String? = null
-    var topicSeen = false
     val items = ArrayList<ExtractedItem>()
     val seen = HashSet<Pair<ProtocolKind, Int>>()
     for (rawLine in raw.lineSequence()) {
         val line = rawLine.trim()
         val topicMatch = TOPIC_LINE.matchEntire(line)
-        if (topicMatch != null && !topicSeen) {
-            topicSeen = true
+        if (topicMatch != null && topic == null) {
             val candidate = topicMatch.groupValues[1].trim()
             if (checkTopic(candidate, text) == null) topic = candidate
             continue

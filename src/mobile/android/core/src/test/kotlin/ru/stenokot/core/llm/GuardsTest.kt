@@ -80,9 +80,9 @@ class GuardsTest {
     }
 
     @Test
-    fun onlyFirstTopicLineCounts() {
-        val extract = parseWindowOutput("T: налоговая проверка\nT: закупка корма\nD 12\n", WINDOW_RU)
-        assertNull(extract.topic)
+    fun firstValidTopicWins() {
+        val extract = parseWindowOutput("T: налоговая проверка\nT: закупка корма\nT: поставщик\nD 12\n", WINDOW_RU)
+        assertEquals("закупка корма", extract.topic)
         assertEquals(listOf(12), extract.items.map { it.utterance.id })
     }
 
