@@ -86,7 +86,7 @@ private fun processing(
     cancelling: Boolean = false,
     powerSave: Boolean = false,
     resumed: Boolean = false,
-    preflight: PreflightInfo = DemoData.preflightDs1,
+    preflight: PreflightInfo? = DemoData.preflightDs1,
 ) = ProcessingUi(
     preflight = preflight,
     stages = railStages(snapshot),
@@ -224,7 +224,7 @@ private fun failureScene(
         speakers = null,
         state = state,
     )
-    val work = preflight?.let { processing(StageSnapshot(null, null, null, null, emptyMap(), null), 0, preflight = it) }
+    val work = processing(StageSnapshot(null, null, null, null, emptyMap(), null), 0, preflight = preflight)
     return DemoScene(
         home = home(jobs = listOf(summary, DemoData.historyDs8), status = statusCode(state)),
         jobs = listOf(JobDetailUi(summary, work, null, diagnostics = "код: ${statusCode(state)}")),

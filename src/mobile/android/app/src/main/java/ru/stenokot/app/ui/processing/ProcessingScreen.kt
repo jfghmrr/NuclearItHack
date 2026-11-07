@@ -93,7 +93,9 @@ fun ProcessingRoute(jobId: String, controller: StenoController, actions: AppActi
         if (target !is Route.Processing) actions.navigator.replaceTop(target)
     }
     if (detail?.processing == null) {
-        StenoTopBar(stringResource(R.string.scr03_title), onBack = actions.back)
+        Column(Modifier.fillMaxSize()) {
+            StenoTopBar(stringResource(R.string.scr03_title), onBack = actions.back)
+        }
         return
     }
     KeepScreenOn()

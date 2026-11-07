@@ -82,7 +82,10 @@ fun DeleteDialog(
                     maxLines = 1,
                     overflow = TextOverflow.MiddleEllipsis,
                 )
-                Text(stringResource(R.string.scr01_delete_body), style = type.bodyMedium)
+                Text(
+                    text = stringResource(if (exported) R.string.scr01_delete_body else R.string.scr01_delete_body_no_json),
+                    style = type.bodyMedium,
+                )
                 if (exported) {
                     if (!removeExported) {
                         Text(stringResource(R.string.scr01_delete_keeps_json), style = type.bodyMedium)

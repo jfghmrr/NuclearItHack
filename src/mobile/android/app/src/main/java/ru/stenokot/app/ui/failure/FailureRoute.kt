@@ -189,7 +189,9 @@ fun FailureRoute(jobId: String, controller: StenoController, actions: AppActions
     }
     val kind = state?.let(::failureKind)
     if (detail == null || kind == null) {
-        StenoTopBar(stringResource(R.string.scr07_title), onBack = actions.back)
+        Column(Modifier.fillMaxSize()) {
+            StenoTopBar(stringResource(R.string.scr07_title), onBack = actions.back)
+        }
         return
     }
     val copy = rememberDiagnosticsCopy(controller, jobId)
@@ -225,18 +227,40 @@ private fun FailureScreen(
     val text = failureText(kind, detail)
     val rootModifier = Modifier.fillMaxSize().semantics { paneTitle = pane }
     val artSize = when {
+        layout.short || layout.largeText -> ArtShort
         layout.width == WindowWidthSizeClass.Expanded -> ArtWide
-        layout.short -> ArtShort
         else -> StenoSize.mascot
     }
+    val dockBoth = !layout.short && !layout.largeText
     val file: @Composable () -> Unit = { FailureFile(detail) }
     val art: @Composable () -> Unit = { FailureArt(kind, artSize) }
     val message: @Composable ColumnScope.() -> Unit = {
         FailureMessage(text)
         DetailsBlock(detail, copy)
     }
-    val dock: @Composable (Boolean) -> Unit = { docked ->
-        FailureDock(kind, docked, onAction)
+    val dock: @Composable () -> Unit = {
+        if (!layout.tiny) {
+            ActionDock(centered = !layout.twoPane) {
+                FailureButtons(
+                    kind = kind,
+                    primary = true,
+                    secondary = dockBoth,
+                    modifier = Modifier.padding(horizontal = layout.gutter, vertical = StenoSpace.m),
+                    onAction = onAction,
+                )
+            }
+        }
+    }
+    val inlineActions: @Composable () -> Unit = {
+        if (layout.tiny || !dockBoth) {
+            FailureButtons(
+                kind = kind,
+                primary = layout.tiny,
+                secondary = true,
+                modifier = Modifier.padding(top = StenoSpace.s),
+                onAction = onAction,
+            )
+        }
     }
     if (layout.twoPane) {
         Row(rootModifier) {
@@ -264,9 +288,9 @@ private fun FailureScreen(
                     verticalArrangement = Arrangement.spacedBy(StenoSpace.s),
                 ) {
                     message()
-                    if (layout.tiny) dock(false)
+                    inlineActions()
                 }
-                if (!layout.tiny) dock(true)
+                dock()
             }
         }
     } else {
@@ -285,10 +309,10 @@ private fun FailureScreen(
                     Spacer(Modifier.padding(top = if (layout.short) 0.dp else StenoSpace.s))
                     art()
                     message()
-                    if (layout.tiny) dock(false)
+                    inlineActions()
                 }
             }
-            if (!layout.tiny) dock(true)
+            dock()
         }
     }
 }
@@ -427,28 +451,29 @@ private fun DockButton(action: FailureAction, kind: FailureKind, primary: Boolea
     }
 }
 
+/** Кнопки причины. На тесном экране запасная уходит в прокрутку, чтобы текст остался на виду. */
 @Composable
-private fun FailureDock(kind: FailureKind, docked: Boolean, onAction: (FailureAction) -> Unit) {
+private fun FailureButtons(
+    kind: FailureKind,
+    primary: Boolean,
+    secondary: Boolean,
+    modifier: Modifier,
+    onAction: (FailureAction) -> Unit,
+) {
     val layout = LocalWindowLayout.current
     val pair = kind.actions
-    val secondary = pair.secondary
-    val inRow = !layout.compactWidth && !layout.largeText
-    val actions: @Composable (Modifier) -> Unit = { modifier ->
-        if (inRow && secondary != null) {
-            Row(modifier, horizontalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
-                DockButton(pair.primary, kind, true, Modifier.weight(1f), onAction)
-                DockButton(secondary, kind, false, Modifier.weight(1f), onAction)
-            }
-        } else {
-            Column(modifier, verticalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
-                DockButton(pair.primary, kind, true, Modifier, onAction)
-                secondary?.let { DockButton(it, kind, false, Modifier, onAction) }
-            }
+    val spare = pair.secondary.takeIf { secondary }
+    val first = pair.primary.takeIf { primary }
+    if (first == null && spare == null) return
+    if (first != null && spare != null && !layout.compactWidth && !layout.largeText) {
+        Row(modifier, horizontalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
+            DockButton(first, kind, true, Modifier.weight(1f), onAction)
+            DockButton(spare, kind, false, Modifier.weight(1f), onAction)
         }
-    }
-    if (docked) {
-        ActionDock { actions(Modifier.padding(horizontal = layout.gutter, vertical = StenoSpace.m)) }
     } else {
-        actions(Modifier.padding(top = StenoSpace.s))
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
+            first?.let { DockButton(it, kind, true, Modifier, onAction) }
+            spare?.let { DockButton(it, kind, false, Modifier, onAction) }
+        }
     }
 }

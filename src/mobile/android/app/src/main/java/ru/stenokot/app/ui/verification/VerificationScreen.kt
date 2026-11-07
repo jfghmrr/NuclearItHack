@@ -128,8 +128,11 @@ internal fun VerificationScreen(
             )
         }
     }
+    val dockCopy = !layout.short && !layout.largeText
     val dock: @Composable () -> Unit = {
-        ActionDock { Column(Modifier.padding(horizontal = layout.gutter, vertical = StenoSpace.m)) { copyAction() } }
+        ActionDock(centered = !layout.twoPane) {
+            Column(Modifier.padding(horizontal = layout.gutter, vertical = StenoSpace.m)) { copyAction() }
+        }
     }
     if (layout.twoPane) {
         Row(Modifier.fillMaxSize()) {
@@ -146,9 +149,9 @@ internal fun VerificationScreen(
                     OfflineProof(state)
                     ModelsSection(state)
                     LinksSection(state, callbacks)
-                    if (layout.short) copyAction()
+                    if (!dockCopy) copyAction()
                 }
-                if (!layout.short) dock()
+                if (dockCopy) dock()
             }
             Spacer(Modifier.width(StenoSize.hairline).fillMaxHeight().background(colors.outlineVariant))
             Column(
@@ -180,10 +183,10 @@ internal fun VerificationScreen(
                         MetricsSection(state, callbacks)
                     }
                     LinksSection(state, callbacks)
-                    if (layout.tiny) copyAction()
+                    if (!dockCopy) copyAction()
                 }
             }
-            if (!layout.tiny) dock()
+            if (dockCopy) dock()
         }
     }
 }
@@ -403,7 +406,9 @@ private fun ModelRow(index: Int, item: ModelItemUi, models: ModelsUi) {
                     style = type.bodySmall,
                     color = colors.onSurfaceVariant,
                 )
-                if (rowState == ModelRowState.READY) {
+                if (rowState != ModelRowState.READY) {
+                    Text(status, style = type.bodySmall, color = modelIconTint(rowState))
+                } else if (!open) {
                     item.sha256?.let {
                         Text(
                             text = stringResource(R.string.scr08_model_hash, hashPrefix(it)),
@@ -411,8 +416,6 @@ private fun ModelRow(index: Int, item: ModelItemUi, models: ModelsUi) {
                             color = colors.onSurfaceVariant,
                         )
                     }
-                } else {
-                    Text(status, style = type.bodySmall, color = modelIconTint(rowState))
                 }
                 if (rowState == ModelRowState.COPYING && models.totalBytes > 0) {
                     StenoProgressBar(

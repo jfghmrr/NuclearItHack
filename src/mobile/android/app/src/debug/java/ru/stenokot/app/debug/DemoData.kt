@@ -317,7 +317,12 @@ internal object DemoData {
         llmStatus = LlmStatus.APPLIED,
     )
 
+    /** Значение полной длины: проверяет перенос, это не настоящий хэш. */
+    private val LongHash = "0123456789abcdef".repeat(4)
+
     val verificationPartial = verificationMetrics.copy(
+        models = modelItems(true).map { it.copy(sha256 = LongHash) },
+        jsonSha256 = LongHash,
         rtfFull = null,
         peakRssMb = null,
         threads = null,
