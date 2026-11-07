@@ -53,6 +53,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -94,6 +95,12 @@ private const val KEY_OUTPUT = "output"
 private const val KEY_HEADING = "heading"
 private const val TYPE_HEADER = 10
 private const val PINNED_STRIP_LIMIT = 2f
+
+/**
+ * Слой вкладок с репликами ниже шапки. Строки, ушедшие под вкладки при прокрутке, иначе забирают
+ * у них область касания в дереве доступности: TalkBack на нижней половине вкладки читал реплику.
+ */
+private const val PANES_LAYER = -1f
 
 /** Разобранная стенограмма и исходный вид списка. Всё считается вне основного потока. */
 @Immutable
@@ -568,7 +575,7 @@ private fun ResultContent(
                     ResultTabs(tab, phase, status = tabStatus) { tab = it }
                 }
             }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+            Box(Modifier.weight(1f).fillMaxWidth().zIndex(PANES_LAYER)) {
                 TabPanes(
                     tab = tab,
                     transcript = { transcriptPane(Modifier.fillMaxSize()) },
@@ -593,7 +600,7 @@ private fun ResultContent(
                         MenuButton({ menuOpen = true })
                     }
                 }
-                Box(Modifier.weight(1f).fillMaxWidth()) {
+                Box(Modifier.weight(1f).fillMaxWidth().zIndex(PANES_LAYER)) {
                     TabPanes(
                         tab = tab,
                         transcript = { transcriptPane(Modifier.fillMaxSize()) },
