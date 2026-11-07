@@ -165,7 +165,7 @@ internal class LlmWorker(
         files.appendWindow(window, raw)
         results += WindowResult(window, parseWindowOutput(raw, window))
         files.replace(files.protocol, FileJson.encodeToString(ProtocolAssembler.assemble(results, job.totalMs)))
-        onProgress(results.size.toFloat() / windowsTotal, null)
+        onProgress(results.size.toFloat() / windowsTotal, "${results.size}/$windowsTotal")
     }
 
     private fun outcome(detail: String?): LlmResult {

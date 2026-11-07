@@ -127,7 +127,7 @@ class WindowedDiarizer(
             val line = describeWindow(index, window, samples, segments, extractor)
             journal.onWindow(line)
             linked += book.addWindow(line)
-            progress.report((index + 1f) / windows.size, null)
+            progress.report((index + 1f) / windows.size, "${index + 1}/${windows.size}")
         }
     }
 
@@ -289,7 +289,7 @@ private class WindowProgress(
         val now = System.currentTimeMillis()
         if (all > 0 && now - lastReport >= REPORT_EVERY_MS) {
             lastReport = now
-            progress.report((window + done.toFloat() / all) / windows, null)
+            progress.report((window + done.toFloat() / all) / windows, "$window/$windows")
         }
         return 0
     }
