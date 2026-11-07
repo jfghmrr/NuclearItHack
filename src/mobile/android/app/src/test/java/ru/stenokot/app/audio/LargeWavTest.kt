@@ -8,11 +8,17 @@ import java.nio.ByteOrder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import ru.stenokot.core.audio.FileAudioInput
 
 /** Разбор WAV, который не читает MediaExtractor. */
 class LargeWavTest {
+    /** Разреженные файлы по 5 ГБ удаляются после каждого теста, а не при выходе из JVM. */
+    @get:Rule
+    val temp = TemporaryFolder()
+
     private fun header(magic: String, fmt: ByteArray, dataDeclared: Long, ds64Data: Long?): ByteArray {
         val out = ByteBuffer.allocate(256).order(ByteOrder.LITTLE_ENDIAN)
         out.put(magic.toByteArray())
@@ -54,8 +60,7 @@ class LargeWavTest {
     }
 
     private fun file(head: ByteArray, length: Long): File {
-        val file = File.createTempFile("large", ".wav")
-        file.deleteOnExit()
+        val file = File.createTempFile("large", ".wav", temp.root)
         RandomAccessFile(file, "rw").use { output ->
             output.write(head)
             output.setLength(length)

@@ -8,10 +8,16 @@ import ru.stenokot.core.audio.FileAudioInput
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 /** Поправка размеров в заголовке WAV. */
 class WavHeaderPatchTest {
+    /** Файл на 5 ГБ удаляется после теста, а не при выходе из JVM. */
+    @get:Rule
+    val temp = TemporaryFolder()
+
     private fun wav(declaredData: Long, dataBytes: Int): File {
         val head = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
         head.put("RIFF".toByteArray())
@@ -26,8 +32,7 @@ class WavHeaderPatchTest {
         head.putShort(16)
         head.put("data".toByteArray())
         head.putInt(declaredData.toInt())
-        val file = File.createTempFile("patch", ".wav")
-        file.deleteOnExit()
+        val file = File.createTempFile("patch", ".wav", temp.root)
         file.writeBytes(head.array() + ByteArray(dataBytes))
         return file
     }
@@ -72,8 +77,7 @@ class WavHeaderPatchTest {
 
     @Test
     fun `посторонний файл не считается WAV`() {
-        val file = File.createTempFile("patch", ".bin")
-        file.deleteOnExit()
+        val file = File.createTempFile("patch", ".bin", temp.root)
         file.writeBytes(ByteArray(100))
         assertNull(detect(file))
     }
