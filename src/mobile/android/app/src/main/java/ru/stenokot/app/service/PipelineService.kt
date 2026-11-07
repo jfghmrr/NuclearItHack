@@ -40,6 +40,7 @@ class PipelineService : Service() {
     private lateinit var runner: PipelineRunner
     private var wakeLock: PowerManager.WakeLock? = null
     private var observing = false
+    private var foreground = false
     private var lastStartId = 0
     private var lastStage: Stage? = null
 
@@ -47,13 +48,14 @@ class PipelineService : Service() {
         super.onCreate()
         runner = (application as StenoApplication).graph.runner
         createChannel()
+        getSystemService(NotificationManager::class.java).cancel(PAUSED_NOTIFICATION_ID)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         lastStartId = startId
-        if (!promote()) {
+        if (!foreground && !promote(baseType())) {
             stopSelf(startId)
             return START_NOT_STICKY
         }
@@ -68,13 +70,25 @@ class PipelineService : Service() {
     }
 
     /**
-     * Лимит типа службы на Android 15 и новее. Чекпойнт уже на диске, задача останавливается на
-     * границе среза, а служба обязана уйти за секунды, иначе система завершит процесс с ошибкой.
+     * Лимит типа службы на Android 15 и новее: шесть часов за сутки, пока приложение не на экране.
+     * Запись на восемь часов при медленном устройстве до него доходит, поэтому служба сразу
+     * продолжает работу с типом без лимита. Если система откажет, чекпойнт уже на диске: задача
+     * останавливается на границе среза, а служба обязана уйти за секунды, иначе система завершит
+     * процесс с ошибкой. Открытие приложения обнуляет лимит и продолжает задачу.
      */
     override fun onTimeout(startId: Int, fgsType: Int) {
+        foreground = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM &&
+            promote(ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        ) {
+            Log.i(LOG_TAG, "Лимит типа $fgsType исчерпан, работа продолжается")
+            return
+        }
+        Log.w(LOG_TAG, "Лимит типа $fgsType исчерпан, задача приостановлена")
         runner.interruptForTimeout()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+        tellPaused()
     }
 
     override fun onDestroy() {
@@ -90,18 +104,21 @@ class PipelineService : Service() {
      * Вызов идёт напрямую, а не через ServiceCompat: core 1.18.0 обрезает тип маской времён API 34,
      * mediaProcessing превращается в ноль, и система отказывает в запуске.
      */
-    private fun promote(): Boolean = try {
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
-        } else {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-        }
+    private fun promote(type: Int): Boolean = try {
         startForeground(NOTIFICATION_ID, notification(runner.live.value), type)
+        foreground = true
         true
     } catch (failure: IllegalStateException) {
         Log.e(LOG_TAG, "Служба не вышла на передний план", failure)
         false
     }
+
+    private fun baseType(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
+        } else {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        }
 
     private fun acquireWakeLock() {
         val power = getSystemService(PowerManager::class.java)
@@ -131,6 +148,7 @@ class PipelineService : Service() {
                 runner.busy.first { !it }
                 Log.i(LOG_TAG, "Работы нет, служба останавливается")
                 stopForeground(STOP_FOREGROUND_REMOVE)
+                foreground = false
                 stopped = stopSelfResult(lastStartId)
             }
         }
@@ -139,6 +157,18 @@ class PipelineService : Service() {
     private fun createChannel() {
         val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW)
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+    }
+
+    /** Служба ушла, а в фоне система её не вернёт: сказать об этом может только уведомление. */
+    private fun tellPaused() {
+        val notice = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(APP_TITLE)
+            .setContentText(PAUSED_LABEL)
+            .setAutoCancel(true)
+            .setContentIntent(openApp())
+            .build()
+        getSystemService(NotificationManager::class.java).notify(PAUSED_NOTIFICATION_ID, notice)
     }
 
     private fun notification(live: LiveProgress?): Notification {
@@ -192,13 +222,15 @@ class PipelineService : Service() {
         private const val APP_TITLE = "Стенокот"
         private const val IDLE_LABEL = "Обработка записи"
         private const val CANCEL_LABEL = "Отмена"
+        private const val PAUSED_LABEL = "Обработка приостановлена. Откройте приложение, чтобы продолжить"
         private const val NOTIFICATION_ID = 1
+        private const val PAUSED_NOTIFICATION_ID = 2
         private const val REQUEST_OPEN = 1
         private const val REQUEST_CANCEL = 2
         private const val PERCENT = 100
         private const val START_GRACE_MS = 5_000L
         private const val WAKE_LOCK_TAG = "stenokot:pipeline"
-        private const val WAKE_LOCK_TIMEOUT_MS = 12L * 60 * 60 * 1000
+        private const val WAKE_LOCK_TIMEOUT_MS = 24L * 60 * 60 * 1000
 
         /**
          * Запускает службу. Вызывается при видимом приложении. Отказ системы не теряет задачу:
