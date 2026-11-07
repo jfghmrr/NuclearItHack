@@ -14,6 +14,7 @@ import android.os.RemoteException
 import android.os.SystemClock
 import java.io.File
 import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -27,10 +28,13 @@ import ru.stenokot.core.model.LlmStatus
 /**
  * Запускает модель в процессе :llm и ведёт её до конца.
  * Отмена укладывается в секунду: сначала флаг в обратном вызове ggml, затем завершение процесса.
+ * Вызовы к системе синхронны и при нехватке памяти могут зависнуть на секунды, поэтому идут на
+ * отдельном потоке [connector]. Поток [handler] выполняет только короткие шаги, и отмена его не ждёт.
  */
 class RemoteLlmRunner(context: Context) : LlmRunner {
     private val appContext = context.applicationContext
     private val handler by lazy { Handler(HandlerThread("llm-client").apply { start() }.looper) }
+    private val connector by lazy { Executors.newSingleThreadExecutor { task -> Thread(task, "llm-connect") } }
     private val current = AtomicReference<Session?>(null)
 
     override suspend fun run(jobDir: File, budget: LlmBudget, progress: Progress): LlmResult {
@@ -73,12 +77,13 @@ class RemoteLlmRunner(context: Context) : LlmRunner {
 
         fun start() {
             if (finished) return
+            bound = true
             val intent = Intent(appContext, LlmService::class.java)
-            val executor = Executor { handler.post(it) }
-            bound = appContext.bindService(intent, Context.BIND_AUTO_CREATE, executor, this)
-            if (!bound) {
-                finish(LlmResult(LlmStatus.FAILED, null, "система отказала в связи со службой"))
-                return
+            val callbacks = Executor { handler.post(it) }
+            connector.execute {
+                if (!appContext.bindService(intent, Context.BIND_AUTO_CREATE, callbacks, this)) {
+                    handler.post { finish(LlmResult(LlmStatus.FAILED, null, "система отказала в связи со службой")) }
+                }
             }
             handler.postDelayed(::onWatchdog, this, request.budgetMs + WATCHDOG_MARGIN_MS)
         }
@@ -142,12 +147,18 @@ class RemoteLlmRunner(context: Context) : LlmRunner {
                 return
             }
             val diedPid = pid
-            handler.postDelayed({ reportDeath(diedPid) }, this, EXIT_RECORD_DELAY_MS)
+            handler.postDelayed({ inspectDeath(diedPid) }, this, EXIT_RECORD_DELAY_MS)
         }
 
-        private fun reportDeath(diedPid: Int) {
+        private fun inspectDeath(diedPid: Int) {
+            connector.execute {
+                val death = LlmExitReason.inspect(appContext, diedPid)
+                handler.post { onDeathInspected(death) }
+            }
+        }
+
+        private fun onDeathInspected(death: LlmDeath) {
             if (finished) return
-            val death = LlmExitReason.inspect(appContext, diedPid)
             val remainingMs = request.budgetMs - (SystemClock.elapsedRealtime() - startedAtMs)
             if (!retried && !cancelling && remainingMs > 0) {
                 retried = true
@@ -180,14 +191,14 @@ class RemoteLlmRunner(context: Context) : LlmRunner {
             if (finished) return
             finished = true
             handler.removeCallbacksAndMessages(this)
-            unbind()
             onResult(if (cancelling) result.copy(status = LlmStatus.CANCELLED_BY_NEW_JOB) else result)
+            unbind()
         }
 
         private fun unbind() {
             if (!bound) return
             bound = false
-            runCatching { appContext.unbindService(this) }
+            connector.execute { runCatching { appContext.unbindService(this) } }
         }
 
         private fun send(target: Messenger, message: Message) {

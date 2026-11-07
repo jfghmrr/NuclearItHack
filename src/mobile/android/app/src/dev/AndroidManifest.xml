@@ -6,9 +6,9 @@
             android:name=".llm.LlmRawProbeActivity"
             android:exported="true"
             android:process=":llm" />
-        <activity
-            android:name=".llm.LlmRunnerProbeActivity"
+        <service
+            android:name=".llm.LlmRunnerProbeService"
             android:exported="true"
-            android:launchMode="singleTask" />
+            android:foregroundServiceType="dataSync" />
     </application>
 </manifest>
