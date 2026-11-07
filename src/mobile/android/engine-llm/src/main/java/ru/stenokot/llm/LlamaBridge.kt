@@ -22,6 +22,7 @@ data class ContextConfig(
     val threads: Int,
     val contextTokens: Int = 1024,
     val batchTokens: Int = 256,
+    val repackWeights: Boolean = false,
 )
 
 /** Настройки выбора токенов для одного запроса. */
@@ -58,7 +59,13 @@ object LlamaBridge {
 
     /** Загружает модель через mmap и создаёт контекст. Долгий вызов, поток не должен быть главным. */
     fun load(modelPath: String, config: ContextConfig): LoadStatus =
-        LoadStatus.entries[nativeLoad(modelPath, config.contextTokens, config.batchTokens, config.threads)]
+        LoadStatus.entries[nativeLoad(
+            modelPath,
+            config.contextTokens,
+            config.batchTokens,
+            config.threads,
+            config.repackWeights,
+        )]
 
     /**
      * Выполняет один запрос. Общий с прошлым запросом префикс заново не считается,
@@ -101,7 +108,13 @@ object LlamaBridge {
 
     private external fun nativeInit(nativeLibDir: String): String
 
-    private external fun nativeLoad(modelPath: String, nCtx: Int, nBatch: Int, nThreads: Int): Int
+    private external fun nativeLoad(
+        modelPath: String,
+        nCtx: Int,
+        nBatch: Int,
+        nThreads: Int,
+        repackWeights: Boolean,
+    ): Int
 
     private external fun nativeGenerate(
         prompt: ByteArray,

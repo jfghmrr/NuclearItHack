@@ -296,10 +296,11 @@ Java_ru_stenokot_llm_LlamaBridge_nativeInit(JNIEnv *env, jobject, jstring native
 
 extern "C" JNIEXPORT jint JNICALL
 Java_ru_stenokot_llm_LlamaBridge_nativeLoad(JNIEnv *env, jobject, jstring model_path, jint n_ctx,
-                                            jint n_batch, jint n_threads) {
+                                            jint n_batch, jint n_threads, jboolean repack_weights) {
     llama_model_params model_params = llama_model_default_params();
     model_params.n_gpu_layers = 0;
     model_params.load_mode = LLAMA_LOAD_MODE_MMAP;
+    model_params.use_extra_bufts = repack_weights == JNI_TRUE;
     model_params.progress_callback = should_continue_loading;
 
     const char *path = env->GetStringUTFChars(model_path, nullptr);
