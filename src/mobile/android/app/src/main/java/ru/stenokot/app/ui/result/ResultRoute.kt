@@ -45,6 +45,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -149,9 +150,18 @@ private class TranscriptNavigator(
         scope.launch { scrollNow(timeMs) }
     }
 
+    /**
+     * После перехода со вкладки протокола значки ещё не измерены, поэтому первый шаг идёт без
+     * отступа, а после кадра реплика выставляется уже под настоящую высоту значков.
+     */
     private suspend fun scrollNow(timeMs: Long) {
         val position = view().nearestPosition(timeMs)
-        if (position >= 0) listState.scrollToItem(rowsOffset() + position, -stripPx())
+        if (position < 0) return
+        val index = rowsOffset() + position
+        val offset = stripPx()
+        listState.scrollToItem(index, -offset)
+        withFrameNanos { }
+        if (stripPx() != offset) listState.scrollToItem(rowsOffset() + position, -stripPx())
     }
 
     /** Снимает сужение, если оно скрывает нужную реплику, и переходит к ней. */
