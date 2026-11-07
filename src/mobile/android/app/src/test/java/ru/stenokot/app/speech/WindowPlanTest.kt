@@ -38,4 +38,15 @@ class WindowPlanTest {
         assertTrue(windows.all { it.endSample - it.startSample <= 330 * rate })
         windows.zipWithNext().forEach { (a, b) -> assertEquals(10 * rate, a.endSample - b.startSample) }
     }
+
+    @Test
+    fun `участки ответственности идут встык и режут нахлёст посередине`() {
+        val windows = WindowedDiarizer.planWindows(1200 * rate)
+        assertEquals(0L, windows.first().keepFrom)
+        assertEquals(1200 * rate, windows.last().keepTo)
+        windows.zipWithNext().forEach { (a, b) ->
+            assertEquals(a.keepTo, b.keepFrom)
+            assertEquals(a.endSample - 5 * rate, a.keepTo)
+        }
+    }
 }

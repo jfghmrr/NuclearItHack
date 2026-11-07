@@ -14,6 +14,7 @@ internal class AudioTrackSource private constructor(
     val format: MediaFormat,
     val mime: String,
     private val unwrapped: File?,
+    private val patched: PatchedWavSource?,
 ) : Closeable {
     /** Частота дискретизации из контейнера. Реальная приходит от кодека. */
     val sampleRate: Int = format.intOrZero(MediaFormat.KEY_SAMPLE_RATE)
@@ -61,6 +62,7 @@ internal class AudioTrackSource private constructor(
 
     override fun close() {
         extractor.release()
+        patched?.close()
         unwrapped?.delete()
     }
 
@@ -91,16 +93,17 @@ internal class AudioTrackSource private constructor(
 
         private fun openPlain(original: File, readable: File, unwrapped: File?): AudioTrackSource {
             val extractor = MediaExtractor()
+            val patched = WavHeaderPatch.detect(readable)?.let { PatchedWavSource(readable, it) }
             try {
-                extractor.setDataSource(readable.path)
+                if (patched != null) extractor.setDataSource(patched) else extractor.setDataSource(readable.path)
             } catch (error: IOException) {
-                extractor.release()
+                release(extractor, patched)
                 throw unreadable(original, error)
             } catch (error: IllegalArgumentException) {
-                extractor.release()
+                release(extractor, patched)
                 throw unreadable(original, error)
             } catch (error: IllegalStateException) {
-                extractor.release()
+                release(extractor, patched)
                 throw unreadable(original, error)
             }
             for (index in 0 until extractor.trackCount) {
@@ -108,13 +111,18 @@ internal class AudioTrackSource private constructor(
                 val mime = format.getString(MediaFormat.KEY_MIME).orEmpty()
                 if (mime.startsWith("audio/")) {
                     extractor.selectTrack(index)
-                    return AudioTrackSource(extractor, format, mime, unwrapped)
+                    return AudioTrackSource(extractor, format, mime, unwrapped, patched)
                 }
             }
             val tracks = extractor.trackCount
-            extractor.release()
+            release(extractor, patched)
             if (tracks == 0) throw unreadable(original, IOException("Контейнер без дорожек"))
             throw unsupported("В файле нет аудиодорожки", null)
+        }
+
+        private fun release(extractor: MediaExtractor, patched: PatchedWavSource?) {
+            extractor.release()
+            patched?.close()
         }
 
         /** Файл, который не открылся: заявленный как аудио считается повреждённым, остальной чужим. */

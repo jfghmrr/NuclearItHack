@@ -56,15 +56,15 @@ class WindowedDiarizer(
         val total = pcm.totalSamples
         if (total == 0L) return emptyList()
         val book = SpeakerBook(narrowband)
-        journal.restored.forEach(book::addWindow)
+        val linked = journal.restored.mapTo(ArrayList()) { book.addWindow(it) }
         val windows = planWindows(total)
         if (journal.restored.size < windows.size) {
             models.require(ModelFiles.DIAR_SEGMENTATION, ModelFiles.DIAR_EMBEDDING)
             withModels(total) { diarizer, extractor ->
-                runWindows(pcm, windows, diarizer, extractor, book, progress)
+                runWindows(pcm, windows, diarizer, extractor, book, linked, progress)
             }
         }
-        return book.finish()
+        return book.finish(linked)
     }
 
     override fun close() = Unit
@@ -90,7 +90,7 @@ class WindowedDiarizer(
                         numThreads = threads,
                     ),
                     embedding = embedding,
-                    clustering = FastClusteringConfig(threshold = threshold),
+                    clustering = FastClusteringConfig(threshold = threshold, computeConfidence = true),
                     minDurationOn = MIN_DURATION_ON,
                     minDurationOff = MIN_DURATION_OFF,
                 ),
@@ -116,6 +116,7 @@ class WindowedDiarizer(
         diarizer: OfflineSpeakerDiarization,
         extractor: SpeakerEmbeddingExtractor,
         book: SpeakerBook,
+        linked: MutableList<List<SpeakerTurn>>,
         progress: Progress,
     ) {
         for (index in journal.restored.size until windows.size) {
@@ -125,7 +126,7 @@ class WindowedDiarizer(
             val segments = diarizer.processWithCallback(samples, WindowProgress(progress, index, windows.size))
             val line = describeWindow(index, window, samples, segments, extractor)
             journal.onWindow(line)
-            book.addWindow(line)
+            linked += book.addWindow(line)
             progress.report((index + 1f) / windows.size, null)
         }
     }
@@ -137,9 +138,14 @@ class WindowedDiarizer(
         segments: Array<OfflineSpeakerDiarizationSegment>,
         extractor: SpeakerEmbeddingExtractor,
     ): DiarJournalLine {
-        val startMs = samplesToMs(window.startSample)
+        val originMs = samplesToMs(window.startSample)
         val turns = segments.map {
-            DiarTurnRecord(it.speaker, startMs + secondsToMs(it.start), startMs + secondsToMs(it.end))
+            DiarTurnRecord(
+                cluster = it.speaker,
+                startMs = originMs + secondsToMs(it.start),
+                endMs = originMs + secondsToMs(it.end),
+                confidence = it.confidence.takeIf { value -> value >= MIN_CONFIDENCE },
+            )
         }
         val clusters = segments.groupBy { it.speaker }.toSortedMap().map { (cluster, own) ->
             val others = segments.filter { it.speaker != cluster }
@@ -149,7 +155,7 @@ class WindowedDiarizer(
                 embedding = embed(own, others, samples, extractor)?.toList(),
             )
         }
-        return DiarJournalLine(index, startMs, samplesToMs(window.endSample), turns, clusters)
+        return DiarJournalLine(index, samplesToMs(window.keepFrom), samplesToMs(window.keepTo), turns, clusters)
     }
 
     /**
@@ -209,8 +215,13 @@ class WindowedDiarizer(
     /** Отмена между окнами: сам нативный вызов на окне неделим. */
     class DiarizationCancelled : Exception("Отменено")
 
-    /** Окно записи в отсчётах 16 кГц. */
-    internal data class DiarWindow(val startSample: Long, val endSample: Long)
+    /** Окно записи в отсчётах 16 кГц. [keepFrom] и [keepTo] задают участок без нахлёста с соседями. */
+    internal data class DiarWindow(
+        val startSample: Long,
+        val endSample: Long,
+        val keepFrom: Long,
+        val keepTo: Long,
+    )
 
     companion object {
         /** Стартовый порог. Значение получено на английских совещаниях и калибруется на своих записях. */
@@ -227,18 +238,27 @@ class WindowedDiarizer(
         private const val MIN_DURATION_OFF = 0.1f
         private const val MIN_EMBEDDING_SAMPLES = 3 * SAMPLE_RATE / 2
         private const val MAX_EMBEDDING_SECONDS = 30
+        private const val MIN_CONFIDENCE = -1f
 
-        /** Окна записи. Короткий хвост присоединяется к последнему окну: в нём мало речи для отпечатка. */
+        /**
+         * Окна записи. Короткий хвост присоединяется к последнему окну: в нём мало речи для отпечатка.
+         * Граница ответственности соседних окон проходит посередине нахлёста.
+         */
         internal fun planWindows(totalSamples: Long): List<DiarWindow> {
             val step = WINDOW_SAMPLES - OVERLAP_SAMPLES
-            val windows = ArrayList<DiarWindow>()
+            val bounds = ArrayList<LongRange>()
             var start = 0L
             while (start + WINDOW_SAMPLES + TAIL_MERGE_SAMPLES < totalSamples) {
-                windows += DiarWindow(start, start + WINDOW_SAMPLES)
+                bounds += start until start + WINDOW_SAMPLES
                 start += step
             }
-            windows += DiarWindow(start, totalSamples)
-            return windows
+            bounds += start until totalSamples
+            return bounds.mapIndexed { index, range ->
+                val end = range.last + 1
+                val keepFrom = if (index == 0) 0L else (range.first + bounds[index - 1].last + 1) / 2
+                val keepTo = if (index == bounds.lastIndex) end else (bounds[index + 1].first + end) / 2
+                DiarWindow(range.first, end, keepFrom, keepTo)
+            }
         }
 
         private fun secondsToSample(seconds: Float, limit: Int): Int =
