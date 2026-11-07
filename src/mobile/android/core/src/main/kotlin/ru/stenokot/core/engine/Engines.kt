@@ -48,6 +48,12 @@ fun interface LanguageDetector {
 
     /** Хватает ли [samples] для уверенного решения. Если нет, конвейер читает ещё срезы. */
     fun settled(samples: List<AsrSegment>): Boolean = true
+
+    /** Русская модель почти ничего не услышала там, где есть речь: нужен второй взгляд другой моделью. */
+    fun needsSecondOpinion(samples: List<AsrSegment>): Boolean = false
+
+    /** Решение по тем же срезам в записи английской модели. */
+    fun secondOpinion(samples: List<AsrSegment>): Language = Language.RU
 }
 
 /** Распознаватель речи. */

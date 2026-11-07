@@ -156,10 +156,16 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
         override fun close() = closed(name)
     }
 
+    var secondOpinion: Language? = null
+
     override fun languageDetector(): LanguageDetector = object : LanguageDetector {
         override fun detect(samples: List<AsrSegment>): Language = language
 
         override fun settled(samples: List<AsrSegment>): Boolean = languageSettled
+
+        override fun needsSecondOpinion(samples: List<AsrSegment>): Boolean = secondOpinion != null
+
+        override fun secondOpinion(samples: List<AsrSegment>): Language = secondOpinion ?: language
     }
 
     override fun diarizer(request: DiarizationRequest): Diarizer = object : Diarizer {

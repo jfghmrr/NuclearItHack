@@ -177,6 +177,15 @@ class PipelineRunnerTest {
     }
 
     @Test
+    fun secondOpinionTurnsFileEnglish() = runTest {
+        val h = harness()
+        h.engines.secondOpinion = Language.EN
+        val id = h.import("thin")
+        h.await(done(id))
+        assertEquals(Language.EN, h.runner.jobs.value.getValue(id).language)
+    }
+
+    @Test
     fun refinedTurnsReachMerge() = runTest {
         val h = harness()
         h.engines.refineBehavior = { turns -> turns + SpeakerTurn(0, 500, 1) }

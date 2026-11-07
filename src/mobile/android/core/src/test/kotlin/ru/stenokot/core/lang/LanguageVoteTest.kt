@@ -21,6 +21,37 @@ class LanguageVoteTest {
     private val garbled = "Ohemember You Wann It thishash Kimipenues lefty intrututu disky name David Hivas"
 
     @Test
+    fun almostSilentRecognizerAsksSecondOpinion() {
+        val long = AsrSegment(SpeechSegment(0, 0, 320_000), "", emptyList())
+        val word = AsrSegment(SpeechSegment(1, 320_000, 640_000), "Витамины.", emptyList())
+        assertTrue(vote.needsSecondOpinion(listOf(long, word, long)))
+    }
+
+    @Test
+    fun normalTextNeedsNoSecondOpinion() {
+        val spoken = AsrSegment(SpeechSegment(0, 0, 320_000), russian, emptyList())
+        assertFalse(vote.needsSecondOpinion(listOf(spoken)))
+    }
+
+    @Test
+    fun shortProbesNeedNoSecondOpinion() {
+        val quiet = AsrSegment(SpeechSegment(0, 0, 16_000), "", emptyList())
+        assertFalse(vote.needsSecondOpinion(listOf(quiet)))
+    }
+
+    @Test
+    fun denseEnglishTextConfirmsEnglish() {
+        val spoken = AsrSegment(SpeechSegment(0, 0, 160_000), english + " " + english, emptyList())
+        assertEquals(Language.EN, vote.secondOpinion(listOf(spoken)))
+    }
+
+    @Test
+    fun sparseWordsKeepRussian() {
+        val noise = AsrSegment(SpeechSegment(0, 0, 320_000), "the music oh", emptyList())
+        assertEquals(Language.RU, vote.secondOpinion(listOf(noise)))
+    }
+
+    @Test
     fun noSamplesDefaultToRussian() {
         assertEquals(Language.RU, vote.detect(emptyList()))
         assertFalse(vote.settled(emptyList()))
