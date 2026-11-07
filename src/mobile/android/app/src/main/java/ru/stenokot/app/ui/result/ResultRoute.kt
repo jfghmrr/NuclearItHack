@@ -35,6 +35,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -47,7 +48,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -91,6 +91,7 @@ private const val KEY_BANNER = "banner"
 private const val KEY_HINT = "hint"
 private const val KEY_OUTPUT = "output"
 private const val TYPE_HEADER = 10
+private const val MAX_PINNED_SPEAKERS = 6
 
 /** Разобранная стенограмма и исходный вид списка. Всё считается вне основного потока. */
 @Immutable
@@ -189,7 +190,6 @@ private fun ResultContent(
 ) {
     val window = LocalWindowLayout.current
     val colors = StenoTheme.colors
-    val density = LocalDensity.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
@@ -319,13 +319,16 @@ private fun ResultContent(
     }
     val active: () -> Int = remember(activeIndex) { { activeIndex.value } }
     val rowsOffset by rememberUpdatedState(headerItems + 1)
-    val stripPx = with(density) { StenoSize.touchTarget.roundToPx() }
+    val pinnedStrip = (!window.short || searchOpen) &&
+        (prep?.model?.speakers?.size ?: 0) <= MAX_PINNED_SPEAKERS
+    var stripHeight by remember { mutableIntStateOf(0) }
+    val pinnedPx by rememberUpdatedState(if (pinnedStrip) stripHeight else 0)
     val navigator = remember(transcriptList, view) {
         TranscriptNavigator(
             scope = scope,
             listState = transcriptList,
             rowsOffset = { rowsOffset },
-            stripPx = { stripPx },
+            stripPx = { pinnedPx },
             view = { view?.value ?: TranscriptView(emptyList(), "", emptySet(), LongArray(0)) },
         )
     }
@@ -368,6 +371,8 @@ private fun ResultContent(
                 active = active,
                 onRow = { row -> player.seekTo(row.startMs, play = true) },
                 header = transcriptHeader,
+                pinned = pinnedStrip,
+                onStripHeight = { stripHeight = it },
                 modifier = modifier,
             )
         }

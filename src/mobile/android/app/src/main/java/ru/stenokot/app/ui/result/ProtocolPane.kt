@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -71,6 +70,7 @@ import ru.stenokot.core.protocol.ProtocolSection
 
 private val RuleThickness = 3.dp
 private val QuoteBadge = 20.dp
+private val MessageWidth = 420.dp
 
 /** Вид пункта протокола: подпись и значок. */
 private enum class ItemKind(val title: Int, @param:DrawableRes val icon: Int, val mark: RibbonMarkKind) {
@@ -192,37 +192,42 @@ private fun ProtocolEmpty(
         verticalArrangement = Arrangement.spacedBy(StenoSpace.l),
     ) {
         if (showBanner && phase != ProtocolPhase.NO_SPEECH) ProtocolBanner(phase, protocol)
-        Spacer(Modifier.height(StenoSpace.s))
-        message.mascot?.let {
-            Image(painterResource(it), contentDescription = null, Modifier.size(StenoSize.mascot))
-        }
-        message.icon?.let { StenoIcon(it, colors.onSurfaceVariant, size = StenoSize.iconLarge) }
-        if (failed) {
-            Text(
-                text = stringResource(R.string.scr05_failed_title),
-                modifier = Modifier.widthIn(max = 420.dp).semantics { heading() },
-                style = StenoTheme.type.titleMedium,
-                color = colors.onSurface,
-                textAlign = TextAlign.Center,
-            )
-        }
-        Text(
-            text = message.text,
-            modifier = Modifier.widthIn(max = 420.dp).testTag(Tags.PROTOCOL_STATE),
-            style = StenoTheme.type.bodyLarge,
-            color = colors.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        if (failed) {
-            if (onOpenTranscript != null) {
-                PrimaryAction(
-                    text = stringResource(R.string.scr05_open_transcript),
-                    onClick = onOpenTranscript,
-                    modifier = Modifier.widthIn(max = 420.dp),
-                    tag = Tags.OPEN_TRANSCRIPT,
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(top = StenoSpace.xxl),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(StenoSpace.l),
+        ) {
+            message.mascot?.let {
+                Image(painterResource(it), contentDescription = null, Modifier.size(StenoSize.mascot))
+            }
+            message.icon?.let { StenoIcon(it, colors.onSurfaceVariant, size = StenoSize.iconLarge) }
+            if (failed) {
+                Text(
+                    text = stringResource(R.string.scr05_failed_title),
+                    modifier = Modifier.widthIn(max = MessageWidth).semantics { heading() },
+                    style = StenoTheme.type.titleMedium,
+                    color = colors.onSurface,
+                    textAlign = TextAlign.Center,
                 )
             }
-            protocol.errorCode?.let { FailureDetails(it.name, onCopyDiagnostics) }
+            Text(
+                text = message.text,
+                modifier = Modifier.widthIn(max = MessageWidth).testTag(Tags.PROTOCOL_STATE),
+                style = StenoTheme.type.bodyLarge,
+                color = colors.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            if (failed) {
+                if (onOpenTranscript != null) {
+                    PrimaryAction(
+                        text = stringResource(R.string.scr05_open_transcript),
+                        onClick = onOpenTranscript,
+                        modifier = Modifier.widthIn(max = MessageWidth),
+                        tag = Tags.OPEN_TRANSCRIPT,
+                    )
+                }
+                protocol.errorCode?.let { FailureDetails(it.name, onCopyDiagnostics) }
+            }
         }
     }
 }
