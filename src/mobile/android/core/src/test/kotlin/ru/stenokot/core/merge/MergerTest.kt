@@ -391,6 +391,20 @@ class MergerTest {
     }
 
     @Test
+    fun speakersPastEightReachContractWithoutGaps() {
+        val speakers = 21
+        val turnMs = 3_000L
+        val durationMs = speakers * turnMs
+        val turns = List(speakers) { i -> SpeakerTurn(i * turnMs, (i + 1) * turnMs, i) }
+        val tokens = List(speakers) { i -> token(" слово$i", i * turnMs + 1_000) }
+        val out = merge(durationMs, tokens, turns)
+        assertEquals((0 until speakers).toList(), out.map { it.speaker })
+        val bytes = TranscriptEncoder.encode(out)
+        assertEquals(ValidationResult.Ok, DefaultTranscriptValidator().validate(bytes, durationMs))
+        assertTrue(bytes.toString(Charsets.UTF_8).contains("\"speaker_id\":\"speaker_21\""))
+    }
+
+    @Test
     fun largeInputIsFast() {
         val tokens = List(60_000) { i -> AsrToken(" слово", i * 300L) }
         val duration = 18_000_100L
