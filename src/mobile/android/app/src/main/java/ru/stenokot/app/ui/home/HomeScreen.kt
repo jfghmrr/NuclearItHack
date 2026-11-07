@@ -514,7 +514,12 @@ private fun LazyListScope.libraryContent(
         item(key = row.key, contentType = row::class) {
             when (row) {
                 is LibraryRow.Day -> DayLabel(row.date, state.today)
-                is LibraryRow.Record -> RecordCard(row, state.today, state.preflight, callbacks)
+                is LibraryRow.Record -> {
+                    val firstQueued = row.kind == RecordKind.QUEUED && row.index == 0
+                    Box(if (firstQueued) Modifier.testTag(Tags.LIST_QUEUE) else Modifier) {
+                        RecordCard(row, state.today, state.preflight, callbacks)
+                    }
+                }
             }
         }
     }
