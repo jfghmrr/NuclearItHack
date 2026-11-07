@@ -8,7 +8,6 @@ import kotlin.math.min
 object EngineThreads {
     private const val MAX_THREADS = 4
     private const val MIN_THREADS = 2
-    private const val DIARIZATION_THREADS = 2
 
     /** Потоки распознавания: max(2, min(4, производительные ядра, ядра - 1)). */
     fun asr(): Int {
@@ -16,8 +15,11 @@ object EngineThreads {
         return max(MIN_THREADS, min(MAX_THREADS, min(performanceCores(cores), cores - 1)))
     }
 
-    /** Потоки диаризации: для этих маленьких моделей больше двух почти не даёт прироста. */
-    fun diarization(): Int = DIARIZATION_THREADS
+    /**
+     * Потоки диаризации, та же формула. Snapdragon 662, файл 3 минуты: 2 потока 25,8 с, 3 потока 21,1 с,
+     * 4 потока 19,0 с, 6 потоков 19,3 с. Пик памяти от числа потоков не зависит.
+     */
+    fun diarization(): Int = asr()
 
     /** Ядра с наибольшей частотой. На эмуляторе частот нет, тогда все ядра считаются равными. */
     private fun performanceCores(cores: Int): Int {
