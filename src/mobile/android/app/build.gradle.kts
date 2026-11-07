@@ -1,4 +1,5 @@
 import java.util.Properties
+import javax.inject.Inject
 
 plugins {
     alias(libs.plugins.android.application)
@@ -6,7 +7,28 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-val modelsDir = providers.environmentVariable("STENOKOT_MODELS_DIR")
+/** Кладёт модели в assets сборки full. Выход задачи объявлен, поэтому её видят все потребители assets. */
+abstract class SyncModelAssets : DefaultTask() {
+    @get:Inject
+    abstract val files: FileSystemOperations
+
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val models: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val output: DirectoryProperty
+
+    @TaskAction
+    fun sync() {
+        files.sync {
+            from(models) { include("asr-ru/**", "asr-en/**", "vad/**", "diar/**", "llm/**") }
+            into(output.dir("models"))
+        }
+    }
+}
+
+val modelsDir: Provider<String> = providers.environmentVariable("STENOKOT_MODELS_DIR")
     .orElse(rootProject.layout.projectDirectory.dir("../../../models").asFile.absolutePath)
 val keystoreProps = rootProject.file("keystore.properties").takeIf { it.exists() }?.let { file ->
     Properties().apply { file.inputStream().use(::load) }
@@ -88,23 +110,14 @@ android {
     }
 }
 
-val syncModelAssets = tasks.register<Sync>("syncModelAssets") {
-    from(modelsDir) {
-        include("asr-ru/**", "asr-en/**", "vad/**", "diar/**", "llm/**")
-    }
-    into(layout.buildDirectory.dir("generated/modelAssets/models"))
+val syncModelAssets = tasks.register<SyncModelAssets>("syncModelAssets") {
+    models.set(layout.projectDirectory.dir(modelsDir.get()))
 }
 
 androidComponents {
     onVariants(selector().withFlavor("models" to "full")) { variant ->
-        variant.sources.assets?.addStaticSourceDirectory(
-            layout.buildDirectory.dir("generated/modelAssets").get().asFile.absolutePath,
-        )
+        variant.sources.assets?.addGeneratedSourceDirectory(syncModelAssets, SyncModelAssets::output)
     }
-}
-
-tasks.configureEach {
-    if (name.endsWith("Assets") && name.contains("Full")) dependsOn(syncModelAssets)
 }
 
 dependencies {
