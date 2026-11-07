@@ -6,8 +6,10 @@ import kotlinx.coroutines.flow.StateFlow
 import ru.stenokot.app.domain.ExportKind
 import ru.stenokot.app.domain.HomeUi
 import ru.stenokot.app.domain.JobDetailUi
+import ru.stenokot.app.domain.MicProblem
 import ru.stenokot.app.domain.ModelReadiness
 import ru.stenokot.app.domain.ModelsUi
+import ru.stenokot.app.domain.RecordingUi
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.domain.VerificationUi
 import ru.stenokot.app.ui.format.STATUS_IDLE
@@ -63,4 +65,20 @@ internal class InertController : StenoController {
     override fun refreshAudio() = Unit
 
     override fun diagnosticsPackage(id: String?): String = ""
+
+    override val recording: MutableStateFlow<RecordingUi> = MutableStateFlow(RecordingUi.Idle)
+
+    override val micLevel: StateFlow<Float> = MutableStateFlow(0f)
+
+    override fun startRecording() {
+        recording.value = RecordingUi.Failed(MicProblem.UNAVAILABLE)
+    }
+
+    override fun stopRecording() = Unit
+
+    override fun cancelRecording() = Unit
+
+    override fun acknowledgeRecording() {
+        recording.value = RecordingUi.Idle
+    }
 }

@@ -2,6 +2,7 @@ package ru.stenokot.app
 
 import android.content.Context
 import android.content.Intent
+import ru.stenokot.app.audio.MicSource
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.ui.nav.Route
 
@@ -12,6 +13,9 @@ interface ControllerOverride {
 
     /** Экран, который просит открыть [intent]. */
     fun routeFor(intent: Intent?): Route?
+
+    /** Источник звука вместо микрофона: у эмулятора без звука настоящей речи не взять. */
+    fun micSource(): MicSource? = null
 }
 
 /**

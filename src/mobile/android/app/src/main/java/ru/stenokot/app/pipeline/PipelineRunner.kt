@@ -175,6 +175,7 @@ class PipelineRunner(
             book.remove(id)
             controls.remove(id)
             store.delete(id)
+            sources.release(job)
             if (removeExported) {
                 runCatching { outputs.removePublished(job.stem, job.output?.uri) }
             }
@@ -318,6 +319,7 @@ class PipelineRunner(
                     stageMs = current.stageMs + (Stage.IMPORT to clock() - startedAt),
                 )
             }
+            sources.release(checked)
         } catch (stop: JobStopped) {
             markCancelled(id)
         } catch (cancelled: CancellationException) {

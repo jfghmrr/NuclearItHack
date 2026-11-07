@@ -32,6 +32,7 @@ import ru.stenokot.app.domain.ExportKind
 import ru.stenokot.app.domain.HomeUi
 import ru.stenokot.app.domain.JobDetailUi
 import ru.stenokot.app.domain.ModelsUi
+import ru.stenokot.app.domain.RecordingUi
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.domain.VerificationUi
 import ru.stenokot.core.model.Utterance
@@ -49,6 +50,7 @@ import java.util.concurrent.atomic.AtomicLong
 class RealStenoController(
     context: Context,
     private val runner: PipelineRunner,
+    private val recorder: MicRecorder,
     private val models: ModelPreparer,
     private val store: JobStore,
     private val publisher: ResultPublisher,
@@ -92,11 +94,27 @@ class RealStenoController(
             verificationUi(modelsUi, jobs.values, audit)
         }.stateIn(scope, SharingStarted.Eagerly, verificationUi(models.models.value, emptyList(), network.value))
 
+    override val recording: StateFlow<RecordingUi> get() = recorder.state
+
+    override val micLevel: StateFlow<Float> get() = recorder.level
+
     /** Первичные проверки, которым нужен диск или обращение к системе. */
     fun start() {
         scope.launch(io) { network.value = auditNetwork() }
+        scope.launch(io) {
+            runner.awaitReady()
+            recorder.recover()
+        }
         refreshAudio()
     }
+
+    override fun startRecording() = recorder.requestStart()
+
+    override fun stopRecording() = recorder.stop()
+
+    override fun cancelRecording() = recorder.cancel()
+
+    override fun acknowledgeRecording() = recorder.acknowledge()
 
     /** Приложение на экране: можно запускать службу и продолжать прерванное. */
     fun onForeground() {

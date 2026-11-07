@@ -23,7 +23,11 @@ import java.io.IOException
 import java.io.InputStream
 
 /** Чтение импортируемого файла: адрес content:// от системы или путь file:// из adb. */
-class AndroidSources(context: Context, private val workDir: () -> File) : SourceGateway {
+class AndroidSources(
+    context: Context,
+    private val workDir: () -> File,
+    private val recordings: () -> File,
+) : SourceGateway {
     private val app = context.applicationContext
 
     override suspend fun describe(job: JobRecord): SourceInfo {
@@ -62,6 +66,13 @@ class AndroidSources(context: Context, private val workDir: () -> File) : Source
         } catch (failure: IOException) {
             dir.usableSpace
         }
+    }
+
+    /** Копия уже у задачи, а вторая копия длинной записи заняла бы столько же места. */
+    override fun release(job: JobRecord) {
+        val uri = Uri.parse(job.sourceUri)
+        val file = uri.path?.takeIf { isFile(uri) }?.let(::File) ?: return
+        if (file.parentFile == recordings()) file.delete()
     }
 
     private fun describeFile(uri: Uri): SourceInfo {

@@ -1,13 +1,17 @@
 package ru.stenokot.app.pipeline
 
 import android.content.Context
+import android.net.Uri
 import android.os.Build
+import android.os.Process
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import ru.stenokot.app.BuildConfig
+import ru.stenokot.app.ControllerProvider
+import ru.stenokot.app.audio.AndroidMic
 import ru.stenokot.app.data.AndroidSources
 import ru.stenokot.app.data.AudioDiscovery
 import ru.stenokot.app.data.JobStore
@@ -15,6 +19,7 @@ import ru.stenokot.app.data.ResultPublisher
 import ru.stenokot.app.data.SpeedBook
 import ru.stenokot.app.service.AndroidDevice
 import ru.stenokot.app.service.PipelineService
+import ru.stenokot.app.service.RecordingService
 import java.io.File
 
 /**
@@ -28,6 +33,7 @@ class AppGraph(context: Context) {
     private val io = Dispatchers.IO
     private val worker = Dispatchers.IO.limitedParallelism(1)
     private val jobsRoot by lazy { File(app.filesDir, JOBS_DIR) }
+    private val recordingsRoot by lazy { File(app.filesDir, RECORDINGS_DIR) }
     private val device = AndroidDevice(app)
     private val ledger = ModelLedger(BuildConfig.MODELS_LOCK)
     private val modelSizes = { path: String -> models.sizeOf(path) }
@@ -54,7 +60,7 @@ class AppGraph(context: Context) {
         store = store,
         engines = EngineFactory(app, ledger.version),
         device = device,
-        sources = AndroidSources(app) { jobsRoot },
+        sources = AndroidSources(app, { jobsRoot }, { recordingsRoot }),
         outputs = publisher,
         modelGate = models,
         metrics = MetricsRecorder({ runContext }, hashes),
@@ -65,10 +71,25 @@ class AppGraph(context: Context) {
         onStatus = { Log.i(STATUS_TAG, it) },
     )
 
+    /** Запись с микрофона. Готовый файл идёт в [controller] как обычный импорт. */
+    val recorder: MicRecorder = MicRecorder(
+        root = { recordingsRoot },
+        openMic = { rate -> ControllerProvider.override?.micSource() ?: AndroidMic.open(rate) },
+        startService = { RecordingService.start(app) },
+        import = { file -> controller.import(listOf(Uri.fromFile(file))) },
+        findJob = { file ->
+            val uri = Uri.fromFile(file).toString()
+            runner.jobs.value.values.firstOrNull { it.sourceUri == uri }
+        },
+        onThreadStart = { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) },
+        log = { Log.i(RECORDER_TAG, it) },
+    )
+
     /** Контроллер для интерфейса. */
-    val controller = RealStenoController(
+    val controller: RealStenoController = RealStenoController(
         context = app,
         runner = runner,
+        recorder = recorder,
         models = models,
         store = store,
         publisher = publisher,
@@ -90,7 +111,9 @@ class AppGraph(context: Context) {
 
     private companion object {
         const val JOBS_DIR = "jobs"
+        const val RECORDINGS_DIR = "recordings"
         const val SPEED_FILE = "speed.json"
         const val STATUS_TAG = "PIPELINE"
+        const val RECORDER_TAG = "Recorder"
     }
 }

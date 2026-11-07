@@ -8,6 +8,7 @@ import android.database.Cursor
 import android.net.Uri
 import ru.stenokot.app.ControllerOverride
 import ru.stenokot.app.ControllerProvider
+import ru.stenokot.app.audio.MicSource
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.ui.nav.Route
 
@@ -15,13 +16,17 @@ import ru.stenokot.app.ui.nav.Route
 private class DemoOverride(context: Context) : ControllerOverride {
     private val fake = FakeController(context.applicationContext)
     private var real = false
+    private var micFeed: String? = null
 
     override fun controller(context: Context, intent: Intent?): StenoController? {
         real = intent?.getBooleanExtra(EXTRA_REAL, false) == true
         DemoAudio.path = intent?.getStringExtra(EXTRA_AUDIO)
+        micFeed = intent?.getStringExtra(EXTRA_MIC_FEED)
         intent?.getStringExtra(EXTRA_PUBLISH)?.let(fake::publishDemoFile)
         return if (real) null else fake
     }
+
+    override fun micSource(): MicSource? = micFeed?.let(::WavFileMic)
 
     override fun routeFor(intent: Intent?): Route? {
         if (real) return null
@@ -34,6 +39,7 @@ private class DemoOverride(context: Context) : ControllerOverride {
         const val EXTRA_REAL = "real"
         const val EXTRA_AUDIO = "audio"
         const val EXTRA_PUBLISH = "publish"
+        const val EXTRA_MIC_FEED = "micfeed"
     }
 }
 

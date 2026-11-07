@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="rec_title">Запись с микрофона</string>
+    <string name="rec_running">Идёт запись</string>
+    <string name="rec_waiting">Запись ждёт</string>
+    <string name="rec_screen_off_hint">Можно выключить экран: запись продолжится. Звук не покидает устройство</string>
+    <string name="rec_level">Уровень сигнала микрофона</string>
+    <string name="rec_busy_title">Микрофон занят, запись ждёт</string>
+    <string name="rec_busy_body">Записанное сохранено. Запись продолжится сама, когда микрофон освободится</string>
+    <string name="rec_stop">Остановить и расшифровать</string>
+    <string name="rec_cancel">Отменить запись</string>
+    <string name="rec_cancel_title">Удалить запись?</string>
+    <string name="rec_cancel_body">Записано %1$s. Вернуть запись будет нельзя</string>
+    <string name="rec_cancel_confirm">Удалить</string>
+    <string name="rec_cancel_dismiss">Продолжить запись</string>
+    <string name="rec_denied">Без доступа к микрофону записать разговор нельзя. Импорт файлов работает как обычно</string>
+    <string name="rec_unavailable">Микрофон сейчас недоступен. Импорт файлов работает как обычно</string>
+    <string name="rec_empty">Запись пуста: микрофон не передал звука</string>
+    <string name="rec_no_space">Мало места на устройстве, запись не началась</string>
+    <string name="rec_open_settings">Открыть настройки</string>
+    <string name="rec_dismiss">Понятно</string>
+    <string name="rec_notification_title">Стенокот</string>
+    <string name="rec_notification_text">Идёт запись</string>
+    <string name="rec_notification_stop">Остановить</string>
+</resources>

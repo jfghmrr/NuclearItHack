@@ -188,3 +188,25 @@ data class HomeUi(
 
 /** Что именно экспортируется. */
 enum class ExportKind { TRANSCRIPT, METADATA, PROTOCOL }
+
+/** Почему запись с микрофона не дала файла. */
+enum class MicProblem { UNAVAILABLE, EMPTY, NO_SPACE }
+
+/** Запись с микрофона. */
+@Immutable
+sealed interface RecordingUi {
+    /** Запись не идёт. */
+    data object Idle : RecordingUi
+
+    /** Служба выходит на передний план, микрофон ещё не открыт. */
+    data object Starting : RecordingUi
+
+    /** Идёт запись. [micBusy] означает, что микрофон у другого приложения и запись ждёт его. */
+    data class Active(val elapsedMs: Long, val micBusy: Boolean) : RecordingUi
+
+    /** Файл передан в конвейер как задача [jobId]. */
+    data class Saved(val jobId: String) : RecordingUi
+
+    /** Запись не удалась, и сохранять нечего. */
+    data class Failed(val problem: MicProblem) : RecordingUi
+}

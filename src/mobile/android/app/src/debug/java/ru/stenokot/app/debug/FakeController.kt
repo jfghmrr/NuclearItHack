@@ -21,6 +21,7 @@ import ru.stenokot.app.domain.ExportKind
 import ru.stenokot.app.domain.HomeUi
 import ru.stenokot.app.domain.JobDetailUi
 import ru.stenokot.app.domain.ProcessingUi
+import ru.stenokot.app.domain.RecordingUi
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.domain.UserStage
 import ru.stenokot.app.domain.VerificationUi
@@ -35,6 +36,8 @@ private const val TICK_MS = 1_000L
 private const val CANCEL_MS = 1_500L
 private const val QUEUE_MS = 1_200L
 private const val DEMO_JSON = "{\"transcript\":[]}"
+private const val DEMO_MIC_LEVEL = 0.62f
+private const val DEMO_RECORDING_MS = 754_000L
 
 /** Шаг имитации: стадия конвейера, её счётчик и этап пользователя. */
 private data class LiveStep(val stage: Stage, val user: UserStage, val total: Int?)
@@ -65,6 +68,24 @@ internal class FakeController(private val context: Context? = null) : StenoContr
 
     override val home: StateFlow<HomeUi> = homeState
     override val verification: StateFlow<VerificationUi> = verificationState
+    override val recording = MutableStateFlow<RecordingUi>(RecordingUi.Idle)
+    override val micLevel = MutableStateFlow(DEMO_MIC_LEVEL)
+
+    override fun startRecording() {
+        recording.value = RecordingUi.Active(DEMO_RECORDING_MS, micBusy = false)
+    }
+
+    override fun stopRecording() {
+        recording.value = RecordingUi.Idle
+    }
+
+    override fun cancelRecording() {
+        recording.value = RecordingUi.Idle
+    }
+
+    override fun acknowledgeRecording() {
+        if (recording.value !is RecordingUi.Active) recording.value = RecordingUi.Idle
+    }
 
     /** Открывает состояние [id]. Возвращает экран, на который надо перейти. */
     fun show(id: String): Route? {
