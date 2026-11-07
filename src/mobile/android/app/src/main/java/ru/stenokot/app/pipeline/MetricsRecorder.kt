@@ -54,7 +54,7 @@ data class LlmStats(
 fun JobRecord.rtf(): RtfValues {
     val audioMs = durationMs ?: 0
     val timed = if (llm.status == null) stageMs else stageMs + (Stage.LLM to llm.tookMs)
-    return RtfCalculator.compute(audioMs, timed)
+    return RtfCalculator.compute(audioMs, timed, overheadMs)
 }
 
 /** Пишет замеры стадий и сводный metadata.json в формате ядра. */
@@ -107,6 +107,7 @@ class MetricsRecorder(
             stages = job.stageMs.map { (stage, ms) ->
                 StageTiming(stage, ms, job.durationMs?.let { RtfCalculator.stage(ms, it) })
             },
+            overheadMs = job.overheadMs,
             rtfCore = rtf.core,
             rtfFull = rtf.full,
             vmHwmKb = listOfNotNull(job.peakRssKb, stats?.vmHwmKb).maxOrNull(),

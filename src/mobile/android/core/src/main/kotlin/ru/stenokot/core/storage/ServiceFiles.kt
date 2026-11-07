@@ -193,6 +193,7 @@ data class MetadataDocument(
     val language: Language? = null,
     @SerialName("lang_votes") val langVotes: LanguageVotes? = null,
     val stages: List<StageTiming> = emptyList(),
+    @SerialName("overhead_ms") val overheadMs: Long? = null,
     @SerialName("rtf_core") val rtfCore: Double? = null,
     @SerialName("rtf_full") val rtfFull: Double? = null,
     @SerialName("vm_hwm_kb") val vmHwmKb: Long? = null,

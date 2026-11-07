@@ -69,8 +69,14 @@ class JobPipeline(
     private val clock: () -> Long,
     private val config: RunnerConfig,
 ) {
-    /** Проводит задачу [id] до записанного контрактного файла. */
+    /**
+     * Проводит задачу [id] до записанного контрактного файла. Время между стадиями, например сброс
+     * чекпойнта на диск, ни в одну стадию не входит, но пользователь его ждал: оно идёт в накладные
+     * расходы, чтобы `RTF_core` оставался честным при задержках диска.
+     */
     suspend fun run(id: String, control: JobControl) {
+        val startedAt = clock()
+        val countedBefore = book.require(id).stageMs.values.sum()
         invalidateStaleCheckpoints(id)
         Run(id, store.files(id), control).use { run ->
             for (stage in CoreStages) {
@@ -79,7 +85,12 @@ class JobPipeline(
                 measured(run, stage) { execute(run, stage) }
             }
         }
-        book.mutate(id) { job -> job.copy(coreMs = job.stageMs.filterKeys { it in CoreStages }.values.sum()) }
+        val elapsed = clock() - startedAt
+        book.mutate(id) { job ->
+            val stages = job.stageMs.filterKeys { it in CoreStages }.values.sum()
+            val overhead = job.overheadMs + (elapsed - (job.stageMs.values.sum() - countedBefore)).coerceAtLeast(0)
+            job.copy(overheadMs = overhead, coreMs = stages + overhead)
+        }
     }
 
     /** То же правило, что и в JobFile ядра: смена настроек или моделей отменяет всё после декодирования. */

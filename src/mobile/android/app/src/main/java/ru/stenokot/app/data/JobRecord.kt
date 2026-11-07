@@ -123,6 +123,7 @@ data class JobRecord(
     val llm: LlmRecord = LlmRecord(),
     val stageMs: Map<Stage, Long> = emptyMap(),
     val coreMs: Long = 0,
+    val overheadMs: Long = 0,
     val peakRssKb: Long? = null,
     val configHash: String? = null,
     val autoResumes: Int = 0,

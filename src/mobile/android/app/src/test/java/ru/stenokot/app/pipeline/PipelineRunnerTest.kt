@@ -771,6 +771,16 @@ class PipelineRunnerTest {
     }
 
     @Test
+    fun timeBetweenStagesIsNotLostFromCoreTime() = runTest {
+        val h = harness { device.thermal = 3 }
+        val id = h.import("gap")
+        h.await(done(id))
+        val job = h.runner.jobs.value.getValue(id)
+        assertTrue("накладные расходы: ${job.overheadMs}", job.overheadMs >= 200)
+        assertEquals(job.stageMs.filterKeys { it != Stage.LLM }.values.sum() + job.overheadMs, job.coreMs)
+    }
+
+    @Test
     fun budgetIsComputedFromRecordingAndCoreTime() = runTest {
         val h = harness()
         val id = h.import("budget")
