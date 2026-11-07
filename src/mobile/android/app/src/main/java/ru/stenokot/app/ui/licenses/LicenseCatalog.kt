@@ -34,9 +34,7 @@ object LicenseCatalog {
         LicenseGroup(
             R.string.licenses_group_fonts,
             listOf(
-                LicenseEntry("golos", "Golos Text", "Шрифт интерфейса", OFL, "The Golos Text Project Authors", "OFL-GolosText.txt"),
-                LicenseEntry("mono", "JetBrains Mono", "Таймкоды и замеры", OFL, "The JetBrains Mono Project Authors", "OFL-JetBrainsMono.txt"),
-                LicenseEntry("symbols", "Material Symbols", "Значки", APACHE, "Google", APACHE_FILE),
+                LicenseEntry("noto", "Noto Sans", "Шрифт интерфейса", OFL, "The Noto Project Authors", "OFL-NotoSans.txt"),
             ),
         ),
         LicenseGroup(
