@@ -10,7 +10,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import ru.stenokot.app.ui.theme.StenoSize
 
-/** Значок Material Symbols Rounded из ресурсов приложения. По умолчанию декоративный. */
+/** Контурный значок из единого набора приложения. По умолчанию декоративный. */
 @Composable
 fun StenoIcon(
     @DrawableRes icon: Int,
