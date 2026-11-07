@@ -2,6 +2,7 @@ package ru.stenokot.app.audio
 
 import android.media.AudioFormat
 import android.media.MediaCodec
+import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.StatFs
 import java.io.File
@@ -40,13 +41,7 @@ class MediaDecoder : AudioDecoder {
             val probe = Preflight.probe(source)
             val partial = File(outWav.path + ".part")
             try {
-                val outcome = PcmWavWriter(partial, TARGET_RATE).use { writer ->
-                    val sink = PcmSink(writer)
-                    pumpAll(source, outWav, sink, probe.sizeBytes, progress)
-                    sink.finish()
-                    writer.finish()
-                    sink
-                }
+                val outcome = decodeInto(partial, source, outWav, probe, progress)
                 requireComplete(probe, outcome.durationMs)
                 if (!partial.renameTo(outWav)) throw IOException("Не удалось сохранить ${outWav.name}")
                 progress.report(1f, null)
@@ -64,13 +59,52 @@ class MediaDecoder : AudioDecoder {
             }
         }
 
-    private suspend fun pumpAll(source: AudioInput, outWav: File, sink: PcmSink, size: Long, progress: Progress) {
+    /** Пачки быстрее, но при малейшем отказе запись заново идёт обычным путём, по одному пакету. */
+    private suspend fun decodeInto(
+        partial: File,
+        source: AudioInput,
+        outWav: File,
+        probe: AudioProbe,
+        progress: Progress,
+    ): PcmSink {
+        val batched = try {
+            decodeOnce(partial, source, outWav, probe.sizeBytes, progress, MP3_BATCH_PACKETS)
+        } catch (refused: BatchRefused) {
+            null
+        }
+        if (batched != null && !(batched.packed && lostAudio(probe, batched.durationMs))) return batched
+        return decodeOnce(partial, source, outWav, probe.sizeBytes, progress, 1)
+    }
+
+    private suspend fun decodeOnce(
+        partial: File,
+        source: AudioInput,
+        outWav: File,
+        size: Long,
+        progress: Progress,
+        batch: Int,
+    ): PcmSink = PcmWavWriter(partial, TARGET_RATE).use { writer ->
+        val sink = PcmSink(writer)
+        pumpAll(source, outWav, sink, size, progress, batch)
+        sink.finish()
+        writer.finish()
+        sink
+    }
+
+    private suspend fun pumpAll(
+        source: AudioInput,
+        outWav: File,
+        sink: PcmSink,
+        size: Long,
+        progress: Progress,
+        batch: Int,
+    ) {
         val wav = source.open().use(LargeWav::detect)
         if (wav != null) {
             source.open().use { input -> pumpLargeWav(wav, input, sink, ProgressPacer(size, progress)) }
         } else {
             AudioTrackSource.open(source, outWav.parentFile).use { track ->
-                pumpWithRestarts(track, sink, size, progress)
+                pumpWithRestarts(track, sink, size, progress, batch)
             }
         }
     }
@@ -105,19 +139,29 @@ class MediaDecoder : AudioDecoder {
     }
 
     /** Отказ кодека на повреждённом фрагменте не обрывает запись: новый кодек, разрыв закроется тишиной. */
-    private suspend fun pumpWithRestarts(track: AudioTrackSource, sink: PcmSink, size: Long, progress: Progress) {
+    private suspend fun pumpWithRestarts(
+        track: AudioTrackSource,
+        sink: PcmSink,
+        size: Long,
+        progress: Progress,
+        batch: Int,
+    ) {
         var restarts = 0
         val pacer = ProgressPacer(size, progress)
         while (true) {
             val codec = track.createCodec()
+            val limit = if (acceptsPackedFrames(track, codec)) batch else 1
+            sink.packed = limit > 1
             try {
-                pump(track, codec, sink, pacer)
+                pump(track, codec, sink, pacer, limit)
                 return
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: IllegalStateException) {
+                if (limit > 1) throw BatchRefused()
                 restarts = nextRestart(track, sink, restarts, error)
             } catch (error: IllegalArgumentException) {
+                if (limit > 1) throw BatchRefused()
                 restarts = nextRestart(track, sink, restarts, error)
             } finally {
                 runCatching { codec.stop() }
@@ -135,7 +179,14 @@ class MediaDecoder : AudioDecoder {
         return restarts + 1
     }
 
-    private suspend fun pump(track: AudioTrackSource, codec: MediaCodec, sink: PcmSink, pacer: ProgressPacer) {
+    /**
+     * Программный декодер MP3 проходит по всем кадрам буфера, остальные кодеки принимают один пакет.
+     * Каждый буфер это несколько вызовов в процесс кодека: на файле 180 с они заняли 7,5 с из 9.
+     */
+    private fun acceptsPackedFrames(track: AudioTrackSource, codec: MediaCodec): Boolean =
+        track.mime == MP3_MIME && codec.name == MP3_SOFT_CODEC
+
+    private suspend fun pump(track: AudioTrackSource, codec: MediaCodec, sink: PcmSink, pacer: ProgressPacer, batch: Int) {
         val info = MediaCodec.BufferInfo()
         val extractor = track.extractor
         var inputDone = false
@@ -147,18 +198,7 @@ class MediaDecoder : AudioDecoder {
                 val slot = codec.dequeueInputBuffer(DEQUEUE_US)
                 if (slot >= 0) {
                     moved = true
-                    val buffer = codec.getInputBuffer(slot)
-                        ?: throw IllegalStateException("Нет входного буфера")
-                    val read = extractor.readSampleData(buffer, 0)
-                    if (read < 0) {
-                        codec.queueInputBuffer(slot, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                        inputDone = true
-                    } else {
-                        val time = extractor.sampleTime
-                        codec.queueInputBuffer(slot, 0, read, time, 0)
-                        pacer.fed(read)
-                        extractor.advance()
-                    }
+                    inputDone = !feed(codec, slot, extractor, pacer, batch)
                 }
             }
             val output = codec.dequeueOutputBuffer(info, DEQUEUE_US)
@@ -185,20 +225,68 @@ class MediaDecoder : AudioDecoder {
             if (moved) {
                 lastProgress = now
             } else if (now - lastProgress > STALL_LIMIT_MS) {
+                if (batch > 1) throw BatchRefused()
                 val code = if (sink.framesAccepted == 0L) ErrorCode.DECODE_UNSUPPORTED_FORMAT else ErrorCode.DECODE_CORRUPT
                 throw EngineException(code, "Декодер завис: ${track.mime}")
             }
         }
     }
 
+    /**
+     * Заполняет буфер [slot] пакетами дорожки, не больше [limit] штук. Возвращает false, когда дорожка
+     * кончилась. Смена формата начинает новый буфер: у выхода кодека один формат на буфер, а чужой
+     * кадр в середине сдвинул бы шкалу времени.
+     */
+    private fun feed(codec: MediaCodec, slot: Int, extractor: MediaExtractor, pacer: ProgressPacer, limit: Int): Boolean {
+        val buffer = codec.getInputBuffer(slot) ?: throw IllegalStateException("Нет входного буфера")
+        val time = extractor.sampleTime
+        var size = 0
+        var packets = 0
+        while (packets < limit) {
+            if (packets > 0 && extractor.sampleSize > buffer.capacity() - size) break
+            val read = extractor.readSampleData(buffer, size)
+            if (read < 0) break
+            if (packets > 0 && (read < MP3_HEADER_BYTES || !sameMp3Format(buffer, 0, size))) break
+            size += read
+            packets += 1
+            pacer.fed(read)
+            extractor.advance()
+        }
+        if (packets == 0) {
+            codec.queueInputBuffer(slot, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+            return false
+        }
+        codec.queueInputBuffer(slot, 0, size, time, 0)
+        return true
+    }
+
+    private fun sameMp3Format(buffer: ByteBuffer, first: Int, next: Int): Boolean {
+        val a = mp3Header(buffer, first)
+        val b = mp3Header(buffer, next)
+        return a and MP3_FORMAT_MASK == b and MP3_FORMAT_MASK && isMono(a) == isMono(b)
+    }
+
+    private fun isMono(header: Int): Boolean = header and MP3_MONO == MP3_MONO
+
+    private fun mp3Header(buffer: ByteBuffer, at: Int): Int =
+        (0 until MP3_HEADER_BYTES).fold(0) { header, index -> (header shl 8) or (buffer.get(at + index).toInt() and 0xFF) }
+
     /** Надёжный заголовок обещал заметно больше данных, чем удалось декодировать: файл обрезан. */
     private fun requireComplete(probe: AudioProbe, decodedMs: Long) {
         if (decodedMs <= 0) throw EngineException(ErrorCode.DECODE_CORRUPT, "Не декодировано ни одного отсчёта")
         val header = probe.headerDurationMs ?: return
-        if (probe.headerReliable && decodedMs < header * MIN_COMPLETE_RATIO && header - decodedMs > MIN_LOSS_MS) {
+        if (probe.headerReliable && lostAudio(probe, decodedMs)) {
             throw EngineException(ErrorCode.DECODE_CORRUPT, "Декодировано $decodedMs мс из $header мс")
         }
     }
+
+    private fun lostAudio(probe: AudioProbe, decodedMs: Long): Boolean {
+        val header = probe.headerDurationMs ?: return false
+        return decodedMs < header * MIN_COMPLETE_RATIO && header - decodedMs > MIN_LOSS_MS
+    }
+
+    /** Кодек не справился с пачкой кадров. Сбой файла покажет обычный путь, здесь причины не важны. */
+    private class BatchRefused : RuntimeException()
 
     private fun sha256(source: AudioInput): String {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -253,6 +341,9 @@ class MediaDecoder : AudioDecoder {
         /** Сколько кадров принято от кодека всего. */
         var framesAccepted = 0L
             private set
+
+        /** Кодек получал пачки кадров. */
+        var packed = false
 
         /** Длительность записанного файла по числу отсчётов. */
         val durationMs: Long
@@ -382,5 +473,11 @@ class MediaDecoder : AudioDecoder {
         const val REPORT_EVERY_MS = 500L
         const val LARGE_WAV_BLOCK = 1 shl 18
         const val MAX_REPORTED = 0.99f
+        const val MP3_MIME = "audio/mpeg"
+        const val MP3_SOFT_CODEC = "c2.android.mp3.decoder"
+        const val MP3_BATCH_PACKETS = 32
+        const val MP3_HEADER_BYTES = 4
+        const val MP3_FORMAT_MASK = 0xFFFE0C00.toInt()
+        const val MP3_MONO = 0xC0
     }
 }
