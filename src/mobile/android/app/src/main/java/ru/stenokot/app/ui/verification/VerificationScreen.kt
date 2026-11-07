@@ -12,6 +12,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -201,7 +202,7 @@ private fun OfflineProof(state: VerificationScreenState) {
     val networkAbsent = verification.networkStatePermissionAbsent && facts?.networkStateAbsent != false
     val clean = internetAbsent && networkAbsent
     val palette = toneColors(if (clean) BannerTone.SUCCESS else BannerTone.ERROR)
-    var open by rememberSaveable { mutableStateOf(false) }
+    var open by rememberSaveable(key = "permissions_open") { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -376,7 +377,7 @@ private fun ModelRow(index: Int, item: ModelItemUi, models: ModelsUi) {
     val rowState = modelRowState(item, models.readiness)
     val status = modelStatus(rowState, models)
     val size = formatMib(item.sizeBytes)
-    var open by rememberSaveable(item.name) { mutableStateOf(false) }
+    var open by rememberSaveable(key = "model_open_${item.name}") { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -484,7 +485,10 @@ private fun MetricsSection(state: VerificationScreenState, callbacks: Verificati
     }
 }
 
-/** Пара главных замеров. Названия всегда полные: слово RTF без уточнения в интерфейсе запрещено. */
+/**
+ * Пара главных замеров. Названия всегда полные: слово RTF без уточнения в интерфейсе запрещено.
+ * Рядом с числом подпись «не измерено» держит его высоту, чтобы пояснения стояли на одной линии.
+ */
 @Composable
 private fun RtfPair(core: Double?, full: Double?) {
     val numeral = StenoTheme.type.numeral
@@ -494,6 +498,7 @@ private fun RtfPair(core: Double?, full: Double?) {
             line = R.string.scr08_rtf_core,
             hint = stringResource(R.string.scr08_rtf_core_hint),
             value = core,
+            aligned = full != null,
             tag = Tags.RTF_CORE,
             modifier = modifier,
         )
@@ -504,6 +509,7 @@ private fun RtfPair(core: Double?, full: Double?) {
             line = R.string.scr08_rtf_full,
             hint = stringResource(R.string.scr08_rtf_full_hint),
             value = full,
+            aligned = core != null,
             tag = Tags.RTF_FULL,
             modifier = modifier,
         )
@@ -530,6 +536,7 @@ private fun RtfCell(
     @StringRes line: Int,
     hint: String,
     value: Double?,
+    aligned: Boolean,
     tag: String,
     modifier: Modifier,
 ) {
@@ -544,10 +551,20 @@ private fun RtfCell(
         verticalArrangement = Arrangement.spacedBy(StenoSpace.xs / 2),
     ) {
         Text(name, style = type.monoMedium, color = colors.onSurface)
-        if (shown != null) {
-            Text(shown, style = type.numeral, color = colors.onSurface, maxLines = 1, softWrap = false)
-        } else {
-            Text(stringResource(R.string.scr08_not_measured), style = type.titleMedium, color = colors.onSurfaceVariant)
+        val numeralLine = with(LocalDensity.current) { type.numeral.lineHeight.toDp() }
+        Box(
+            modifier = Modifier.heightIn(min = if (aligned) numeralLine else 0.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            if (shown != null) {
+                Text(shown, style = type.numeral, color = colors.onSurface, maxLines = 1, softWrap = false)
+            } else {
+                Text(
+                    text = stringResource(R.string.scr08_not_measured),
+                    style = type.titleMedium,
+                    color = colors.onSurfaceVariant,
+                )
+            }
         }
         Text(hint, style = type.bodySmall, color = colors.onSurfaceVariant)
     }

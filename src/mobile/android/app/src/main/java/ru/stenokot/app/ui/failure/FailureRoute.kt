@@ -381,7 +381,7 @@ private fun FailureMessage(text: FailureText) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DetailsBlock(detail: JobDetailUi, copy: DiagnosticsCopy) {
-    var open by rememberSaveable { mutableStateOf(false) }
+    var open by rememberSaveable(key = "failure_details") { mutableStateOf(false) }
     Column {
         FlowRow(
             modifier = Modifier.offset(x = -StenoSpace.s),
