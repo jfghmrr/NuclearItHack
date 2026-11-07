@@ -30,12 +30,6 @@ class ProtocolGrammarTest {
                         out.append(Regex.escape(literal))
                         i = end + 1
                     }
-                    c == '[' -> {
-                        var end = i + 1
-                        while (body[end] != ']' || body[end - 1] == '\\') end++
-                        out.append(body, i, end + 1)
-                        i = end + 1
-                    }
                     c == '{' -> {
                         val end = body.indexOf('}', i)
                         out.append(body, i, end + 1)
@@ -47,7 +41,7 @@ class ProtocolGrammarTest {
                     }
                     else -> {
                         var end = i
-                        while (end < body.length && body[end].isLetter()) end++
+                        while (end < body.length && body[end].isLetterOrDigit()) end++
                         out.append("(?:").append(expand(body.substring(i, end))).append(")")
                         i = end
                     }
@@ -59,53 +53,96 @@ class ProtocolGrammarTest {
         return Regex(expand("root"))
     }
 
-    private val grammar = ProtocolGrammar.build(listOf(12, 13, 14))
-    private val regex = toRegex(grammar)
+    private val regex = toRegex(ProtocolGrammar.build(WINDOW_RU))
 
     private fun assertAccepted(output: String) = assertTrue(output, regex.matches(output))
 
     private fun assertRejected(output: String) = assertFalse(output, regex.matches(output))
 
     @Test
-    fun exactText() {
-        assertEquals(
-            """
-            root  ::= topic item{0,3}
-            topic ::= "T: " word (" " word){0,5} "\n"
-            item  ::= [DAQ] " " ref "\n"
-            ref   ::= "12" | "13" | "14"
-            word  ::= [^ \n\t\[\]]{1,24}
-            """.trimIndent() + "\n",
-            grammar,
-        )
+    fun acceptsQuotesAndConfirmedItems() {
+        assertAccepted("T: закупаем корм\n")
+        assertAccepted("T: закупаем корм у нового поставщика\n")
+        assertAccepted("T: закупаем корм\nD 12\nA 13\n")
     }
 
     @Test
-    fun acceptsValidAnswers() {
-        assertAccepted("T: закупка корма\n")
-        assertAccepted("T: закупка корма\nD 12\nA 13\n")
-        assertAccepted("T: a b c d e f\nD 12\nA 13\nQ 14\n")
+    fun rejectsTextThatIsNotQuote() {
+        assertRejected("T: закупка корма\n")
+        assertRejected("T: налоговая проверка\n")
+        assertRejected("T: корм закупаем\n")
+        assertRejected("T: закупаем\n")
+        assertRejected("T: Значит закупаем\n")
     }
 
     @Test
-    fun rejectsInvalidAnswers() {
+    fun quoteEndsOnSignificantWord() {
+        assertRejected("T: закупаем корм у\n")
+        assertRejected("T: корм у\n")
+    }
+
+    @Test
+    fun quoteDoesNotEndOnWeakWord() {
+        val window = LlmWindow(0, listOf(utterance(1, 0, 0, 1, "описание вашей архитектуры и вашего что-то")))
+        val matcher = toRegex(ProtocolGrammar.build(window))
+        assertTrue(matcher.matches("T: описание вашей архитектуры\n"))
+        assertFalse(matcher.matches("T: архитектуры и вашего\n"))
+        assertFalse(matcher.matches("T: архитектуры и вашего что-то\n"))
+    }
+
+    @Test
+    fun rejectsBrokenAnswers() {
         assertRejected("D 12\n")
-        assertRejected("T: тема\nD 99\n")
-        assertRejected("T: тема\nX 12\n")
-        assertRejected("T: тема\n" + "D 12\n".repeat(4))
-        assertRejected("T: a b c d e f g\n")
-        assertRejected("T: тема\nD 12: текст\n")
-        assertRejected("T: [тема]\n")
-        assertRejected("T: " + "ы".repeat(25) + "\n")
-        assertRejected("T: тема")
+        assertRejected("T: закупаем корм")
+        assertRejected("T: закупаем корм\nX 12\n")
+        assertRejected("T: закупаем корм\nD 12: текст\n")
+        assertRejected("T: закупаем корм\n" + "D 12\n".repeat(4))
     }
 
     @Test
-    fun refContainsOnlyWindowNumbers() {
-        val text = ProtocolGrammar.build(WINDOW_RU)
-        assertTrue(text.contains("""ref   ::= "12" | "13" | "14""""))
-        val other = toRegex(ProtocolGrammar.build(LlmWindow(0, listOf(utterance(7, 0, 0, 1, "да")))))
-        assertTrue(other.matches("T: тема\nD 7\n"))
-        assertFalse(other.matches("T: тема\nD 12\n"))
+    fun itemsAreLimitedToConfirmedKinds() {
+        assertRejected("T: закупаем корм\nD 99\n")
+        assertRejected("T: закупаем корм\nD 13\n")
+        assertRejected("T: закупаем корм\nA 12\n")
+        assertRejected("T: закупаем корм\nQ 12\n")
+        assertRejected("T: закупаем корм\nA 14\n")
+    }
+
+    @Test
+    fun quoteIsLimitedToSixWords() {
+        val long = LlmWindow(0, listOf(utterance(1, 0, 0, 1, "первый второй третий четвёртый пятый шестой седьмой восьмой")))
+        val matcher = toRegex(ProtocolGrammar.build(long))
+        assertTrue(matcher.matches("T: первый второй третий четвёртый пятый шестой\n"))
+        assertFalse(matcher.matches("T: первый второй третий четвёртый пятый шестой седьмой\n"))
+    }
+
+    @Test
+    fun quoteDoesNotCrossPunctuationOrFillers() {
+        val window = LlmWindow(0, listOf(utterance(1, 0, 0, 1, "Новый склад, большой город э-э далёкий регион")))
+        val matcher = toRegex(ProtocolGrammar.build(window))
+        assertTrue(matcher.matches("T: Новый склад\n"))
+        assertTrue(matcher.matches("T: большой город\n"))
+        assertFalse(matcher.matches("T: склад большой\n"))
+        assertFalse(matcher.matches("T: город далёкий\n"))
+    }
+
+    @Test
+    fun windowWithoutConfirmedItemsAllowsOnlyTopic() {
+        val window = LlmWindow(0, listOf(utterance(1, 0, 0, 1, "Обычный разговор про погоду в большом городе")))
+        val text = ProtocolGrammar.build(window)
+        assertFalse(text.contains("item"))
+        assertFalse(toRegex(text).matches("T: Обычный разговор\nD 1\n"))
+    }
+
+    @Test
+    fun windowWithoutQuotableWordsStaysValid() {
+        val window = LlmWindow(0, listOf(utterance(1, 0, 0, 1, "Да. Нет. Да.")))
+        assertTrue(toRegex(ProtocolGrammar.build(window)).matches("T: -\n"))
+    }
+
+    @Test
+    fun everyAcceptedTopicPassesParser() {
+        val output = "T: закупаем корм у нового поставщика\nD 12\n"
+        assertEquals("закупаем корм у нового поставщика", parseWindowOutput(output, WINDOW_RU).topic)
     }
 }

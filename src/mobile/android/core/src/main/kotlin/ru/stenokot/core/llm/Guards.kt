@@ -1,5 +1,6 @@
 package ru.stenokot.core.llm
 
+import java.util.Collections
 import ru.stenokot.core.model.Utterance
 
 /** Алфавит текста окна. */
@@ -17,9 +18,6 @@ enum class ProtocolKind(val letter: Char, val value: String) {
     }
 }
 
-/** Причина отказа в теме. Тогда раздел получает интервал времени вместо названия. */
-enum class TopicRejection { SUPPORT, DIGITS }
-
 /** Итог разбора ответа по окну. */
 enum class WindowOutcome { OK, SKIPPED_SCRIPT }
 
@@ -31,20 +29,14 @@ data class WindowExtract(val outcome: WindowOutcome, val topic: String?, val ite
 
 private const val MIN_SCRIPT_LETTERS = 20
 private const val SCRIPT_SHARE = 0.7
-private const val MIN_TOPIC_WORD_LENGTH = 4
-private const val MIN_TOPIC_SUPPORT = 0.6
-private const val MIN_ITEM_WORDS = 3
 
 private val WORD = Regex("[0-9]+|[а-яёa-z]+(?:['’-][а-яёa-z]+)*")
-private val TOPIC_LINE = Regex("T: (.{3,80})")
+private val TOPIC_LINE = Regex("T: (.{3,120})")
 private val ITEM_LINE = Regex("([DAQ]) ([0-9]{1,5})")
 
 /** Слова текста в нижнем регистре, ё приведена к е. Используются только для сравнения. */
 internal fun normalizedWords(text: String): List<String> =
     WORD.findAll(text.lowercase()).map { it.value.replace('ё', 'е') }.toList()
-
-/** Основа слова: от четырёх до пяти букв, без последней буквы. */
-internal fun stem(word: String): String = word.take(maxOf(4, minOf(5, word.length - 1)))
 
 /** Определяет алфавит. Меньше двадцати букв значит, что опереться не на что. */
 fun detectScript(text: String): Script {
@@ -66,47 +58,44 @@ fun detectScript(text: String): Script {
 }
 
 /**
- * Проверяет тему по основам слов окна. Проверка не зависит от языка: тема годится, если достаточно
- * её слов встречается в окне, а все числа в цифрах взяты из окна.
+ * Тема годится, только если она дословная цитата из окна. Отказ оставляет разделу интервал времени:
+ * лучше честное время, чем придуманное название. Проверка не верит грамматике и работает и для
+ * ответов из журнала.
  */
-fun checkTopic(topic: String, windowText: String, minSupport: Double = MIN_TOPIC_SUPPORT): TopicRejection? {
-    val window = normalizedWords(windowText)
-    val topicWords = normalizedWords(topic)
-    val long = topicWords.filter { it.length >= MIN_TOPIC_WORD_LENGTH }
-    val stems = window.mapTo(HashSet(), ::stem)
-    if (long.isNotEmpty() && long.count { stem(it) in stems }.toDouble() / long.size < minSupport) {
-        return TopicRejection.SUPPORT
-    }
-    val windowDigits = window.filterTo(HashSet()) { it.all(Char::isDigit) }
-    if (topicWords.any { it.all(Char::isDigit) && it !in windowDigits }) return TopicRejection.DIGITS
-    return null
+fun isTopicQuote(topic: String, windowText: String): Boolean {
+    val quote = normalizedWords(topic)
+    val words = topic.trim().split(' ').size
+    if (quote.isEmpty() || words !in ProtocolGrammar.MIN_TOPIC_WORDS..ProtocolGrammar.MAX_TOPIC_WORDS) return false
+    return Collections.indexOfSubList(normalizedWords(windowText), quote) >= 0
 }
 
 /**
- * Разбирает ответ модели. Модель выбирает только вид пункта и номер реплики; ни одно её слово,
- * кроме темы, в протокол не попадает. Испорченный ответ даёт пустой результат, а не ошибку.
+ * Разбирает ответ модели. Модель выбирает только цитату для темы, вид пункта и номер реплики; своих
+ * слов она в протокол добавить не может. Вид пункта должен подтверждаться текстом реплики, а одна
+ * реплика даёт один пункт. Испорченный ответ даёт пустой результат, а не ошибку.
  */
 fun parseWindowOutput(raw: String, window: LlmWindow): WindowExtract {
     val text = window.text
     if (detectScript(text) == Script.UNKNOWN) return WindowExtract(WindowOutcome.SKIPPED_SCRIPT, null, emptyList())
     val byId = window.utterances.associateBy { it.id }
+    val candidates = ItemEvidence.candidates(window)
     var topic: String? = null
     val items = ArrayList<ExtractedItem>()
-    val seen = HashSet<Pair<ProtocolKind, Int>>()
+    val seen = HashSet<Int>()
     for (rawLine in raw.lineSequence()) {
         val line = rawLine.trim()
         val topicMatch = TOPIC_LINE.matchEntire(line)
         if (topicMatch != null && topic == null) {
             val candidate = topicMatch.groupValues[1].trim()
-            if (checkTopic(candidate, text) == null) topic = candidate
+            if (isTopicQuote(candidate, text)) topic = candidate
             continue
         }
         val match = ITEM_LINE.matchEntire(line) ?: continue
         if (items.size >= ProtocolGrammar.MAX_ITEMS) continue
         val kind = ProtocolKind.of(match.groupValues[1][0]) ?: continue
         val utterance = byId[match.groupValues[2].toInt()] ?: continue
-        if (normalizedWords(utterance.text).size < MIN_ITEM_WORDS) continue
-        if (seen.add(kind to utterance.id)) items += ExtractedItem(kind, utterance)
+        if (utterance.id !in candidates.of(kind)) continue
+        if (seen.add(utterance.id)) items += ExtractedItem(kind, utterance)
     }
     return WindowExtract(WindowOutcome.OK, topic, items)
 }

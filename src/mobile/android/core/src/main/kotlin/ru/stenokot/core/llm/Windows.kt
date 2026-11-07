@@ -23,17 +23,8 @@ data class LlmWindow(val index: Int, val utterances: List<Utterance>) {
 
 /** Разбиение расшифровки на окна и выбор окон, равномерный по времени записи. */
 object LlmWindows {
-    /** Записи длиннее этого значения получают окна меньшего размера. */
-    const val SHORT_RECORDING_MS = 15 * 60_000L
-
-    /** Размер окна в токенах для обычной записи. */
+    /** Размер окна в токенах. */
     const val WINDOW_TOKENS = 450
-
-    /** Размер окна в токенах для длинной записи. */
-    const val LONG_WINDOW_TOKENS = 300
-
-    /** Меньшее окно уже не имеет смысла отправлять в модель. */
-    const val MIN_WINDOW_TOKENS = 100
 
     private const val TOKENS_PER_WORD_RU = 2.32
     private const val TOKENS_PER_WORD_EN = 1.22
@@ -44,9 +35,6 @@ object LlmWindows {
     /** Строка реплики в сообщении модели. */
     fun line(utterance: Utterance): String =
         "[${utterance.id}] ${speakerId(utterance.speaker)}: ${utterance.text}"
-
-    /** Предел токенов окна для записи длительностью [audioMs]. */
-    fun maxTokens(audioMs: Long): Int = if (audioMs <= SHORT_RECORDING_MS) WINDOW_TOKENS else LONG_WINDOW_TOKENS
 
     /** Оценка числа токенов реплики в окне. Настоящий токенизатор доступен только внутри модели. */
     fun estimateTokens(utterance: Utterance, language: Language): Int {
@@ -105,7 +93,7 @@ object LlmWindows {
 
     /**
      * Порядок обработки, при котором любая начальная часть покрывает запись равномерно: сначала
-     * середина, затем середины половин и так далее. Бюджет может закончиться на любом окне.
+     * середина, затем середины половин и так далее. Новый импорт может прервать стадию на любом окне.
      */
     fun coverageOrder(windows: List<LlmWindow>): List<LlmWindow> {
         val out = ArrayList<LlmWindow>(windows.size)

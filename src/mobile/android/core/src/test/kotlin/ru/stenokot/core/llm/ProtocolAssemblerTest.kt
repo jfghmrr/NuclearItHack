@@ -10,11 +10,11 @@ class ProtocolAssemblerTest {
     @Test
     fun itemsAreCopiedVerbatimFromUtterance() {
         val document = ProtocolAssembler.assemble(
-            listOf(result(WINDOW_RU, "T: закупка корма\nA 13\nD 12\n")),
+            listOf(result(WINDOW_RU, "T: закупаем корм\nA 13\nD 12\n")),
             60_000,
         )
         val section = document.sections.single()
-        assertEquals("закупка корма", section.title)
+        assertEquals("Закупаем корм", section.title)
         assertEquals(0L, section.startMs)
         assertEquals(8_000L, section.endMs)
         assertEquals(12, section.firstUtterance)
@@ -29,7 +29,14 @@ class ProtocolAssemblerTest {
 
     @Test
     fun questionKindIsMapped() {
-        val document = ProtocolAssembler.assemble(listOf(result(WINDOW_EN, "T: buying food\nQ 25\n")), 60_000)
+        val window = LlmWindow(
+            0,
+            listOf(
+                utterance(25, 0, 0, 1_000, "Кто отвечает за найм кладовщиков?"),
+                utterance(26, 1, 1_000, 2_000, "Пока не знаю."),
+            ),
+        )
+        val document = ProtocolAssembler.assemble(listOf(result(window, "T: найм кладовщиков\nQ 25\n")), 60_000)
         assertEquals("question", document.sections.single().items.single().kind)
     }
 
@@ -63,10 +70,10 @@ class ProtocolAssemblerTest {
 
     @Test
     fun sameItemInOverlappingWindowsAppearsOnce() {
-        val shared = utterance(5, 0, 5_000, 6_000, "обычная реплика на русском языке")
+        val shared = utterance(5, 0, 5_000, 6_000, "мы решили подготовь договор склада")
         val first = LlmWindow(0, listOf(utterance(4, 0, 0, 4_000, "другая реплика на русском языке"), shared))
-        val second = LlmWindow(1, listOf(shared, utterance(6, 1, 7_000, 8_000, "ещё одна реплика на русском")))
-        val document = ProtocolAssembler.assemble(listOf(result(first, "D 5\n"), result(second, "D 5\nQ 6\n")), 10_000)
+        val second = LlmWindow(1, listOf(shared, utterance(6, 1, 7_000, 8_000, "мы решили закрыть склад зимой")))
+        val document = ProtocolAssembler.assemble(listOf(result(first, "D 5\n"), result(second, "A 5\nD 6\n")), 10_000)
         assertEquals(listOf(5, 6), document.sections.flatMap { it.items }.map { it.utterance })
     }
 

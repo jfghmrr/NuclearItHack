@@ -15,15 +15,15 @@ object ProtocolAssembler {
         val used = results
             .filter { it.extract.outcome == WindowOutcome.OK }
             .sortedBy { it.window.startMs }
-        val seen = HashSet<Pair<ProtocolKind, Int>>()
+        val seen = HashSet<Int>()
         val sections = used.map { section(it, seen) }
         return ProtocolDocument(sections, coveredMs(used), totalMs)
     }
 
-    private fun section(result: WindowResult, seen: MutableSet<Pair<ProtocolKind, Int>>): ProtocolSection {
+    private fun section(result: WindowResult, seen: MutableSet<Int>): ProtocolSection {
         val window = result.window
         val items = result.extract.items
-            .filter { seen.add(it.kind to it.utterance.id) }
+            .filter { seen.add(it.utterance.id) }
             .sortedBy { it.utterance.startMs }
             .map { item ->
                 val utterance = item.utterance
@@ -36,7 +36,7 @@ object ProtocolAssembler {
                 )
             }
         return ProtocolSection(
-            title = result.extract.topic ?: interval(window.startMs, window.endMs),
+            title = result.extract.topic?.replaceFirstChar(Char::uppercase) ?: interval(window.startMs, window.endMs),
             startMs = window.startMs,
             endMs = window.endMs,
             firstUtterance = window.utterances.first().id,

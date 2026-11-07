@@ -16,12 +16,6 @@ class WindowsTest {
         List(count) { i -> LlmWindow(i, listOf(utterance(i + 1, 0, i * 60_000L, (i + 1) * 60_000L, "текст"))) }
 
     @Test
-    fun maxTokensDependOnDuration() {
-        assertEquals(450, LlmWindows.maxTokens(15 * 60_000L))
-        assertEquals(300, LlmWindows.maxTokens(15 * 60_000L + 1))
-    }
-
-    @Test
     fun windowsOverlapByOneUtterance() {
         val windows = LlmWindows.split(utterances, 100) { 30 }
         assertTrue(windows.size > 1)
@@ -106,10 +100,17 @@ class WindowsTest {
 
     @Test
     fun systemPromptsDifferByLanguage() {
-        assertTrue(LlmPrompts.system(Language.RU).startsWith("Ты готовишь оглавление"))
+        assertTrue(LlmPrompts.system(Language.RU).startsWith("Ты составляешь оглавление"))
         assertTrue(LlmPrompts.system(Language.EN).startsWith("You build a table of contents"))
-        assertTrue(LlmPrompts.system(Language.RU).endsWith("D 3\nA 4"))
         assertFalse(LlmPrompts.system(Language.RU).contains("  "))
+    }
+
+    /** Модель копировала тему примера в ответ, поэтому конкретного примера в запросе быть не должно. */
+    @Test
+    fun systemPromptsHoldNoConcreteExample() {
+        for (language in Language.entries) {
+            assertFalse(Regex("(?m)^(T: |D \\d|A \\d|Q \\d)").containsMatchIn(LlmPrompts.system(language).replace("T: фраза", "").replace("T: the phrase", "")))
+        }
     }
 
     @Test

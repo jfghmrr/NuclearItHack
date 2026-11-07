@@ -26,7 +26,7 @@ internal val WINDOW_RU = LlmWindow(
 internal val WINDOW_EN = LlmWindow(
     1,
     listOf(
-        utterance(21, 0, 0, 3_000, "So we buy the food from the new supplier."),
+        utterance(21, 0, 0, 3_000, "So we decided to buy the food from the new supplier."),
         utterance(22, 1, 3_100, 7_000, "Barsik, please call the supplier by November twentieth."),
         utterance(23, 0, 7_100, 9_000, "We won't install cameras, it is too expensive."),
         utterance(24, 2, 9_100, 9_500, "Okay."),
