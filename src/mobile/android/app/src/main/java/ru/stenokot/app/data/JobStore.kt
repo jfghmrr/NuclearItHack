@@ -53,7 +53,7 @@ class JobStore(private val root: () -> File) {
 
     /** Убирает недописанные файлы умершего процесса: продолжать их нельзя, а место они занимают. */
     fun dropPartial(id: String) {
-        files(id).dir.listFiles { file -> file.name.endsWith(".tmp") }?.forEach(File::delete)
+        files(id).dir.listFiles { file -> PARTIAL_SUFFIXES.any(file.name::endsWith) }?.forEach(File::delete)
     }
 
     /** Удаляет каталог задачи вместе со всеми файлами. */
@@ -77,6 +77,10 @@ class JobStore(private val root: () -> File) {
 
     private fun read(file: File): JobRecord? =
         runCatching { ServiceJson.decodeFromString(JobRecord.serializer(), file.readText()) }.getOrNull()
+
+    private companion object {
+        val PARTIAL_SUFFIXES = listOf(".tmp", ".part")
+    }
 }
 
 /**

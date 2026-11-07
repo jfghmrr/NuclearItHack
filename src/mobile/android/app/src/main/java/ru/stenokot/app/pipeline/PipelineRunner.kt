@@ -242,7 +242,7 @@ class PipelineRunner(
 
     /** Обновляет запись задачи после экспорта. */
     suspend fun updateJob(id: String, change: (JobRecord) -> JobRecord) {
-        book.mutate(id, change)
+        book.mutate(id, change = change)
     }
 
     private fun hasWork(all: Collection<JobRecord>, hold: Boolean): Boolean {
@@ -284,7 +284,7 @@ class PipelineRunner(
 
     private suspend fun resumeOldest() {
         val all = book.snapshot()
-        if (!idleWithResumable(all)) return
+        if (!visible.value || !idleWithResumable(all)) return
         val job = all.filter(::resumesAlone).minBy { it.seq }
         requeue(job.id)
         onResumed(job.id)
@@ -314,7 +314,7 @@ class PipelineRunner(
     }
 
     private suspend fun park(id: String) {
-        book.mutate(id) { job ->
+        book.mutate(id, announce = false) { job ->
             if (job.phase == JobPhase.QUEUED) job.copy(phase = JobPhase.INTERRUPTED, errorCode = null) else job
         }
     }
@@ -375,7 +375,8 @@ class PipelineRunner(
             val named = book.mutate(id) { current ->
                 current.copy(
                     title = info.name,
-                    stem = StemRules.claim(info.name, stemClaims(id)),
+                    stem = StemRules.claim(info.name, stemClaims(id), info.sizeBytes),
+                    sourceBytes = info.sizeBytes,
                     preflight = preflightRecord(info, info.sizeBytes, null),
                 )
             } ?: return
@@ -414,11 +415,14 @@ class PipelineRunner(
         }
     }
 
-    /** Имена других задач, чей результат лежит в папке или ещё появится там. */
+    /**
+     * Имена других задач, чей результат лежит в папке или идёт туда. Прерванная задача имя не держит:
+     * брошенный файл не должен отнимать точное имя у нового. Своё имя она получит при возврате.
+     */
     private fun stemClaims(id: String): List<StemClaim> = book.snapshot()
         .filter { it.id != id && it.preflight != null }
-        .filter { it.output != null || (it.phase != JobPhase.FAILED && it.phase != JobPhase.CANCELLED) }
-        .map { StemClaim(it.title, it.stem) }
+        .filter { it.output != null || it.phase !in UNCLAIMED_PHASES }
+        .map { StemClaim(it.title, it.stem, it.sourceBytes) }
 
     private fun preflightRecord(
         info: SourceInfo,
@@ -516,7 +520,9 @@ class PipelineRunner(
         when (request) {
             StopRequest.Cancel -> markCancelled(id)
             is StopRequest.Interrupt -> {
-                book.mutate(id) { it.copy(phase = JobPhase.INTERRUPTED, errorCode = request.code, pauseReason = null) }
+                book.mutate(id, announce = request.code != null) {
+                    it.copy(phase = JobPhase.INTERRUPTED, errorCode = request.code, pauseReason = null)
+                }
             }
         }
     }
@@ -671,13 +677,18 @@ class PipelineRunner(
         if (!job.resumed) runCatching { speed.record(job.stageMs, audioMs) }
     }
 
-    /** Возвращённая задача встаёт в конец очереди, а прерванная ещё и уступит следующему импорту. */
+    /**
+     * Возвращённая задача встаёт в конец очереди, а прерванная ещё и уступит следующему импорту.
+     * Запрет на самостоятельное продолжение снимается: решение уже принято нажатием.
+     */
     private suspend fun requeue(id: String) {
         controls.remove(id)
         if (book.get(id)?.phase == JobPhase.INTERRUPTED) yielding += id
         val job = book.mutate(id) { current ->
             current.copy(
                 seq = maxOf(current.seq, clock()),
+                stem = reclaimedStem(current),
+                manualResume = false,
                 phase = JobPhase.QUEUED,
                 errorCode = null,
                 errorDetail = null,
@@ -689,6 +700,13 @@ class PipelineRunner(
         held.value = false
         announceWork()
     }
+
+    private fun reclaimedStem(job: JobRecord): String =
+        if (job.preflight != null && job.output == null) {
+            StemRules.claim(job.title, stemClaims(job.id), job.sourceBytes)
+        } else {
+            job.stem
+        }
 
     private suspend fun markCancelled(id: String) {
         book.mutate(id) { it.copy(phase = JobPhase.CANCELLED, pauseReason = null) }
@@ -712,5 +730,6 @@ class PipelineRunner(
 
     private companion object {
         const val TICK_MS = 1_000L
+        val UNCLAIMED_PHASES = setOf(JobPhase.FAILED, JobPhase.CANCELLED, JobPhase.INTERRUPTED)
     }
 }

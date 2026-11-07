@@ -111,6 +111,16 @@ class RulesTest {
     }
 
     @Test
+    fun stemClaimTellsFilesApartByNameAndSize() {
+        val first = StemClaim("dialog1.mp3", "dialog1", 1_000)
+        assertEquals("dialog1", StemRules.claim("dialog1.mp3", listOf(first), 1_000))
+        assertEquals("dialog1", StemRules.claim("dialog1.mp3", listOf(first), 0))
+        assertEquals("dialog1.mp3", StemRules.claim("dialog1.mp3", listOf(first), 2_000))
+        val second = StemClaim("dialog1.mp3", "dialog1.mp3", 2_000)
+        assertEquals("dialog1.mp3 (2)", StemRules.claim("dialog1.mp3", listOf(first, second), 3_000))
+    }
+
+    @Test
     fun extensionIsLowercaseAndRejectsNonsense() {
         assertEquals("mp3", StemRules.extension("X.MP3"))
         assertEquals("", StemRules.extension("noext"))

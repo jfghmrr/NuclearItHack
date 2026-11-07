@@ -198,6 +198,7 @@ class StorageTest {
         val store = JobStore { folder.root }
         val dir = store.files("a").dir.apply { mkdirs() }
         File(dir, "pcm16k.wav.tmp").writeText("x")
+        File(dir, "pcm16k.wav.tmp.part").writeText("x")
         File(dir, "job.json").writeText("x")
         store.dropPartial("a")
         assertEquals(listOf("job.json"), dir.list()?.toList())

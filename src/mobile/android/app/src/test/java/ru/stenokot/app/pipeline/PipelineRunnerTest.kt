@@ -957,6 +957,7 @@ class PipelineRunnerTest {
         assertEquals("старая задача не декодируется заново", listOf("decode:$fresh"), decoded)
         assertEquals("уступка не считается смертью", 1, h.runner.jobs.value.getValue(old).deaths)
         assertEquals(listOf(old, old), h.resumed)
+        assertFalse("уступка не похожа на сбой", h.statuses.any { it.startsWith("FAILED") })
     }
 
     @Test
@@ -1029,6 +1030,108 @@ class PipelineRunnerTest {
         assertEquals(setOf("dialog", "dialog.wav"), h.outputs.transcripts.keys)
         assertTrue(OUTPUT_RENAMED_WARNING in h.runner.jobs.value.getValue(second).warnings)
         assertFalse(OUTPUT_RENAMED_WARNING in h.runner.jobs.value.getValue(repeat).warnings)
+    }
+
+    @Test
+    fun otherRecordingWithTheSameFileNameDoesNotOverwriteTheFirst() = runTest {
+        val h = harness()
+        h.sources.name = "dialog.mp3"
+        val first = h.import("dialog")
+        h.await(done(first))
+        h.sources.size = 2_000
+        val other = h.import("dialog")
+        h.await(done(other))
+
+        assertEquals("dialog", h.runner.jobs.value.getValue(first).stem)
+        assertEquals("dialog.mp3", h.runner.jobs.value.getValue(other).stem)
+        assertEquals(setOf("dialog", "dialog.mp3"), h.outputs.transcripts.keys)
+        assertTrue(OUTPUT_RENAMED_WARNING in h.runner.jobs.value.getValue(other).warnings)
+    }
+
+    @Test
+    fun abandonedJobGivesItsNameToTheNewFileAndTakesAnotherOnReturn() = runTest {
+        val h = Harness(
+            this,
+            folder.root,
+            engines = FakeEngines(segmentCount = 12),
+            sources = FakeSources().apply { name = "dialog.wav" },
+        )
+        h.engines.onTranscribe = { index ->
+            if (index == 3) {
+                h.die()
+                throw CancellationException("смерть процесса")
+            }
+        }
+        val old = h.import("dialog")
+        h.await { it[old]?.phase == JobPhase.RUNNING && it[old]?.stage == Stage.ASR }
+        delay(1_000)
+        val store = Harness(this, folder.root, sources = FakeSources().apply { name = "dialog.mp3" })
+        store.await { it[old]?.phase == JobPhase.INTERRUPTED }
+
+        val fresh = store.import("dialog")
+        store.await(done(fresh))
+        assertEquals("dialog", store.runner.jobs.value.getValue(fresh).stem)
+
+        store.sources.name = "dialog.wav"
+        store.runner.resume(old)
+        store.await(done(old))
+        assertEquals("dialog.wav", store.runner.jobs.value.getValue(old).stem)
+        assertEquals(setOf("dialog", "dialog.wav"), store.outputs.transcripts.keys)
+    }
+
+    @Test
+    fun pressingContinueLiftsTheBanOnResumingAlone() = runTest {
+        val h = Harness(this, folder.root, engines = FakeEngines(segmentCount = 12))
+        h.engines.onTranscribe = { index ->
+            if (index == 3) {
+                h.die()
+                throw CancellationException("смерть процесса")
+            }
+        }
+        val id = h.import("forced")
+        h.await { it[id]?.stage == Stage.ASR && it[id]?.phase == JobPhase.RUNNING }
+        delay(1_000)
+
+        val closed = FakeDevice().apply { stoppedByUser = true }
+        val reopened = Harness(this, folder.root, engines = FakeEngines(segmentCount = 12), device = closed)
+        reopened.await { it[id]?.phase == JobPhase.INTERRUPTED }
+        assertTrue(reopened.runner.jobs.value.getValue(id).manualResume)
+
+        reopened.runner.resume(id)
+        reopened.await(done(id))
+        assertFalse(reopened.runner.jobs.value.getValue(id).manualResume)
+    }
+
+    @Test
+    fun idleResumeDoesNotFireAfterTheAppLeftTheScreen() = runTest {
+        val h = Harness(
+            this,
+            folder.root,
+            engines = FakeEngines(segmentCount = 12),
+            config = RunnerConfig(idleResumeMs = 1_000),
+        )
+        h.engines.onTranscribe = { index ->
+            if (index == 3) {
+                h.die()
+                throw CancellationException("смерть процесса")
+            }
+        }
+        val id = h.import("hidden")
+        h.await { it[id]?.stage == Stage.ASR && it[id]?.phase == JobPhase.RUNNING }
+        delay(1_000)
+
+        val reopened = Harness(
+            this,
+            folder.root,
+            engines = FakeEngines(segmentCount = 12),
+            config = RunnerConfig(idleResumeMs = 1_000),
+        )
+        reopened.await { it[id]?.phase == JobPhase.INTERRUPTED }
+        reopened.runner.onForeground()
+        reopened.runner.onBackground()
+        delay(10_000)
+        assertEquals(JobPhase.INTERRUPTED, reopened.runner.jobs.value.getValue(id).phase)
+        assertTrue(reopened.resumed.isEmpty())
     }
 
     @Test

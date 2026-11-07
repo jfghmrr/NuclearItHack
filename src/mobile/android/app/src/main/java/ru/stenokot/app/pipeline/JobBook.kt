@@ -44,8 +44,12 @@ class JobBook(private val store: JobStore, private val onStatus: (String) -> Uni
         records.associateBy { it.id } + current
     }
 
-    /** Изменяет задачу и записывает её. Возвращает новое значение или null, если задачи нет. */
-    suspend fun mutate(id: String, change: (JobRecord) -> JobRecord): JobRecord? {
+    /**
+     * Изменяет задачу и записывает её. Возвращает новое значение или null, если задачи нет. При
+     * [announce] равном false смена статуса не попадает в журнал: автоматика, ждущая итог нового
+     * файла, приняла бы уступившую ему задачу за его сбой.
+     */
+    suspend fun mutate(id: String, announce: Boolean = true, change: (JobRecord) -> JobRecord): JobRecord? {
         var before: JobRecord? = null
         var updated: JobRecord? = null
         state.update { current ->
@@ -57,7 +61,7 @@ class JobBook(private val store: JobStore, private val onStatus: (String) -> Uni
         val next = updated ?: return null
         persist(id)
         val previous = before
-        if (previous == null || status(previous) != status(next)) onStatus(status(next))
+        if (announce && (previous == null || status(previous) != status(next))) onStatus(status(next))
         return next
     }
 

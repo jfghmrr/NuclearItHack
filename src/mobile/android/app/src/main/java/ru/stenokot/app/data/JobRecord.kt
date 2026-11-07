@@ -96,7 +96,8 @@ data class LlmRecord(
 
 /**
  * Единственный источник правды о задаче. Пишет его только основной процесс. [deaths] считает смерти
- * процесса на этой задаче, [manualResume] запрещает продолжать её без нажатия «Продолжить».
+ * процесса на этой задаче, [manualResume] запрещает продолжать её без нажатия «Продолжить»,
+ * [sourceBytes] хранит размер, сообщённый источником: по нему узнаётся повторный импорт того же файла.
  */
 @Serializable
 data class JobRecord(
@@ -134,6 +135,7 @@ data class JobRecord(
     val configHash: String? = null,
     val deaths: Int = 0,
     val manualResume: Boolean = false,
+    val sourceBytes: Long = 0,
     val resumed: Boolean = false,
 ) {
     /** Задача ждёт основного потока конвейера. */

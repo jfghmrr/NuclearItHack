@@ -132,12 +132,13 @@ class PipelineService : Service() {
         }
     }
 
+    /** Служба уже ушла с переднего плана, и новое уведомление осталось бы висеть без хозяина. */
     private fun observeProgress() {
         val manager = getSystemService(NotificationManager::class.java)
         scope.launch {
             runner.live.collect { live ->
                 val stageChanged = live?.stage != lastStage
-                if (gate.allow(force = stageChanged)) {
+                if (foreground && gate.allow(force = stageChanged)) {
                     lastStage = live?.stage
                     manager.notify(NOTIFICATION_ID, notification(live))
                 }
