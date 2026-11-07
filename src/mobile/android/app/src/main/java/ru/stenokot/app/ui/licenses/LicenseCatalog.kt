@@ -45,7 +45,7 @@ object LicenseCatalog {
                 LicenseEntry("gigaam", "GigaAM v3 e2e RNNT int8", "Русская речь", MIT, "GigaChat Team", "MIT-GigaAM.txt"),
                 LicenseEntry(
                     "parakeet",
-                    "Parakeet TDT 110M int8",
+                    "Parakeet TDT 0.6B v2 int8",
                     "Английская речь",
                     "веса CC-BY-4.0, код Apache-2.0",
                     "NVIDIA",

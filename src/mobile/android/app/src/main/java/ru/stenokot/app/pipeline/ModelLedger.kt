@@ -47,7 +47,7 @@ class ModelLedger(lock: String) {
         /** Модели в порядке показа. */
         val Cards = listOf(
             ModelCard("GigaAM v3 e2e RNNT int8", "Русская речь", "MIT", "asr-ru/", "asr-ru/encoder.int8.onnx"),
-            ModelCard("Parakeet TDT 110M int8", "Английская речь", "CC-BY-4.0", "asr-en/", "asr-en/encoder.int8.onnx"),
+            ModelCard("Parakeet TDT 0.6B v2 int8", "Английская речь", "CC-BY-4.0", "asr-en/", "asr-en/encoder.int8.onnx"),
             ModelCard("Silero VAD", "Поиск речи", "MIT", "vad/", "vad/silero_vad.onnx"),
             ModelCard(
                 "pyannote-segmentation-3-0 int8",

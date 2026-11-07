@@ -27,16 +27,22 @@ class GigaAsr(models: ModelSource, threads: Int = EngineThreads.asr()) : Asr by 
     threads = threads,
 )
 
-/** Распознавание английской речи: Parakeet TDT 110M. Размерность признаков в экспорте не записана. */
+/**
+ * Распознавание английской речи: Parakeet TDT 0.6B v2. Размерность признаков в экспорте не записана:
+ * у этой модели 128, у прежней 110M 80. Выбор по размеру оставляет рабочими сборки dev, на устройстве
+ * которых лежит прежняя модель.
+ */
 class ParakeetAsr(models: ModelSource, threads: Int = EngineThreads.asr()) : Asr by TransducerEngine(
     models = models,
     encoder = ModelFiles.ASR_EN_ENCODER,
     decoder = ModelFiles.ASR_EN_DECODER,
     joiner = ModelFiles.ASR_EN_JOINER,
     tokens = ModelFiles.ASR_EN_TOKENS,
-    featureDim = 80,
+    featureDim = if ((models.sizeOf(ModelFiles.ASR_EN_ENCODER) ?: 0L) > SMALL_ENCODER_BYTES) 128 else 80,
     threads = threads,
 )
+
+private const val SMALL_ENCODER_BYTES = 200L * 1024 * 1024
 
 /** Общая часть обеих моделей: срез записи, поток, декодирование, абсолютное время токенов. */
 internal class TransducerEngine(

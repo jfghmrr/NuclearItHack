@@ -59,7 +59,7 @@ internal object DemoData {
 
     private fun modelItems(llmReady: Boolean) = listOf(
         ModelItemUi("GigaAM v3 e2e RNNT int8", "Русская речь", mib(221.0), "demo-hash-01", "MIT", true),
-        ModelItemUi("Parakeet TDT 110M int8", "Английская речь", mib(130.0), "demo-hash-02", "CC-BY-4.0", true),
+        ModelItemUi("Parakeet TDT 0.6B v2 int8", "Английская речь", mib(631.0), "demo-hash-02", "CC-BY-4.0", true),
         ModelItemUi("Silero VAD", "Поиск речи", mib(0.6), "demo-hash-03", "MIT", true),
         ModelItemUi("pyannote-segmentation-3-0 int8", "Границы говорящих", mib(1.5), "demo-hash-04", "MIT", true),
         ModelItemUi("TitaNet-small fp32", "Голоса говорящих", mib(38.0), "demo-hash-05", "Apache-2.0", true),

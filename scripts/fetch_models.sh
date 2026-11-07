@@ -11,7 +11,7 @@ LOCK="$ROOT/config/models.lock"
 CACHE="$DIR/.cache"
 GH="https://github.com/k2-fsa/sherpa-onnx/releases/download"
 GIGA="sherpa-onnx-nemo-transducer-punct-giga-am-v3-russian-2025-12-16"
-PARA="sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8"
+PARA="sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8"
 GGUF_URL="https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_K_M.gguf"
 
 mkdir -p "$DIR"/{asr-ru,asr-en,vad,diar,llm} "$CACHE" "$JNI"
@@ -31,8 +31,10 @@ if [ ! -s "$DIR/asr-ru/tokens.txt" ]; then
 fi
 
 fetch "$GH/asr-models/$PARA.tar.bz2" "$CACHE/$PARA.tar.bz2"
-if [ ! -s "$DIR/asr-en/tokens.txt" ]; then
+# Каталог пересобирается и тогда, когда в нём лежит другая модель: сверка идёт по замку.
+if ! (cd "$DIR" && grep ' asr-en/' "$LOCK" | shasum -a 256 -c --quiet >/dev/null 2>&1); then
   tar -xjf "$CACHE/$PARA.tar.bz2" -C "$CACHE"
+  rm -f "$DIR"/asr-en/*
   cp "$CACHE/$PARA"/{encoder*.onnx,decoder*.onnx,joiner*.onnx,tokens.txt} "$DIR/asr-en/"
 fi
 
