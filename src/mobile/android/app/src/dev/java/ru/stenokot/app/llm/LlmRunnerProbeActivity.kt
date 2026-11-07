@@ -38,14 +38,17 @@ class LlmRunnerProbeActivity : Activity() {
         val jobDir = File(getExternalFilesDir(null), "jobs/probe")
         val budget = LlmBudget(nCtx = 1024, maxChunkTokens = 450, deadlineMs = intent.getLongExtra("budget", 90_000L))
         val started = SystemClock.elapsedRealtime()
+        cancelledAt = 0L
         Log.i(TAG, "run pid=${android.os.Process.myPid()} dir=$jobDir")
         scope.launch {
             val result = runner(this@LlmRunnerProbeActivity).run(jobDir, budget) { fraction, note ->
                 Log.i(TAG, "progress fraction=$fraction note=$note")
             }
             val now = SystemClock.elapsedRealtime()
-            Log.i(TAG, "result status=${result.status} path=${result.protocolPath} detail=${result.detail} " +
-                "total_ms=${now - started} since_cancel_ms=${if (cancelledAt > 0) now - cancelledAt else -1}")
+            val line = "status=${result.status} path=${result.protocolPath} detail=${result.detail} " +
+                "total_ms=${now - started} since_cancel_ms=${if (cancelledAt > 0) now - cancelledAt else -1}"
+            Log.i(TAG, "result $line")
+            File(jobDir, "probe_result.txt").writeText(line)
         }
     }
 

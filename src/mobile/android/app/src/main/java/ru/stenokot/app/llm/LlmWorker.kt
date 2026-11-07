@@ -73,13 +73,20 @@ internal class LlmWorker(
     private var speed: LlmSpeed? = null
     private var shortened = false
 
-    /** Выполняет стадию. Исключение превращается в статус: контрактный файл от него не зависит. */
+    /**
+     * Выполняет стадию. Исключение превращается в статус: контрактный файл от него не зависит.
+     * После отмены процесс всё равно завершится, а освобождение памяти и запись на диск только
+     * задержали бы ответ, поэтому при отмене они пропускаются.
+     */
     fun run(): LlmResult {
         val result = runCatching(::process).getOrElse { error ->
             Log.e(TAG, "stage failed", error)
             LlmResult(failureStatus(), protocolPath(), error.javaClass.simpleName)
         }
-        writeStats(result.status)
+        if (result.status != LlmStatus.CANCELLED_BY_NEW_JOB) {
+            LlamaBridge.unload()
+            writeStats(result.status)
+        }
         return result
     }
 
@@ -95,9 +102,7 @@ internal class LlmWorker(
 
         val failure = loadModel()
         if (failure != null) return failure
-        val outcome = generate(job, LlmWindows.coverageOrder(pending))
-        LlamaBridge.unload()
-        return outcome
+        return generate(job, LlmWindows.coverageOrder(pending))
     }
 
     private fun planWindows(job: LlmJob): List<LlmWindow> {

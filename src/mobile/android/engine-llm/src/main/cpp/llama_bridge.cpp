@@ -394,5 +394,4 @@ Java_ru_stenokot_llm_LlamaBridge_nativeUnload(JNIEnv *, jobject) {
         g_engine.model = nullptr;
     }
     g_engine.cached.clear();
-    llama_backend_free();
 }
