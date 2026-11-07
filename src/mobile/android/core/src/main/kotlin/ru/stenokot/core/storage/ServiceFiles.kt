@@ -175,6 +175,7 @@ data class LlmMetadata(
     @SerialName("windows_total") val windowsTotal: Int? = null,
     @SerialName("time_ms") val timeMs: Long? = null,
     @SerialName("retry_used") val retryUsed: Boolean = false,
+    @SerialName("vm_hwm_kb") val vmHwmKb: Long? = null,
 )
 
 /** Содержимое metadata.json: доказательства прогона. Текст реплик и аудио сюда не попадают. */

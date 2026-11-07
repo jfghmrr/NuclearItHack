@@ -120,6 +120,7 @@ class MetricsRecorder(
                 windowsTotal = stats?.windowsTotal,
                 timeMs = job.llm.tookMs.takeIf { job.llm.status != null },
                 retryUsed = job.llm.retryUsed,
+                vmHwmKb = stats?.vmHwmKb,
             ),
             speakers = job.speakers,
             utterances = job.utterances,
