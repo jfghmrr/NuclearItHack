@@ -27,6 +27,13 @@ import ru.stenokot.core.model.Stage
 import ru.stenokot.core.model.Utterance
 import ru.stenokot.core.protocol.ProtocolDocument
 
+/** Настоящий файл для плеера. Кладётся на устройство вручную, в репозиторий аудио не попадает. */
+internal object DemoAudio {
+    /** Путь к файлу или null: тогда экран показывает, что аудио недоступно. */
+    @Volatile
+    var path: String? = null
+}
+
 /** Срез состояния приложения для одного состояния из дизайн-брифа. */
 internal data class DemoScene(
     val home: HomeUi,
@@ -155,7 +162,7 @@ private fun result(
     language = language,
     speakers = speakers,
     utterances = utterances,
-    audioPath = null,
+    audioPath = DemoAudio.path,
     output = output(title.substringBeforeLast('.'), exportFailed),
     protocol = proto,
 )
@@ -485,6 +492,30 @@ private fun resultScene(id: String): DemoScene? {
         )
         "S04-P" -> resultScene(done(LlmStatus.APPLIED), ds1Result(applied))
         "S04-Q" -> resultScene(done(LlmStatus.APPLIED), ds1Result(applied, exportFailed = true))
+        "S04-X" -> resultScene(
+            done(LlmStatus.APPLIED),
+            result(
+                DemoData.FILE_PERF,
+                DemoData.DURATION_PERF,
+                6,
+                DemoData.utterancesPerf,
+                protocol(LlmStatus.APPLIED, windowsDone = 8, document = DemoData.protocolDs1),
+            ),
+            id = "perf",
+        )
+        "S04-E2" -> resultScene(
+            done(LlmStatus.CANCELLED_BY_NEW_JOB),
+            ds1Result(protocol(LlmStatus.CANCELLED_BY_NEW_JOB, windowsDone = 2, retryUsed = true)),
+        )
+        "S04-H2" -> resultScene(
+            done(LlmStatus.FAILED),
+            ds1Result(protocol(LlmStatus.FAILED, error = ErrorCode.LLM_MODEL_UNAVAILABLE)),
+        )
+        "S04-R" -> resultScene(JobState.TranscriptReady("Download/Stenokot/x.json"), ds1Result(protocol(null)))
+        "S04-A2" -> resultScene(
+            running(Stage.LLM, 0f),
+            ds1Result(protocol(null, running = true, windowsDone = 0)),
+        )
         "S05-A" -> protocolStateScene(resultScene("S04-C")!!)
         "S05-B" -> protocolStateScene(resultScene("S04-A")!!)
         "S05-C" -> protocolStateScene(resultScene("S04-D")!!)
@@ -505,6 +536,8 @@ private fun resultScene(id: String): DemoScene? {
             id = "ds8",
         )
         "S05-I" -> protocolStateScene(resultScene("S04-I")!!)
+        "S05-G2" -> protocolStateScene(resultScene("S04-H2")!!)
+        "S05-D2" -> protocolStateScene(resultScene("S04-E2")!!)
         else -> null
     }
 }

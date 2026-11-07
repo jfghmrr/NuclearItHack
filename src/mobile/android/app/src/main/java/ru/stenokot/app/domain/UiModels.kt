@@ -98,7 +98,7 @@ data class ProcessingUi(
     val resumed: Boolean = false,
 )
 
-/** Сведения о сохранённом контрактном файле. */
+/** Сведения о сохранённом контрактном файле. [contentUri] нужен для «Поделиться». */
 @Immutable
 data class OutputFileUi(
     val path: String,
@@ -107,6 +107,7 @@ data class OutputFileUi(
     val validated: Boolean,
     val sha256: String?,
     val exportFailed: Boolean,
+    val contentUri: String? = null,
 )
 
 /** Состояние протокола в результате. */

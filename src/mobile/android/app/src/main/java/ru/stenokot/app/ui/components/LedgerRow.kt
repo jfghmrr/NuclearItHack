@@ -54,6 +54,7 @@ fun LedgerRow(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    titleMaxLines: Int = 1,
     marginFallback: String? = subtitle,
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
@@ -120,8 +121,8 @@ fun LedgerRow(
                     text = title,
                     style = type.labelMedium,
                     color = colors.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.MiddleEllipsis,
+                    maxLines = titleMaxLines,
+                    overflow = if (titleMaxLines == 1) TextOverflow.MiddleEllipsis else TextOverflow.Clip,
                 )
                 val secondLine = if (showMargin) subtitle else marginFallback
                 secondLine?.let { Text(it, style = type.bodySmall, color = colors.onSurfaceVariant) }

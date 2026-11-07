@@ -12,12 +12,13 @@ import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.ui.nav.Route
 
 /** Отладочная сборка показывает демо-данные, пока запуск не попросит рабочий конвейер. */
-private class DemoOverride : ControllerOverride {
-    private val fake = FakeController()
+private class DemoOverride(context: Context) : ControllerOverride {
+    private val fake = FakeController(context.applicationContext)
     private var real = false
 
     override fun controller(context: Context, intent: Intent?): StenoController? {
         real = intent?.getBooleanExtra(EXTRA_REAL, false) == true
+        DemoAudio.path = intent?.getStringExtra(EXTRA_AUDIO)
         return if (real) null else fake
     }
 
@@ -30,6 +31,7 @@ private class DemoOverride : ControllerOverride {
     private companion object {
         const val EXTRA_DEMO = "demo"
         const val EXTRA_REAL = "real"
+        const val EXTRA_AUDIO = "audio"
     }
 }
 
@@ -39,7 +41,7 @@ private class DemoOverride : ControllerOverride {
  */
 class DebugBootstrap : ContentProvider() {
     override fun onCreate(): Boolean {
-        ControllerProvider.override = DemoOverride()
+        ControllerProvider.override = context?.let(::DemoOverride)
         return true
     }
 

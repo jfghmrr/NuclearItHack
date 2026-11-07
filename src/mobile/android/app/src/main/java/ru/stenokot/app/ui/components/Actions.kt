@@ -38,28 +38,32 @@ import ru.stenokot.app.ui.theme.StenoTheme
 private val ActionShape = RoundedCornerShape(StenoRadius.xl)
 private val ActionPadding = PaddingValues(horizontal = 20.dp, vertical = StenoSpace.m)
 private val LargeTextPadding = PaddingValues(horizontal = StenoSpace.m, vertical = StenoSpace.m)
+private val DensePadding = PaddingValues(horizontal = StenoSpace.m, vertical = StenoSpace.s)
 
 /** Отступы кнопки. При крупном шрифте подпись важнее воздуха: иначе длинное слово разорвётся. */
 @Composable
-private fun actionPadding(): PaddingValues =
-    if (LocalWindowLayout.current.largeText) LargeTextPadding else ActionPadding
+private fun actionPadding(dense: Boolean): PaddingValues = when {
+    dense -> DensePadding
+    LocalWindowLayout.current.largeText -> LargeTextPadding
+    else -> ActionPadding
+}
 
 /** Подпись прижата влево, значок вправо: кнопка читается как строка документа, а не как плашка. */
 @Composable
-private fun RowScope.ActionContent(text: String, @DrawableRes icon: Int?) {
+private fun RowScope.ActionContent(text: String, @DrawableRes icon: Int?, dense: Boolean) {
     Text(
         text = text,
         modifier = Modifier.weight(1f),
-        style = StenoTheme.type.labelLarge,
+        style = if (dense) StenoTheme.type.labelMedium else StenoTheme.type.labelLarge,
         textAlign = TextAlign.Start,
     )
     if (icon != null && !LocalWindowLayout.current.largeText) {
-        Spacer(Modifier.width(StenoSpace.m))
+        Spacer(Modifier.width(if (dense) StenoSpace.s else StenoSpace.m))
         Icon(painterResource(icon), contentDescription = null, Modifier.size(StenoSize.icon))
     }
 }
 
-/** Главное действие экрана. На экране такое одно. */
+/** Главное действие экрана. На экране такое одно. [dense] для пары кнопок в одну строку. */
 @Composable
 fun PrimaryAction(
     text: String,
@@ -68,15 +72,16 @@ fun PrimaryAction(
     @DrawableRes icon: Int? = null,
     enabled: Boolean = true,
     tag: String? = null,
+    dense: Boolean = false,
 ) {
     Button(
         onClick = onClick,
         modifier = modifier.fillMaxWidth().heightIn(min = StenoSize.actionHeight).tagged(tag),
         enabled = enabled,
         shape = ActionShape,
-        contentPadding = actionPadding(),
+        contentPadding = actionPadding(dense),
         elevation = null,
-    ) { ActionContent(text, icon) }
+    ) { ActionContent(text, icon, dense) }
 }
 
 /** Тональное действие: важное, но не главное. */
@@ -95,13 +100,13 @@ fun TonalAction(
         modifier = modifier.fillMaxWidth().heightIn(min = StenoSize.actionHeight).tagged(tag),
         enabled = enabled,
         shape = ActionShape,
-        contentPadding = actionPadding(),
+        contentPadding = actionPadding(false),
         elevation = null,
         colors = ButtonDefaults.buttonColors(
             containerColor = colors.secondaryContainer,
             contentColor = colors.onSecondaryContainer,
         ),
-    ) { ActionContent(text, icon) }
+    ) { ActionContent(text, icon, false) }
 }
 
 /** Контурное действие: второстепенное рядом с главным. */
@@ -113,6 +118,7 @@ fun OutlinedAction(
     @DrawableRes icon: Int? = null,
     enabled: Boolean = true,
     tag: String? = null,
+    dense: Boolean = false,
 ) {
     val colors = StenoTheme.colors
     OutlinedButton(
@@ -120,10 +126,10 @@ fun OutlinedAction(
         modifier = modifier.fillMaxWidth().heightIn(min = StenoSize.actionHeight).tagged(tag),
         enabled = enabled,
         shape = ActionShape,
-        contentPadding = actionPadding(),
+        contentPadding = actionPadding(dense),
         border = BorderStroke(StenoSize.hairline, if (enabled) colors.outline else colors.outlineVariant),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
-    ) { ActionContent(text, icon) }
+    ) { ActionContent(text, icon, dense) }
 }
 
 /** Тихое текстовое действие без контура. */

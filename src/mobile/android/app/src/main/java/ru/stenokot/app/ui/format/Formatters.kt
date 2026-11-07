@@ -11,6 +11,7 @@ import ru.stenokot.core.model.PreflightInfo
 const val NBSP = ' '
 
 private const val MEBIBYTE = 1_048_576.0
+private const val KIBIBYTE = 1_024.0
 private const val GIGABYTE = 1_000_000_000.0
 private const val MEGABYTE = 1_000_000.0
 private const val MINUTE_MS = 60_000L
@@ -42,6 +43,17 @@ fun formatTimeRange(startMs: Long, endMs: Long): String =
 /** Целый процент без округления вверх: незаконченная стадия не покажет 100. */
 fun percentValue(fraction: Float): Int = (fraction.coerceIn(0f, 1f) * 100f + 0.0001f).toInt()
 
+/** Таймкод для TalkBack после предлогов «с» и «до»: «2 минут 4 секунд». */
+fun spokenTimecode(ms: Long): String {
+    val total = ms.coerceAtLeast(0) / 1000
+    val hours = total / 3600
+    val minutes = total % 3600 / 60
+    val seconds = total % 60
+    val time = "$minutes ${genitiveAfterOf(minutes, "минуты", "минут")} " +
+        "$seconds ${genitiveAfterOf(seconds, "секунды", "секунд")}"
+    return if (hours > 0) "$hours ${genitiveAfterOf(hours, "часа", "часов")} $time" else time
+}
+
 /** Процент с неразрывным пробелом перед знаком. */
 fun formatPercent(fraction: Float): String = "${percentValue(fraction)}$NBSP%"
 
@@ -67,6 +79,14 @@ fun formatDecimal(value: Double): String {
 
 /** Размер файла или модели в МиБ. */
 fun formatMib(bytes: Long): String = "${formatDecimal(bytes / MEBIBYTE)}$NBSP" + "МиБ"
+
+/** Размер небольшого файла: от мебибайта в МиБ, ниже в КиБ, чтобы JSON не выглядел пустым. */
+fun formatFileSize(bytes: Long): String =
+    if (bytes >= MEBIBYTE) {
+        formatMib(bytes)
+    } else {
+        "${(bytes / KIBIBYTE).roundToLong().coerceAtLeast(1)}$NBSP" + "КиБ"
+    }
 
 /** Значение в МиБ без единицы: для строк «214 из 378 МиБ». */
 fun formatMibValue(bytes: Long): String = formatDecimal(bytes / MEBIBYTE)

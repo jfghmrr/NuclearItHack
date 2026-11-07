@@ -36,6 +36,9 @@ internal object DemoData {
     const val DURATION_DS5 = 380_000L
     const val DURATION_DS6 = 45_000L
     const val DURATION_DS8 = 1_120_000L
+    const val DURATION_PERF = 10_800_000L
+    const val PERF_ROWS = 5_200
+    const val FILE_PERF = "zasedanie_tri_chasa.mp3"
 
     private const val FREE_BYTES = 12_400_000_000L
 
@@ -109,7 +112,7 @@ internal object DemoData {
         utt(1, 1, 4_120, 9_480, "Всем привет, это подкаст «Городские сады», и сегодня мы говорим про огороды на крышах."),
         utt(2, 2, 9_900, 15_260, "Привет. Ну, э-э, крыша - это не самое простое место, там ветер и солнце весь день."),
         utt(3, 3, 15_700, 18_340, "А что лучше всего приживается?"),
-        utt(4, 2, 18_600, 23_950, "Шпинат, салат, редис. Помидоры тоже можно, но им нужна опора."),
+        utt(4, 2, 18_600, 23_950, "Шпинат, салат, редис. Помидоры тоже можно, но им нужна опора.", overlap = true),
         utt(5, 3, 24_300, 26_100, "Понял, записываю."),
         utt(6, 1, 26_700, 32_480, "Значит, следующий выпуск посвятим поливу, решено."),
         utt(7, 3, 32_900, 38_250, "Хорошо, я соберу вопросы слушателей до пятницы."),
@@ -117,7 +120,8 @@ internal object DemoData {
         utt(9, 2, 44_500, 49_720, "Она тяжёлая, лучше лёгкий субстрат, иначе нагрузка на кровлю слишком большая."),
         utt(10, 3, 50_100, 54_600, "А кто вообще разрешает такие посадки? И, э-э, сколько это стоит?"),
         utt(11, 2, 55_000, 58_300, "Зависит от дома, надо уточнять."),
-        utt(12, 1, 59_020, 65_400, "Хорошо, вернёмся к этому в конце выпуска."),
+        utt(12, 2, 58_400, 58_900, "Лучше спросить в управляющей компании."),
+        utt(13, 1, 59_020, 65_400, "Хорошо, вернёмся к этому в конце выпуска."),
     )
 
     private const val LONG_TEXT = "Смотрите, я, э-э, подробно расскажу, как мы считали нагрузку. Квадратный метр мокрого " +
@@ -191,6 +195,18 @@ internal object DemoData {
         (before + tail + after).mapIndexed { index, item -> item.copy(id = index + 1) }
     }
 
+    /** Длинная запись для проверки скорости списка: шесть говорящих, тысячи реплик. */
+    val utterancesPerf: List<Utterance> by lazy {
+        val phrases = ds1Base.map { it.text } + LONG_TEXT
+        val step = DURATION_PERF / PERF_ROWS
+        List(PERF_ROWS) { index ->
+            val speaker = (index * 7 + index / 3) % 6
+            val text = phrases[index % phrases.size]
+            val start = index * step
+            Utterance(index + 1, speaker, start, start + step - 200, emptyList(), text, index % 37 == 0)
+        }
+    }
+
     val utterancesDs5: List<Utterance> by lazy {
         extended(
             listOf(
@@ -231,7 +247,7 @@ internal object DemoData {
                     ),
                 ),
             ),
-            ProtocolSection("Полив и ветер", 65_400, 400_000, 13, emptyList()),
+            ProtocolSection("Полив и ветер", 65_400, 400_000, 14, emptyList()),
             ProtocolSection("Вопросы слушателей", 400_000, DURATION_DS1, 120, emptyList()),
         ),
         coveredMs = DURATION_DS1,
