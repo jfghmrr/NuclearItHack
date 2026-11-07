@@ -8,6 +8,7 @@ import kotlinx.coroutines.sync.withLock
 import ru.stenokot.app.data.JobRecord
 import ru.stenokot.app.data.JobStore
 import ru.stenokot.app.data.toState
+import ru.stenokot.core.model.statusCode
 
 /**
  * Состояние всех задач в памяти и его запись на диск.
@@ -70,5 +71,5 @@ class JobBook(private val store: JobStore, private val onStatus: (String) -> Uni
     /** Убирает задачу из памяти. Файлы удаляет вызывающий. */
     fun remove(id: String) = state.update { it - id }
 
-    private fun status(record: JobRecord): String = StatusCodes.of(record.toState())
+    private fun status(record: JobRecord): String = statusCode(record.toState())
 }

@@ -1,20 +1,15 @@
 package ru.stenokot.app.pipeline
 
 import ru.stenokot.app.data.PreflightRecord
-import ru.stenokot.app.data.SpeedRange
-import ru.stenokot.core.model.ErrorCode
+import ru.stenokot.core.metrics.DeviceSpeed
+import ru.stenokot.core.metrics.EtaBasis
+import ru.stenokot.core.metrics.EtaEstimator
 
 /** Чистые правила предварительной проверки: сколько места нужно и сколько ждать. */
 object PreflightRules {
     private const val PCM_BYTES_PER_SECOND = 32_000L
     private const val JOURNAL_BYTES_PER_SECOND = 14_000L
     private const val RESERVE_BYTES = 64L * 1024 * 1024
-
-    /**
-     * Примерный диапазон `RTF_core` для устройства без своих замеров. Он взят из расчётной оценки
-     * спецификации, поэтому в интерфейсе подписывается как примерный.
-     */
-    val RoughSpeed = SpeedRange(minRtf = 0.35, maxRtf = 0.75, measured = false)
 
     /** Запас, который нужен задаче: копия файла, WAV, журналы и резерв. */
     fun requiredBytes(sizeBytes: Long, durationMs: Long?): Long {
@@ -27,8 +22,8 @@ object PreflightRules {
         (requiredBytes - freeBytes).coerceAtLeast(0)
 
     /**
-     * Собирает сведения для показа. Без длительности оценка скрыта: неизвестно, от чего считать.
-     * [speed] равен null, если у устройства нет замеров: тогда берётся примерный диапазон.
+     * Собирает сведения для показа. Оценку считает ядро: по замерам устройства или широким
+     * диапазоном с пометкой. Без длительности оценка скрыта, потому что считать не от чего.
      */
     fun record(
         fileName: String,
@@ -36,9 +31,9 @@ object PreflightRules {
         durationMs: Long?,
         mime: String?,
         freeBytes: Long,
-        speed: SpeedRange?,
+        speed: DeviceSpeed?,
     ): PreflightRecord {
-        val range = speed ?: RoughSpeed
+        val estimate = EtaEstimator(speed).preflight(durationMs)
         return PreflightRecord(
             fileName = fileName,
             sizeBytes = sizeBytes,
@@ -46,20 +41,14 @@ object PreflightRules {
             mime = mime,
             freeBytes = freeBytes,
             requiredBytes = requiredBytes(sizeBytes, durationMs),
-            estimateMinMs = durationMs?.let { (it * range.minRtf).toLong() },
-            estimateMaxMs = durationMs?.let { (it * range.maxRtf).toLong() },
-            estimateMeasured = durationMs != null && range.measured,
+            estimateMinMs = estimate?.minMs,
+            estimateMaxMs = estimate?.maxMs,
+            estimateMeasured = estimate?.basis == EtaBasis.MEASURED,
         )
     }
 
-    /** Возвращает отказ, если места не хватает. Подробность содержит оба числа для диагностики. */
-    fun storageRejection(record: PreflightRecord): PreflightOutcome.Rejected? {
-        val shortfall = shortfallBytes(record.requiredBytes, record.freeBytes)
-        if (shortfall == 0L) return null
-        return PreflightOutcome.Rejected(
-            code = ErrorCode.STORAGE_LOW,
-            detail = "shortfall=$shortfall free=${record.freeBytes} required=${record.requiredBytes}",
-            record = record,
-        )
-    }
+    /** Подробность отказа: оба числа для диагностики, сколько освободить, считает интерфейс. */
+    fun storageDetail(record: PreflightRecord): String =
+        "shortfall=${shortfallBytes(record.requiredBytes, record.freeBytes)} " +
+            "free=${record.freeBytes} required=${record.requiredBytes}"
 }

@@ -1,9 +1,18 @@
 package ru.stenokot.app.pipeline
 
 import ru.stenokot.app.data.JobRecord
-import ru.stenokot.app.data.PreflightRecord
 import ru.stenokot.core.model.ErrorCode
 import java.io.File
+
+/**
+ * Сбой стадии с кодом, который конвейер переводит в состояние задачи. Движки могут бросать
+ * собственные исключения: их код сообщает [PipelineEngines.errorCode].
+ */
+class EngineFailure(
+    val code: ErrorCode,
+    detail: String? = null,
+    cause: Throwable? = null,
+) : Exception(detail, cause)
 
 /** Показатели устройства. Вынесены из конвейера, чтобы его логику можно было проверять на JVM. */
 interface DeviceMonitor {
@@ -20,26 +29,19 @@ interface DeviceMonitor {
     fun lastExitCode(): ErrorCode?
 }
 
-/** Итог предварительной проверки. */
-sealed interface PreflightOutcome {
-    /** Файл годится: [record] показывается пользователю, [warnings] попадают в задачу. */
-    data class Passed(val record: PreflightRecord, val warnings: List<String>) : PreflightOutcome
+/** Сведения о файле, известные до его копирования. Размер равен нулю, если источник его не сообщил. */
+data class SourceInfo(val name: String, val sizeBytes: Long, val mime: String?)
 
-    /** Файл не годится. [record] есть, если сведения успели собрать. */
-    data class Rejected(
-        val code: ErrorCode,
-        val detail: String?,
-        val record: PreflightRecord?,
-    ) : PreflightOutcome
-}
-
-/** Доступ к импортируемому файлу. */
+/** Доступ к импортируемому файлу. Сбой доступа сообщается через [EngineFailure]. */
 interface SourceGateway {
-    /** Проверяет файл до загрузки моделей. */
-    suspend fun preflight(job: JobRecord): PreflightOutcome
+    /** Узнаёт имя и размер файла и проверяет, что он читается. */
+    suspend fun describe(job: JobRecord): SourceInfo
 
     /** Копирует файл в [target]. [progress] получает скопированные и общие байты. */
     suspend fun copy(job: JobRecord, target: File, progress: (copied: Long, total: Long) -> Unit)
+
+    /** Свободное место в хранилище задач. */
+    fun freeBytes(): Long
 }
 
 /** Адрес опубликованного файла. */

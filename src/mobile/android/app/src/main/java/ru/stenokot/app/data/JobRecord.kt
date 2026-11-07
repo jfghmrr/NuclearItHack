@@ -9,6 +9,7 @@ import ru.stenokot.core.model.LlmStatus
 import ru.stenokot.core.model.PauseReason
 import ru.stenokot.core.model.PreflightInfo
 import ru.stenokot.core.model.Stage
+import ru.stenokot.core.storage.LanguageVotes
 
 /** Положение задачи на диске. Живая доля прогресса сюда не входит и в job.json не пишется. */
 @Serializable
@@ -111,7 +112,9 @@ data class JobRecord(
     val audio: AudioRecord? = null,
     val language: Language? = null,
     val langFailed: Boolean = false,
+    val langVotes: LanguageVotes? = null,
     val speakers: Int? = null,
+    val utterances: Int? = null,
     val noSpeech: Boolean = false,
     val warnings: List<String> = emptyList(),
     val skippedSegments: List<Int> = emptyList(),

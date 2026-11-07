@@ -1,10 +1,10 @@
 package ru.stenokot.app.data
 
-import kotlinx.serialization.encodeToString
 import ru.stenokot.core.model.ErrorCode
 import ru.stenokot.core.model.LlmStatus
 import ru.stenokot.core.model.Stage
 import ru.stenokot.core.protocol.ProtocolDocument
+import ru.stenokot.core.storage.ServiceJson
 import java.io.File
 
 /** Пути внутри каталога задачи. Состав описан в разделе хранения спецификации. */
@@ -17,6 +17,7 @@ class JobFiles(val dir: File) {
     val asrAttempt: File get() = File(dir, "asr.attempt")
     val diar: File get() = File(dir, "diar.jsonl")
     val diarAttempt: File get() = File(dir, "diar.attempt")
+    val turns: File get() = File(dir, "turns.json")
     val merged: File get() = File(dir, "merged.json")
     val transcript: File get() = File(dir, "transcript.json")
     val protocol: File get() = File(dir, "protocol.json")
@@ -41,7 +42,7 @@ class JobStore(private val root: () -> File) {
 
     /** Атомарно заменяет job.json. */
     fun save(record: JobRecord) {
-        AtomicFiles.replaceText(files(record.id).job, StoreJson.encodeToString(record))
+        AtomicFiles.replaceText(files(record.id).job, ServiceJson.encodeToString(JobRecord.serializer(), record))
     }
 
     /** Читает все задачи в порядке очереди. Каталог с нечитаемым job.json пропускается. */
@@ -59,18 +60,18 @@ class JobStore(private val root: () -> File) {
     fun readUtterances(id: String): List<UtteranceLine> {
         val file = files(id).merged
         if (!file.exists()) return emptyList()
-        return StoreJson.decodeFromString<MergedDocument>(file.readText()).utterances
+        return ServiceJson.decodeFromString(MergedDocument.serializer(), file.readText()).utterances
     }
 
     /** Читает протокол задачи, если он есть и читается. */
     fun readProtocol(id: String): ProtocolDocument? {
         val file = files(id).protocol
         if (!file.exists()) return null
-        return runCatching { StoreJson.decodeFromString<ProtocolDocument>(file.readText()) }.getOrNull()
+        return runCatching { ServiceJson.decodeFromString(ProtocolDocument.serializer(), file.readText()) }.getOrNull()
     }
 
     private fun read(file: File): JobRecord? =
-        runCatching { StoreJson.decodeFromString<JobRecord>(file.readText()) }.getOrNull()
+        runCatching { ServiceJson.decodeFromString(JobRecord.serializer(), file.readText()) }.getOrNull()
 }
 
 /**
@@ -160,7 +161,7 @@ object JobReconciler {
         Stage.VAD -> files.vad.exists()
         Stage.LANG_ID -> record.noSpeech || files.lang.exists()
         Stage.ASR -> record.noSpeech || files.asr.exists()
-        Stage.DIARIZE -> record.noSpeech || files.diar.exists()
+        Stage.DIARIZE -> record.noSpeech || files.turns.exists()
         Stage.MERGE -> files.merged.exists()
         Stage.VALIDATE -> files.transcript.exists()
         Stage.LLM -> true

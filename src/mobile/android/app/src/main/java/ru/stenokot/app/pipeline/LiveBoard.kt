@@ -73,6 +73,12 @@ class LiveBoard(private val clock: () -> Long) {
         }
     }
 
+    /** Показывает значение движка. Заметка вида «3/8» даёт настоящий счётчик. */
+    fun report(fraction: Float, note: String?) {
+        val parts = note?.split('/')?.mapNotNull { it.trim().toIntOrNull() }.orEmpty()
+        if (parts.size == 2) progress(fraction, parts[0], parts[1]) else progress(fraction)
+    }
+
     /** Отмечает нехватку памяти. */
     fun markLowMemory() = state.update { it?.copy(lowMemory = true) }
 

@@ -19,6 +19,7 @@ import ru.stenokot.app.data.AsrJournal
 import ru.stenokot.app.data.DiarJournal
 import ru.stenokot.app.data.JobPhase
 import ru.stenokot.core.contract.ValidationResult
+import ru.stenokot.core.llm.LlmBudgetPolicy
 import ru.stenokot.core.model.ErrorCode
 import ru.stenokot.core.model.Language
 import ru.stenokot.core.model.LlmResult
@@ -110,7 +111,7 @@ class PipelineRunnerTest {
         h.await { it[id]?.stage == Stage.ASR && it[id]?.phase == JobPhase.RUNNING }
         delay(1_000)
 
-        val journal = AsrJournal(h.store.files(id).asr).restore().map { it.i }.toSet()
+        val journal = AsrJournal(h.store.files(id).asr).restore().map { it.index }.toSet()
         assertEquals(setOf(0, 1, 2, 3, 4, 5, 8), journal)
 
         val reopened = Harness(this, folder.root, engines = FakeEngines(segmentCount = 12))
@@ -137,7 +138,7 @@ class PipelineRunnerTest {
         val id = h.import("probe")
         h.await { it[id]?.stage == Stage.LANG_ID }
         delay(1_000)
-        assertEquals(listOf(2), AsrJournal(h.store.files(id).asr).restore().map { it.i })
+        assertEquals(listOf(2), AsrJournal(h.store.files(id).asr).restore().map { it.index })
 
         val reopened = Harness(this, folder.root, engines = FakeEngines(segmentCount = 12))
         reopened.await { it[id]?.phase == JobPhase.INTERRUPTED }
@@ -148,7 +149,7 @@ class PipelineRunnerTest {
     }
 
     @Test
-    fun diarizationResumesFromLastWindowWithItsState() = runTest {
+    fun diarizationResumesFromLastFinishedWindow() = runTest {
         val h = harness()
         h.engines.onWindow = { index ->
             if (index == 1) {
@@ -159,25 +160,52 @@ class PipelineRunnerTest {
         val id = h.import("diar")
         h.await { it[id]?.stage == Stage.DIARIZE }
         delay(1_000)
-        assertEquals(listOf(0), DiarJournal(h.store.files(id).diar).restore().map { it.i })
+        assertEquals(listOf(0), DiarJournal(h.store.files(id).diar).restore().map { it.index })
 
         val reopened = Harness(this, folder.root)
         reopened.await { it[id]?.phase == JobPhase.INTERRUPTED }
         reopened.runner.resume(id)
         reopened.await(done(id))
+        assertEquals(listOf(1), reopened.engines.restoredPerPass)
         assertEquals(listOf(1, 2), reopened.engines.diarizedWindows)
         assertTrue(reopened.engines.transcribed.isEmpty())
-        val lines = DiarJournal(reopened.store.files(id).diar).restore()
-        assertEquals("state1<-state0<-null", lines.first { it.i == 1 }.state)
+        assertEquals(listOf(0, 1, 2), DiarJournal(reopened.store.files(id).diar).restore().map { it.index })
+        assertTrue(reopened.store.files(id).turns.exists())
     }
 
     @Test
-    fun plainDiarizerIsOneCheckpointedWindow() = runTest {
-        val h = harness { engines.windowed = false }
-        val id = h.import("plain")
+    fun brokenWindowGetsTwoAttemptsAndIsSkipped() = runTest {
+        val h = harness()
+        h.engines.onWindow = { index -> if (index == 1) error("сбой на окне") }
+        val id = h.import("window")
         h.await(done(id))
-        assertEquals(listOf(0), h.engines.diarizedWindows)
-        assertEquals(2, DiarJournal(h.store.files(id).diar).restore().size)
+        val job = h.runner.jobs.value.getValue(id)
+        assertEquals(listOf(1), job.skippedWindows)
+        assertEquals(listOf(0, 2), h.engines.diarizedWindows)
+        assertEquals(0, h.engines.openHeavy)
+    }
+
+    @Test
+    fun codedDiarizerFailureIsFatalNotSkipped() = runTest {
+        val h = harness()
+        h.engines.onWindow = { throw EngineFailure(ErrorCode.MODEL_LOAD_FAILED, "нет файла модели") }
+        val id = h.import("nomodel")
+        h.await { it[id]?.phase == JobPhase.FAILED }
+        val job = h.runner.jobs.value.getValue(id)
+        assertEquals(ErrorCode.MODEL_LOAD_FAILED, job.errorCode)
+        assertEquals(Stage.DIARIZE, job.stage)
+        assertTrue(job.skippedWindows.isEmpty())
+    }
+
+    @Test
+    fun cancelInsideDiarizationStopsBetweenWindows() = runTest {
+        val h = harness()
+        lateinit var id: String
+        h.engines.onWindow = { index -> if (index == 1) h.runner.cancel(id) }
+        id = h.import("cancel")
+        h.await { it[id]?.phase == JobPhase.CANCELLED }
+        assertEquals(listOf(0, 1), h.engines.diarizedWindows)
+        assertEquals(0, h.engines.openHeavy)
     }
 
     @Test
@@ -331,16 +359,54 @@ class PipelineRunnerTest {
     }
 
     @Test
-    fun rejectedPreflightNeverReachesModels() = runTest {
-        val h = harness {
-            sources.rejection = PreflightOutcome.Rejected(ErrorCode.DECODE_CORRUPT, "нет кадров", null)
-        }
+    fun corruptFileFailsAtPreflightBeforeAnyModelAndLeavesNoCopy() = runTest {
+        val h = harness { engines.probeFailure = EngineFailure(ErrorCode.DECODE_CORRUPT, "нет кадров") }
         val id = h.import("corrupt")
         h.await { it[id]?.phase == JobPhase.FAILED }
-        assertEquals(ErrorCode.DECODE_CORRUPT, h.runner.jobs.value.getValue(id).errorCode)
-        assertTrue(h.engines.events.isEmpty())
-        assertTrue(h.sources.copied.isEmpty())
+        val job = h.runner.jobs.value.getValue(id)
+        assertEquals(ErrorCode.DECODE_CORRUPT, job.errorCode)
+        assertEquals(Stage.IMPORT, job.stage)
+        assertEquals(listOf("probe"), h.engines.events)
+        assertTrue(h.store.files(id).dir.listFiles().orEmpty().none { it.name.startsWith("source") })
         assertEquals("FAILED:DECODE_CORRUPT", h.statuses.last())
+    }
+
+    @Test
+    fun unreadableFileFailsWithItsOwnCode() = runTest {
+        val h = harness {
+            sources.describeFailure = EngineFailure(ErrorCode.IMPORT_NO_PERMISSION, "нет доступа")
+        }
+        val id = h.import("locked")
+        h.await { it[id]?.phase == JobPhase.FAILED }
+        assertEquals(ErrorCode.IMPORT_NO_PERMISSION, h.runner.jobs.value.getValue(id).errorCode)
+        assertTrue(h.sources.copied.isEmpty())
+    }
+
+    @Test
+    fun lowStorageSaysHowMuchIsMissingAndRetryRechecks() = runTest {
+        val h = harness { sources.free = 1_000 }
+        val id = h.import("big")
+        h.await { it[id]?.phase == JobPhase.FAILED }
+        val job = h.runner.jobs.value.getValue(id)
+        assertEquals(ErrorCode.STORAGE_LOW, job.errorCode)
+        val preflight = checkNotNull(job.preflight)
+        assertTrue(PreflightRules.shortfallBytes(preflight.requiredBytes, preflight.freeBytes) > 0)
+        assertTrue(h.engines.events.isEmpty())
+
+        h.sources.free = 10_000_000_000
+        h.runner.start(id)
+        h.await(done(id))
+    }
+
+    @Test
+    fun preflightIsVisibleBeforeProcessing() = runTest {
+        val h = harness()
+        val id = h.import("visible")
+        h.await(done(id))
+        val preflight = checkNotNull(h.runner.jobs.value.getValue(id).preflight)
+        assertEquals(60_000L, preflight.durationMs)
+        assertNotNull(preflight.estimateMinMs)
+        assertFalse("первая запись идёт по примерной оценке", preflight.estimateMeasured)
     }
 
     @Test
@@ -634,6 +700,6 @@ class PipelineRunnerTest {
         val id = h.import("budget")
         h.await(done(id))
         val job = h.runner.jobs.value.getValue(id)
-        assertEquals(LlmRules.budget(60_000, job.coreMs), h.engines.llmRuns.single())
+        assertEquals(LlmBudgetPolicy.budget(60_000, job.coreMs), h.engines.llmRuns.single())
     }
 }

@@ -25,8 +25,8 @@ import ru.stenokot.app.data.JobReconciler
 import ru.stenokot.app.data.JobStore
 import ru.stenokot.app.data.LlmRecord
 import ru.stenokot.app.data.SpeedBook
-import ru.stenokot.core.engine.EngineFailure
 import ru.stenokot.core.engine.Progress
+import ru.stenokot.core.llm.LlmBudgetPolicy
 import ru.stenokot.core.model.ErrorCode
 import ru.stenokot.core.model.LlmResult
 import ru.stenokot.core.model.LlmStatus
@@ -263,7 +263,11 @@ class PipelineRunner(
         }
     }
 
-    /** Предварительная проверка и копия файла. Здесь отсеивается всё, что не дойдёт до моделей. */
+    /**
+     * Предварительная проверка. Сначала имя и размер, затем копия, затем пробное чтение копии: всё
+     * это до загрузки моделей, поэтому плохой файл отсеивается здесь. Копия нужна раньше пробы ещё и
+     * потому, что права на чужой адрес живут недолго.
+     */
     private suspend fun importOne(id: String) {
         val control = control(id)
         val job = book.get(id) ?: return
@@ -275,46 +279,63 @@ class PipelineRunner(
             board.enter(id, Stage.IMPORT, 0)
         }
         try {
-            val checked = control.stoppable { preflight(id) } ?: return
             control.check()
-            val source = copySource(id, checked, control, visible)
-            val took = clock() - startedAt
+            val info = control.stoppable { sources.describe(job) }
+            val named = book.mutate(id) { current ->
+                current.copy(
+                    title = info.name,
+                    stem = StemRules.stem(info.name),
+                    preflight = preflightRecord(info, info.sizeBytes, null),
+                )
+            } ?: return
+            requireSpace(named)
+            val source = copySource(id, named, control, visible)
+            control.check()
+            val probe = control.stoppable { engines.probe(source) }
+            val checked = book.mutate(id) { current ->
+                val record = preflightRecord(info, source.length(), probe)
+                val lowMemory = device.availableMemoryBytes() < StageBudgets.memoryBytes(Stage.ASR)
+                current.copy(preflight = record).let { if (lowMemory) it.warned(ErrorCode.LOW_MEMORY.name) else it }
+            } ?: return
+            requireSpace(checked)
             book.mutate(id) { current ->
                 current.copy(
                     sourceFile = source.name,
                     completedStages = current.completedStages + Stage.IMPORT,
-                    stageMs = current.stageMs + (Stage.IMPORT to took),
+                    stageMs = current.stageMs + (Stage.IMPORT to clock() - startedAt),
                 )
             }
         } catch (stop: JobStopped) {
             markCancelled(id)
-            board.clear(id)
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (failure: EngineFailure) {
-            fail(id, Stage.IMPORT, failure.code, failure.message)
         } catch (failure: Exception) {
-            fail(id, Stage.IMPORT, ErrorCode.IMPORT_READ_FAILED, failure.toString())
+            discardSource(id)
+            val code = engines.errorCode(failure) ?: ErrorCode.IMPORT_READ_FAILED
+            fail(id, Stage.IMPORT, code, failure.message ?: failure.toString())
         }
     }
 
-    private suspend fun preflight(id: String): JobRecord? {
-        val job = book.require(id)
-        return when (val outcome = sources.preflight(job)) {
-            is PreflightOutcome.Rejected -> {
-                book.mutate(id) { it.copy(preflight = outcome.record) }
-                fail(id, Stage.IMPORT, outcome.code, outcome.detail)
-                null
-            }
-            is PreflightOutcome.Passed -> book.mutate(id) { current ->
-                val named = current.copy(
-                    preflight = outcome.record,
-                    title = outcome.record.fileName,
-                    stem = StemRules.stem(outcome.record.fileName),
-                )
-                outcome.warnings.fold(named) { acc, warning -> acc.warned(warning) }
-            }
+    private fun preflightRecord(info: SourceInfo, sizeBytes: Long, probe: SourceProbe?) = PreflightRules.record(
+        fileName = info.name,
+        sizeBytes = sizeBytes,
+        durationMs = probe?.durationMs,
+        mime = probe?.mime ?: info.mime,
+        freeBytes = sources.freeBytes(),
+        speed = speed.current(),
+    )
+
+    private fun requireSpace(job: JobRecord) {
+        val record = job.preflight ?: return
+        if (PreflightRules.shortfallBytes(record.requiredBytes, record.freeBytes) > 0) {
+            throw EngineFailure(ErrorCode.STORAGE_LOW, PreflightRules.storageDetail(record))
         }
+    }
+
+    /** Отвергнутая копия не должна занимать место, ради которого пользователя просят его освободить. */
+    private fun discardSource(id: String) {
+        val files = store.files(id)
+        files.dir.listFiles { file -> file.name.startsWith("source") }?.forEach(File::delete)
     }
 
     private suspend fun copySource(id: String, job: JobRecord, control: JobControl, visible: Boolean): File {
@@ -365,15 +386,13 @@ class PipelineRunner(
             false
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (failure: EngineFailure) {
-            fail(id, currentStage(id), failure.code, failure.message)
-            false
         } catch (failure: OutOfMemoryError) {
             fail(id, currentStage(id), ErrorCode.LOW_MEMORY, failure.toString())
             false
         } catch (failure: Exception) {
             val stage = currentStage(id)
-            fail(id, stage, StageBudgets.failureCode(stage), failure.toString())
+            val code = engines.errorCode(failure) ?: StageBudgets.failureCode(stage)
+            fail(id, stage, code, failure.message ?: failure.toString())
             false
         } finally {
             modelGate.setBusy(false)
@@ -490,25 +509,18 @@ class PipelineRunner(
         }
         val job = book.mutate(id) { it.copy(phase = JobPhase.RUNNING, stage = Stage.LLM) } ?: book.require(id)
         board.enter(id, Stage.LLM, job.coreMs)
-        val budget = LlmRules.budget(job.durationMs ?: 0, job.coreMs)
-        val progress = Progress { value, note -> llmProgress(value, note) }
+        val budget = LlmBudgetPolicy.budget(job.durationMs ?: 0, job.coreMs)
+        val progress = Progress { value, note -> board.report(value, note) }
         llmRunning = true
         return try {
             engines.llm.run(store.files(id).dir, budget, progress)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
-            val code = (failure as? EngineFailure)?.code ?: ErrorCode.LLM_DIED_NATIVE
-            LlmResult(LlmStatus.FAILED, null, code.name)
+            LlmResult(LlmStatus.FAILED, null, (engines.errorCode(failure) ?: ErrorCode.LLM_DIED_NATIVE).name)
         } finally {
             llmRunning = false
         }
-    }
-
-    /** Заметка стадии вида «3/8» даёт настоящий счётчик окон для экрана результата. */
-    private fun llmProgress(value: Float, note: String?) {
-        val parts = note?.split('/')?.mapNotNull { it.trim().toIntOrNull() }.orEmpty()
-        if (parts.size == 2) board.progress(value, parts[0], parts[1]) else board.progress(value)
     }
 
     private suspend fun finalize(id: String) {
@@ -539,9 +551,8 @@ class PipelineRunner(
     }
 
     private fun recordSpeed(job: JobRecord) {
-        val core = Rtf.core(job) ?: return
-        val diarize = Rtf.of(job.stageMs[Stage.DIARIZE] ?: 0, job.durationMs)
-        runCatching { speed.record(core, diarize?.takeIf { it > 0 }) }
+        val audioMs = job.durationMs ?: return
+        if (!job.resumed) runCatching { speed.record(job.stageMs, audioMs) }
     }
 
     private suspend fun requeue(id: String) {

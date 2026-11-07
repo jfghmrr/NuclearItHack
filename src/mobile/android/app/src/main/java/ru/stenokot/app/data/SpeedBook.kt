@@ -1,60 +1,49 @@
 package ru.stenokot.app.data
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
+import ru.stenokot.core.metrics.DeviceSpeed
+import ru.stenokot.core.model.Stage
+import ru.stenokot.core.storage.ServiceJson
 import java.io.File
-
-/** Диапазон скорости обработки. [measured] отличает замер устройства от примерной оценки. */
-data class SpeedRange(val minRtf: Double, val maxRtf: Double, val measured: Boolean)
 
 /** Содержимое speed.json. */
 @Serializable
-private data class SpeedDocument(val rtfCore: List<Double> = emptyList(), val rtfDiarize: List<Double> = emptyList())
+private data class SpeedDocument(val stageRtf: Map<Stage, Double> = emptyMap())
 
 /**
- * Замеры скорости этого устройства. Оценка времени опирается только на них, поэтому после первой
- * завершённой записи она становится честной, а не взятой из таблицы.
+ * Скорость этого устройства по последней подходящей записи. Оценка времени опирается на неё, поэтому
+ * после первой завершённой записи она становится замером, а не прикидкой.
  */
 class SpeedBook(private val file: () -> File) {
-    private var document: SpeedDocument? = null
+    private var loaded = false
+    private var speed: DeviceSpeed? = null
 
-    /** Возвращает диапазон `RTF_core` с запасом или null, если замеров нет. */
+    /** Возвращает скорость устройства или null, если замеров ещё нет. */
     @Synchronized
-    fun coreRange(): SpeedRange? = range(load().rtfCore)
-
-    /** Возвращает диапазон скорости диаризации или null, если замеров нет. */
-    @Synchronized
-    fun diarizeRange(): SpeedRange? = range(load().rtfDiarize)
-
-    /** Добавляет замер завершённой записи. */
-    @Synchronized
-    fun record(rtfCore: Double, rtfDiarize: Double?) {
-        val current = load()
-        val updated = SpeedDocument(
-            rtfCore = (current.rtfCore + rtfCore).takeLast(KEEP),
-            rtfDiarize = (current.rtfDiarize + listOfNotNull(rtfDiarize)).takeLast(KEEP),
-        )
-        document = updated
-        AtomicFiles.replaceText(file(), StoreJson.encodeToString(updated))
+    fun current(): DeviceSpeed? {
+        if (!loaded) {
+            speed = read()
+            loaded = true
+        }
+        return speed
     }
 
-    private fun range(values: List<Double>): SpeedRange? {
-        if (values.isEmpty()) return null
-        return SpeedRange(values.min() * LOWER_MARGIN, values.max() * UPPER_MARGIN, measured = true)
+    /** Запоминает замер. Слишком короткая запись замером не считается и не записывается. */
+    @Synchronized
+    fun record(stageMs: Map<Stage, Long>, audioMs: Long) {
+        val measured = DeviceSpeed.fromRun(stageMs, audioMs) ?: return
+        speed = measured
+        loaded = true
+        val text = ServiceJson.encodeToString(SpeedDocument.serializer(), SpeedDocument(measured.stageRtf))
+        AtomicFiles.replaceText(file(), text)
     }
 
-    private fun load(): SpeedDocument = document ?: read().also { document = it }
-
-    private fun read(): SpeedDocument {
+    private fun read(): DeviceSpeed? {
         val target = file()
-        if (!target.exists()) return SpeedDocument()
-        return runCatching { StoreJson.decodeFromString<SpeedDocument>(target.readText()) }
-            .getOrDefault(SpeedDocument())
-    }
-
-    private companion object {
-        const val KEEP = 5
-        const val LOWER_MARGIN = 0.9
-        const val UPPER_MARGIN = 1.2
+        if (!target.exists()) return null
+        val document = runCatching {
+            ServiceJson.decodeFromString(SpeedDocument.serializer(), target.readText())
+        }.getOrNull() ?: return null
+        return DeviceSpeed(document.stageRtf).takeIf { document.stageRtf.isNotEmpty() }
     }
 }

@@ -29,6 +29,9 @@ class JobControl {
         stop.compareAndSet(null, request)
     }
 
+    /** Задачу просили остановить. Нужно движкам, которые сами проверяют границы окон. */
+    fun isStopRequested(): Boolean = stop.value != null
+
     /** Бросает [JobStopped], если задачу просили остановить. */
     fun check() {
         stop.value?.let { throw JobStopped(it) }

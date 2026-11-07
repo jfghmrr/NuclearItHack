@@ -2,15 +2,11 @@ package ru.stenokot.app.pipeline
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-import kotlinx.serialization.encodeToString
 import ru.stenokot.app.data.AsrJournal
-import ru.stenokot.app.data.AsrLine
 import ru.stenokot.app.data.AtomicFiles
 import ru.stenokot.app.data.AttemptLog
 import ru.stenokot.app.data.CoreStages
 import ru.stenokot.app.data.DiarJournal
-import ru.stenokot.app.data.DiarLine
-import ru.stenokot.app.data.FINAL_WINDOW
 import ru.stenokot.app.data.JobFiles
 import ru.stenokot.app.data.JobPhase
 import ru.stenokot.app.data.JobRecord
@@ -18,21 +14,20 @@ import ru.stenokot.app.data.JobStore
 import ru.stenokot.app.data.LangDocument
 import ru.stenokot.app.data.MergedDocument
 import ru.stenokot.app.data.OutputRecord
-import ru.stenokot.app.data.StoreJson
-import ru.stenokot.app.data.TurnLine
+import ru.stenokot.app.data.TurnsDocument
 import ru.stenokot.app.data.VadDocument
 import ru.stenokot.app.data.toLine
 import ru.stenokot.app.data.toRecord
 import ru.stenokot.app.data.toSegment
 import ru.stenokot.app.data.toTurn
 import ru.stenokot.app.data.toUtterance
+import ru.stenokot.core.contract.TranscriptEncoder
 import ru.stenokot.core.contract.ValidationResult
 import ru.stenokot.core.engine.Asr
-import ru.stenokot.core.engine.Diarizer
-import ru.stenokot.core.engine.EngineFailure
 import ru.stenokot.core.engine.PcmReader
 import ru.stenokot.core.engine.Progress
-import ru.stenokot.core.engine.WindowedDiarizer
+import ru.stenokot.core.lang.LanguageVote
+import ru.stenokot.core.metrics.RtfCalculator
 import ru.stenokot.core.model.AsrSegment
 import ru.stenokot.core.model.ErrorCode
 import ru.stenokot.core.model.Language
@@ -40,6 +35,10 @@ import ru.stenokot.core.model.PauseReason
 import ru.stenokot.core.model.SpeakerTurn
 import ru.stenokot.core.model.SpeechSegment
 import ru.stenokot.core.model.Stage
+import ru.stenokot.core.storage.AsrJournalLine
+import ru.stenokot.core.storage.DiarJournalLine
+import ru.stenokot.core.storage.LanguageVotes
+import ru.stenokot.core.storage.ServiceJson
 import java.io.Closeable
 import java.io.File
 import java.security.MessageDigest
@@ -83,6 +82,7 @@ class JobPipeline(
         book.mutate(id) { job -> job.copy(coreMs = job.stageMs.filterKeys { it in CoreStages }.values.sum()) }
     }
 
+    /** То же правило, что и в JobFile ядра: смена настроек или моделей отменяет всё после декодирования. */
     private suspend fun invalidateStaleCheckpoints(id: String) {
         val job = book.require(id)
         val stale = job.configHash != null && job.configHash != engines.configHash
@@ -90,10 +90,10 @@ class JobPipeline(
             val files = store.files(id)
             AsrJournal(files.asr).clear()
             DiarJournal(files.diar).clear()
-            files.lang.delete()
-            files.merged.delete()
-            val kept = job.completedStages.intersect(setOf(Stage.IMPORT, Stage.DECODE, Stage.VAD))
-            book.mutate(id) { it.copy(completedStages = kept) }
+            listOf(files.vad, files.lang, files.turns, files.merged, files.asrAttempt, files.diarAttempt)
+                .forEach(File::delete)
+            val kept = job.completedStages.filter { it <= Stage.DECODE }.toSet()
+            book.mutate(id) { it.copy(completedStages = kept, noSpeech = false) }
         }
         book.mutate(id) { it.copy(configHash = engines.configHash) }
     }
@@ -119,8 +119,9 @@ class JobPipeline(
             run.files,
             StageMetrics(
                 stage = stage,
+                startedAtMs = startedAt,
                 tookMs = took,
-                rtf = Rtf.of(took, job.durationMs),
+                rtf = job.durationMs?.let { RtfCalculator.stage(took, it) },
                 availMemMb = available / BYTES_IN_MB,
                 thermalStart = thermalStart,
                 thermalEnd = device.thermalStatus(),
@@ -163,7 +164,7 @@ class JobPipeline(
     private suspend fun vad(run: Run) {
         val segments = loading { engines.vad() }.use { it.segments(run.pcm, stageProgress()) }
         val document = VadDocument(segments.map { it.toLine() })
-        AtomicFiles.replaceText(run.files.vad, StoreJson.encodeToString(document))
+        AtomicFiles.replaceText(run.files.vad, ServiceJson.encodeToString(VadDocument.serializer(), document))
         if (segments.isEmpty()) {
             book.mutate(run.id) { job ->
                 job.copy(
@@ -185,18 +186,21 @@ class JobPipeline(
         val probes = LanguageProbes.pick(segments)
         val asr = run.asr(Language.RU)
         val journal = AsrJournal(run.files.asr)
-        val known = journal.restore().associateBy { it.i }
+        val known = journal.restore().associateBy { it.index }
         val results = ArrayList<AsrSegment>(probes.size)
         var language = Language.RU
+        var votes: LanguageVotes? = null
         var failed = false
         try {
             probes.forEachIndexed { index, probe ->
                 run.boundary(Stage.LANG_ID)
                 val restored = known[probe.index]?.takeUnless { it.skipped }?.toSegment()
-                results += restored ?: asr.transcribe(run.pcm, probe).also { journal.append(it.toLine()) }
+                results += restored ?: asr.transcribe(run.pcm, probe).also { journal.append(AsrJournalLine.of(it)) }
                 board.progress((index + 1f) / probes.size, index + 1, probes.size)
             }
-            language = engines.languageDetector().detect(results)
+            val detector = engines.languageDetector()
+            language = detector.detect(results)
+            votes = (detector as? LanguageVote)?.tally(results)?.let { LanguageVotes(it.ru, it.en, it.chunks) }
         } catch (stop: JobStopped) {
             throw stop
         } catch (cancelled: CancellationException) {
@@ -207,9 +211,9 @@ class JobPipeline(
         }
         val document = LangDocument(language, failed, results.size)
         if (language != Language.RU) journal.clear()
-        AtomicFiles.replaceText(run.files.lang, StoreJson.encodeToString(document))
+        AtomicFiles.replaceText(run.files.lang, ServiceJson.encodeToString(LangDocument.serializer(), document))
         book.mutate(run.id) { job ->
-            val updated = job.copy(language = language, langFailed = failed)
+            val updated = job.copy(language = language, langFailed = failed, langVotes = votes)
             if (failed) updated.warned(ErrorCode.LANG_ID_FAILED.name) else updated
         }
     }
@@ -218,7 +222,7 @@ class JobPipeline(
         val language = book.require(run.id).language ?: Language.RU
         val segments = readSegments(run.files)
         val journal = AsrJournal(run.files.asr)
-        val done = journal.restore().map { it.i }.toMutableSet()
+        val done = journal.restore().map { it.index }.toMutableSet()
         val attempts = AttemptLog(run.files.asrAttempt)
         val asr = run.asr(language)
         val total = segments.size
@@ -251,89 +255,66 @@ class JobPipeline(
             } catch (failure: Exception) {
                 continue
             }
-            journal.append(result.toLine())
+            journal.append(AsrJournalLine.of(result))
             return
         }
-        journal.append(AsrLine(segment.index, segment.startSample, segment.endSample, skipped = true))
+        journal.append(AsrJournalLine(segment.index, segment.startSample, segment.endSample, "", skipped = true))
         book.mutate(run.id) { it.copy(skippedSegments = it.skippedSegments + segment.index) }
     }
 
+    /**
+     * Окна ведёт сам диаризатор, конвейер пишет чекпойнт в его обратном вызове. Падение считается
+     * попыткой окна: на третий раз окно записывается пустым и пропускается, иначе запись, убивающая
+     * процесс, не дала бы закончить файл. Сбой с кодом, например нет модели, окном не лечится.
+     */
     private suspend fun diarize(run: Run) {
         val journal = DiarJournal(run.files.diar)
-        val done = journal.restore().filter { it.i != FINAL_WINDOW }.toMutableList()
-        val diarizer = loading { engines.diarizer() }
-        diarizer.use {
-            if (diarizer is WindowedDiarizer) {
-                diarizeWindows(run, diarizer, journal, done)
-            } else {
-                diarizeWhole(run, diarizer, journal, done)
-            }
-        }
-    }
-
-    private suspend fun diarizeWindows(
-        run: Run,
-        diarizer: WindowedDiarizer,
-        journal: DiarJournal,
-        done: MutableList<DiarLine>,
-    ) {
-        val total = diarizer.windowCount(run.pcm.totalSamples)
+        val done = journal.restore().toMutableList()
         val attempts = AttemptLog(run.files.diarAttempt)
-        board.progress(fraction(done.size, total), done.size, total, force = true)
-        for (index in done.size until total) {
-            run.boundary(Stage.DIARIZE)
-            val state = done.lastOrNull()?.state
-            val line = diarizeOne(run, diarizer, index, total, state, attempts)
-            journal.append(line)
-            done += line
-            board.progress(fraction(done.size, total), done.size, total)
-        }
-        val windows = done.map { window -> window.turns.map(TurnLine::toTurn) }
-        val finished = diarizer.finish(windows).ifEmpty { wholeRecordingTurn(run) }
-        journal.append(DiarLine(FINAL_WINDOW, finished.map { it.toLine() }))
-    }
-
-    private suspend fun diarizeOne(
-        run: Run,
-        diarizer: WindowedDiarizer,
-        index: Int,
-        total: Int,
-        state: String?,
-        attempts: AttemptLog,
-    ): DiarLine {
-        while (attempts.begin(index)) {
-            val window = try {
-                diarizer.diarizeWindow(run.pcm, index, state, windowProgress(index, total))
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Exception) {
+        var turns: List<SpeakerTurn>? = null
+        while (turns == null) {
+            val index = done.size
+            if (!attempts.begin(index)) {
+                val empty = DiarJournalLine(index, 0, 0, emptyList(), emptyList())
+                journal.append(empty)
+                done += empty
+                book.mutate(run.id) { it.copy(skippedWindows = it.skippedWindows + index) }
                 continue
             }
-            return DiarLine(index, window.turns.map { it.toLine() }, window.state)
+            run.boundary(Stage.DIARIZE)
+            turns = diarizeFrom(run, journal, done)
         }
-        book.mutate(run.id) { it.copy(skippedWindows = it.skippedWindows + index) }
-        return DiarLine(index, emptyList(), state, skipped = true)
+        val finished = turns.ifEmpty { wholeRecordingTurn(run) }
+        val document = TurnsDocument(finished.map { it.toLine() })
+        AtomicFiles.replaceText(run.files.turns, ServiceJson.encodeToString(TurnsDocument.serializer(), document))
     }
 
-    private suspend fun diarizeWhole(
-        run: Run,
-        diarizer: Diarizer,
-        journal: DiarJournal,
-        done: MutableList<DiarLine>,
-    ) {
-        if (done.isEmpty()) {
-            run.boundary(Stage.DIARIZE)
-            val line = DiarLine(0, diarizer.diarize(run.pcm, stageProgress()).map { it.toLine() })
-            journal.append(line)
-            done += line
+    /** Один проход диаризатора. Возвращает null, если проход оборвался и окно надо повторить. */
+    private fun diarizeFrom(run: Run, journal: DiarJournal, done: MutableList<DiarJournalLine>): List<SpeakerTurn>? {
+        val request = DiarizationRequest(
+            restored = done.toList(),
+            onWindow = { line ->
+                journal.append(line)
+                done += line
+            },
+            isCancelled = run.control::isStopRequested,
+            sourceSampleRate = book.require(run.id).audio?.sourceSampleRate,
+        )
+        val diarizer = loading { engines.diarizer(request) }
+        return try {
+            diarizer.use { it.diarize(run.pcm, stageProgress()) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            run.control.check()
+            if (engines.errorCode(failure) != null) throw failure
+            null
         }
-        val turns = done.flatMap { window -> window.turns.map(TurnLine::toTurn) }
-        journal.append(DiarLine(FINAL_WINDOW, turns.ifEmpty { wholeRecordingTurn(run) }.map { it.toLine() }))
     }
 
     /**
-     * Запасной интервал: если ни одно окно не дало говорящих, текст остаётся, а реплики получают
-     * одного говорящего. Пропущенные окна уже отмечены в metadata.json.
+     * Запасной интервал: если говорящих нет совсем, текст остаётся, а реплики получают одного
+     * говорящего. Пропущенные окна уже отмечены в metadata.json.
      */
     private fun wholeRecordingTurn(run: Run): List<SpeakerTurn> =
         listOf(SpeakerTurn(0, book.require(run.id).durationMs ?: 0, 0))
@@ -345,17 +326,18 @@ class JobPipeline(
         } else {
             val asr = AsrJournal(run.files.asr).restore()
                 .filterNot { it.skipped }
-                .sortedBy { it.i }
+                .sortedBy { it.index }
                 .map { it.toSegment() }
-            val lines = DiarJournal(run.files.diar).restore()
-            val finalTurns = lines.lastOrNull { it.i == FINAL_WINDOW }?.turns
-                ?: lines.flatMap { it.turns }
-            engines.merger().merge(asr, finalTurns.map { it.toTurn() })
+            val turns = ServiceJson.decodeFromString(TurnsDocument.serializer(), run.files.turns.readText())
+            engines.merger(job.durationMs ?: 0).merge(asr, turns.turns.map { it.toTurn() })
         }
         val document = MergedDocument(utterances.map { it.toLine() })
-        AtomicFiles.replaceText(run.files.merged, StoreJson.encodeToString(document))
+        AtomicFiles.replaceText(run.files.merged, ServiceJson.encodeToString(MergedDocument.serializer(), document))
         book.mutate(run.id) { current ->
-            val updated = current.copy(speakers = utterances.map { it.speaker }.distinct().size)
+            val updated = current.copy(
+                speakers = utterances.map { it.speaker }.distinct().size,
+                utterances = utterances.size,
+            )
             if (utterances.isEmpty()) {
                 updated.copy(noSpeech = true).warned(ErrorCode.AUDIO_EMPTY.name)
             } else {
@@ -368,7 +350,7 @@ class JobPipeline(
     private suspend fun validateAndSave(run: Run) {
         val job = book.require(run.id)
         val utterances = store.readUtterances(run.id).map { it.toUtterance() }
-        val bytes = TranscriptBuilder.bytes(utterances)
+        val bytes = TranscriptEncoder.encode(utterances)
         val verdict = engines.validator().validate(bytes, job.durationMs ?: 0)
         if (verdict is ValidationResult.Invalid) {
             throw EngineFailure(ErrorCode.CONTRACT_INVALID, verdict.errors.take(5).joinToString("; "))
@@ -406,25 +388,20 @@ class JobPipeline(
         }
     }
 
-    private fun stageProgress() = Progress { value, _ -> board.progress(value) }
-
-    private fun windowProgress(index: Int, total: Int) = Progress { value, _ ->
-        board.progress((index + value.coerceIn(0f, 1f)) / total, index, total)
-    }
+    private fun stageProgress() = Progress { value, note -> board.report(value, note) }
 
     private fun readSegments(files: JobFiles): List<SpeechSegment> =
-        StoreJson.decodeFromString<VadDocument>(files.vad.readText()).segments.map { it.toSegment() }
+        ServiceJson.decodeFromString(VadDocument.serializer(), files.vad.readText()).segments.map { it.toSegment() }
 
     private fun fraction(done: Int, total: Int): Float =
         if (total <= 0) 1f else done.toFloat() / total
 
     private inline fun <T> loading(create: () -> T): T = try {
         create()
-    } catch (failure: EngineFailure) {
-        throw failure
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (failure: Exception) {
+        if (engines.errorCode(failure) != null) throw failure
         throw EngineFailure(ErrorCode.MODEL_LOAD_FAILED, failure.message, failure)
     }
 

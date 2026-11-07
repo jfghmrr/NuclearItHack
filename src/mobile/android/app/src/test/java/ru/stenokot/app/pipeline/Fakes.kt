@@ -10,20 +10,17 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.withTimeout
 import ru.stenokot.app.data.JobRecord
 import ru.stenokot.app.data.JobStore
-import ru.stenokot.app.data.PreflightRecord
 import ru.stenokot.app.data.SpeedBook
 import ru.stenokot.core.contract.TranscriptValidator
 import ru.stenokot.core.contract.ValidationResult
 import ru.stenokot.core.engine.Asr
 import ru.stenokot.core.engine.Diarizer
-import ru.stenokot.core.engine.DiarizationWindow
 import ru.stenokot.core.engine.LanguageDetector
 import ru.stenokot.core.engine.LlmRunner
 import ru.stenokot.core.engine.Merger
 import ru.stenokot.core.engine.PcmReader
 import ru.stenokot.core.engine.Progress
 import ru.stenokot.core.engine.Vad
-import ru.stenokot.core.engine.WindowedDiarizer
 import ru.stenokot.core.model.AsrSegment
 import ru.stenokot.core.model.AsrToken
 import ru.stenokot.core.model.AudioInfo
@@ -36,6 +33,10 @@ import ru.stenokot.core.model.SpeakerTurn
 import ru.stenokot.core.model.SpeechSegment
 import ru.stenokot.core.model.Utterance
 import ru.stenokot.core.model.Word
+import ru.stenokot.core.storage.DiarClusterRecord
+import ru.stenokot.core.storage.DiarJournalLine
+import ru.stenokot.core.storage.DiarTurnRecord
+import ru.stenokot.core.storage.ModelHash
 import java.io.File
 
 /** Читатель без данных: фальшивым движкам звук не нужен. */
@@ -61,8 +62,9 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
     var validation: ValidationResult = ValidationResult.Ok
     var language: Language = Language.RU
     var noSpeech = false
-    var windowed = true
     var windows = 3
+    var probeFailure: Exception? = null
+    val restoredPerPass = ArrayList<Int>()
     var llmCancels = 0
     var llmBehavior: suspend (Int) -> LlmResult = { LlmResult(LlmStatus.APPLIED, null, null) }
     override var configHash: String = "cfg"
@@ -76,6 +78,12 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
     private fun closed(name: String) {
         events += "close:$name"
         openHeavy -= 1
+    }
+
+    override fun probe(source: File): SourceProbe {
+        events += "probe"
+        probeFailure?.let { throw it }
+        return SourceProbe(60_000, "audio/mpeg")
     }
 
     override suspend fun decode(source: File, outWav: File, progress: Progress): AudioInfo {
@@ -117,40 +125,35 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
 
     override fun languageDetector(): LanguageDetector = LanguageDetector { language }
 
-    override fun diarizer(): Diarizer = if (windowed) WindowedFake() else WholeFake()
-
-    private inner class WholeFake : Diarizer {
+    override fun diarizer(request: DiarizationRequest): Diarizer = object : Diarizer {
         init {
             opened("diar")
+            restoredPerPass += request.restored.size
         }
 
         override fun diarize(pcm: PcmReader, progress: Progress): List<SpeakerTurn> {
-            diarizedWindows += 0
-            return listOf(SpeakerTurn(0, 60_000, 0))
+            for (index in request.restored.size until windows) {
+                if (request.isCancelled()) error("Отменено")
+                onWindow(index)
+                diarizedWindows += index
+                val start = index * 1_000L
+                request.onWindow(
+                    DiarJournalLine(
+                        index = index,
+                        startMs = start,
+                        endMs = start + 1_000,
+                        turns = listOf(DiarTurnRecord(0, start, start + 1_000)),
+                        clusters = listOf(DiarClusterRecord(0, 1_000)),
+                    ),
+                )
+            }
+            return listOf(SpeakerTurn(0, windows * 1_000L, 0))
         }
 
         override fun close() = closed("diar")
     }
 
-    private inner class WindowedFake : WindowedDiarizer {
-        init {
-            opened("diar")
-        }
-
-        override fun windowCount(totalSamples: Long): Int = windows
-
-        override fun diarizeWindow(pcm: PcmReader, index: Int, state: String?, progress: Progress): DiarizationWindow {
-            onWindow(index)
-            diarizedWindows += index
-            return DiarizationWindow(listOf(SpeakerTurn(index * 1_000L, (index + 1) * 1_000L, index % 2)), "state$index<-$state")
-        }
-
-        override fun diarize(pcm: PcmReader, progress: Progress): List<SpeakerTurn> = error("Конвейер обязан идти по окнам")
-
-        override fun close() = closed("diar")
-    }
-
-    override fun merger(): Merger = Merger { asr, turns ->
+    override fun merger(audioDurationMs: Long): Merger = Merger { asr, turns ->
         events += "merge:${asr.size}:${turns.size}"
         asr.mapIndexed { index, segment ->
             val startMs = segment.segment.startSample / 16
@@ -187,19 +190,22 @@ class FakeDevice : DeviceMonitor {
 
 /** Источник файла, который можно заставить отказать. */
 class FakeSources : SourceGateway {
-    var rejection: PreflightOutcome.Rejected? = null
+    var describeFailure: Exception? = null
+    var free = 10_000_000_000L
     val copied = ArrayList<String>()
 
-    override suspend fun preflight(job: JobRecord): PreflightOutcome = rejection ?: PreflightOutcome.Passed(
-        PreflightRecord(job.title, 1_000, 60_000, "audio/mpeg", 10_000_000, 1_000_000),
-        emptyList(),
-    )
+    override suspend fun describe(job: JobRecord): SourceInfo {
+        describeFailure?.let { throw it }
+        return SourceInfo(job.title, 1_000, "audio/mpeg")
+    }
 
     override suspend fun copy(job: JobRecord, target: File, progress: (Long, Long) -> Unit) {
         copied += job.id
         target.writeText(job.id)
         progress(1, 1)
     }
+
+    override fun freeBytes(): Long = free
 }
 
 /** Запоминает всё опубликованное. */
@@ -256,7 +262,7 @@ class Harness(
     private var seq = 0L
     private val recorder = MetricsRecorder(
         context = { RunContext("1", "abc", "emu", 36, 4_000_000_000, 3) },
-        modelHashes = { mapOf("asr-ru/encoder.int8.onnx" to "aa") },
+        modelHashes = { listOf(ModelHash("asr-ru/encoder.int8.onnx", "aa")) },
     )
     val runner = PipelineRunner(
         store = store,

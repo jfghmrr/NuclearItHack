@@ -1,23 +1,16 @@
 package ru.stenokot.app.data
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import ru.stenokot.core.model.AsrSegment
-import ru.stenokot.core.model.AsrToken
 import ru.stenokot.core.model.Language
 import ru.stenokot.core.model.SpeakerTurn
 import ru.stenokot.core.model.SpeechSegment
 import ru.stenokot.core.model.Utterance
 import ru.stenokot.core.model.Word
+import ru.stenokot.core.storage.AsrJournalLine
+import ru.stenokot.core.storage.DiarJournalLine
+import ru.stenokot.core.storage.ServiceJson
+import ru.stenokot.core.storage.encodeJournalLine
 import java.io.File
-
-/** Настройки служебных файлов задачи. Контрактный файл их не использует. */
-val StoreJson: Json = Json {
-    ignoreUnknownKeys = true
-    encodeDefaults = true
-    explicitNulls = false
-}
 
 /** Срез записи в vad.json. */
 @Serializable
@@ -27,40 +20,17 @@ data class SegmentLine(val i: Int, val s: Long, val e: Long)
 @Serializable
 data class VadDocument(val segments: List<SegmentLine>)
 
-/** Содержимое lang.json. Текст пробных срезов не хранится: он уже есть в журнале ASR. */
+/** Содержимое lang.json. Его читает и процесс языковой модели. */
 @Serializable
 data class LangDocument(val language: Language, val failed: Boolean, val probes: Int)
 
-/** Токен журнала ASR. */
-@Serializable
-data class TokenLine(val t: String, val ms: Long)
-
-/** Строка asr.jsonl: один завершённый срез. Пропущенный срез отмечен, чтобы не повторять сбой. */
-@Serializable
-data class AsrLine(
-    val i: Int,
-    val s: Long,
-    val e: Long,
-    val text: String = "",
-    val tokens: List<TokenLine> = emptyList(),
-    val skipped: Boolean = false,
-)
-
-/** Интервал говорящего в diar.jsonl. */
+/** Интервал говорящего в turns.json. */
 @Serializable
 data class TurnLine(val s: Long, val e: Long, val k: Int, val c: Float? = null)
 
-/** Строка diar.jsonl: завершённое окно. Строка с [FINAL_WINDOW] содержит итоговый список. */
+/** Содержимое turns.json: итог диаризации после склейки окон. */
 @Serializable
-data class DiarLine(
-    val i: Int,
-    val turns: List<TurnLine> = emptyList(),
-    val state: String? = null,
-    val skipped: Boolean = false,
-)
-
-/** Номер строки diar.jsonl с итогом всей стадии. */
-const val FINAL_WINDOW: Int = -1
+data class TurnsDocument(val turns: List<TurnLine>)
 
 /** Слово в merged.json. */
 @Serializable
@@ -82,32 +52,16 @@ data class UtteranceLine(
 @Serializable
 data class MergedDocument(val utterances: List<UtteranceLine>)
 
-/** Переводит срез записи в строку журнала. */
+/** Переводит срез записи в строку файла. */
 fun SpeechSegment.toLine(): SegmentLine = SegmentLine(index, startSample, endSample)
 
-/** Восстанавливает срез записи из строки журнала. */
+/** Восстанавливает срез записи из строки файла. */
 fun SegmentLine.toSegment(): SpeechSegment = SpeechSegment(i, s, e)
 
-/** Переводит результат распознавания в строку журнала. */
-fun AsrSegment.toLine(): AsrLine = AsrLine(
-    i = segment.index,
-    s = segment.startSample,
-    e = segment.endSample,
-    text = text,
-    tokens = tokens.map { TokenLine(it.text, it.startMs) },
-)
-
-/** Восстанавливает результат распознавания из строки журнала. */
-fun AsrLine.toSegment(): AsrSegment = AsrSegment(
-    segment = SpeechSegment(i, s, e),
-    text = text,
-    tokens = tokens.map { AsrToken(it.t, it.ms) },
-)
-
-/** Переводит интервал говорящего в строку журнала. */
+/** Переводит интервал говорящего в строку файла. */
 fun SpeakerTurn.toLine(): TurnLine = TurnLine(startMs, endMs, speaker, confidence)
 
-/** Восстанавливает интервал говорящего из строки журнала. */
+/** Восстанавливает интервал говорящего из строки файла. */
 fun TurnLine.toTurn(): SpeakerTurn = SpeakerTurn(s, e, k, c)
 
 /** Переводит реплику в форму merged.json. */
@@ -132,47 +86,46 @@ fun UtteranceLine.toUtterance(): Utterance = Utterance(
     overlap = overlap,
 )
 
-/** Журнал asr.jsonl. */
+/** Журнал asr.jsonl в формате ядра. */
 class AsrJournal(file: File) {
     private val journal = LineJournal(file)
 
     /** Возвращает завершённые срезы и обрезает повреждённый хвост. */
-    fun restore(): List<AsrLine> = journal.restore { line ->
-        runCatching { StoreJson.decodeFromString<AsrLine>(line) }.getOrNull()
+    fun restore(): List<AsrJournalLine> = journal.restore { line ->
+        runCatching { ServiceJson.decodeFromString(AsrJournalLine.serializer(), line) }.getOrNull()
     }
 
     /** Дописывает завершённый срез. */
-    fun append(line: AsrLine) = journal.append(StoreJson.encodeToString(line))
+    fun append(line: AsrJournalLine) =
+        journal.append(encodeJournalLine(AsrJournalLine.serializer(), line).trimEnd('\n'))
 
     /** Удаляет журнал. */
     fun clear() = journal.clear()
 }
 
-/** Журнал diar.jsonl. */
+/** Журнал diar.jsonl в формате ядра. Из него книга говорящих собирается заново. */
 class DiarJournal(file: File) {
     private val journal = LineJournal(file)
 
     /** Возвращает завершённые окна и обрезает повреждённый хвост. */
-    fun restore(): List<DiarLine> = journal.restore { line ->
-        runCatching { StoreJson.decodeFromString<DiarLine>(line) }.getOrNull()
+    fun restore(): List<DiarJournalLine> = journal.restore { line ->
+        runCatching { ServiceJson.decodeFromString(DiarJournalLine.serializer(), line) }.getOrNull()
     }
 
     /** Дописывает завершённое окно. */
-    fun append(line: DiarLine) = journal.append(StoreJson.encodeToString(line))
+    fun append(line: DiarJournalLine) =
+        journal.append(encodeJournalLine(DiarJournalLine.serializer(), line).trimEnd('\n'))
 
     /** Удаляет журнал. */
     fun clear() = journal.clear()
 }
 
 /**
- * Счётчик попыток среза. Живёт в файле, потому что падение нативного кода убивает процесс:
+ * Счётчик попыток среза или окна. Живёт в файле, потому что падение нативного кода убивает процесс:
  * без файла тот же срез повторялся бы вечно.
  */
 class AttemptLog(private val file: File, private val limit: Int = 2) {
-    /**
-     * Отмечает начало попытки для [index]. Возвращает false, если лимит исчерпан и срез
-     * надо пропустить.
-     */
+    /** Отмечает попытку для [index]. Возвращает false, если лимит исчерпан и пора пропускать. */
     fun begin(index: Int): Boolean {
         val previous = read()
         val attempts = if (previous?.first == index) previous.second + 1 else 1
