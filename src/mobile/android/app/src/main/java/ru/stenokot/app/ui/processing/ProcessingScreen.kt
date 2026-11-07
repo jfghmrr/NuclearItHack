@@ -172,8 +172,9 @@ private fun ProcessingScreen(
                     ) {
                         file()
                         status()
+                        if (layout.tiny) dock()
                     }
-                    if (!dockUnderPanes) dock()
+                    if (!dockUnderPanes && !layout.tiny) dock()
                 }
                 Spacer(Modifier.width(StenoSize.hairline).fillMaxHeight().background(colors.outlineVariant))
                 Column(
@@ -186,7 +187,7 @@ private fun ProcessingScreen(
                     rail()
                 }
             }
-            if (dockUnderPanes) dock()
+            if (dockUnderPanes && !layout.tiny) dock()
         }
     } else {
         Column(Modifier.fillMaxSize()) {
@@ -443,7 +444,7 @@ private fun ProcessingDock(
     val actions: @Composable (Modifier) -> Unit = { modifier ->
         if (inRow || layout.width == WindowWidthSizeClass.Expanded) {
             Row(modifier, horizontalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
-                first(Modifier.weight(1.6f))
+                first(Modifier.weight(1.55f))
                 second(Modifier.weight(1f))
             }
         } else {
