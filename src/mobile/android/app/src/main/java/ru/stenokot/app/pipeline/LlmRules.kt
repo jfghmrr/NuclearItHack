@@ -7,7 +7,7 @@ import ru.stenokot.core.model.ErrorCode
 import ru.stenokot.core.model.LlmResult
 import ru.stenokot.core.model.LlmStatus
 
-/** Повтор языковой модели по разделу 8.7 спецификации. Бюджет считает ядро. */
+/** Повтор языковой модели по разделу 8.7 спецификации. Пределы стадии задаёт ядро. */
 object LlmRules {
     /** Ниже этого запаса модель не загружается. */
     const val MIN_MEMORY_BYTES: Long = 650L * 1024 * 1024

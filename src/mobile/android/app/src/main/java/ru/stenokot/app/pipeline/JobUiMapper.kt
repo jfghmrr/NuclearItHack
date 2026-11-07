@@ -13,7 +13,6 @@ import ru.stenokot.app.domain.StageMetricUi
 import ru.stenokot.app.domain.StageStatus
 import ru.stenokot.app.domain.StageUi
 import ru.stenokot.app.domain.UserStage
-import ru.stenokot.core.llm.LlmBudgetPolicy
 import ru.stenokot.core.metrics.DeviceSpeed
 import ru.stenokot.core.metrics.EtaEstimator
 import ru.stenokot.core.metrics.EtaProgress
@@ -86,14 +85,12 @@ object JobUiMapper {
 
     private fun remaining(job: JobRecord, live: LiveProgress, speed: DeviceSpeed?): Pair<Long, Long>? {
         val audioMs = job.durationMs ?: return null
-        val llmBudget = if (live.stage == Stage.LLM) LlmBudgetPolicy.budgetMs(audioMs, job.coreMs) else null
         val progress = EtaProgress(
             audioMs = audioMs,
             stage = live.stage,
             stageFraction = live.fraction,
             stageElapsedMs = live.stageElapsedMs,
             finishedStageMs = job.stageMs.filterKeys { it in job.completedStages },
-            llmBudgetMs = llmBudget,
         )
         return EtaEstimator(speed).remaining(progress)?.let { it.minMs to it.maxMs }
     }

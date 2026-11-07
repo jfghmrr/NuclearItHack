@@ -10,7 +10,6 @@ import kotlinx.serialization.json.Json
 import ru.stenokot.core.llm.LlmBudgetPolicy
 import ru.stenokot.core.llm.LlmPrompts
 import ru.stenokot.core.llm.LlmSampler
-import ru.stenokot.core.llm.LlmSpeed
 import ru.stenokot.core.llm.LlmWindow
 import ru.stenokot.core.llm.LlmWindows
 import ru.stenokot.core.llm.ProtocolAssembler
@@ -64,13 +63,13 @@ internal class LlmWorker(
     private var systemInfo = ""
     private var loadMs = 0L
     private var windowsTotal = 0
+    private var windowsPlanned = 0
     private var promptTokens = 0L
     private var decodedPromptTokens = 0L
     private var completionTokens = 0L
     private var promptMs = 0L
     private var generationMs = 0L
     private var samplingMs = 0L
-    private var speed: LlmSpeed? = null
     private var shortened = false
 
     /**
@@ -93,16 +92,18 @@ internal class LlmWorker(
     private fun process(): LlmResult {
         val job = files.readJob()
         val windows = planWindows(job)
+        val planned = LlmWindows.selectEvenly(windows, LlmBudgetPolicy.MAX_WINDOWS)
         windowsTotal = windows.size
+        windowsPlanned = planned.size
         results += files.restoreWindows(job)
         val finished = results.mapTo(HashSet()) { it.window.utterances.first().id }
-        val pending = windows.filterNot { it.utterances.first().id in finished }
-        Log.i(TAG, "windows total=$windowsTotal restored=${results.size}")
+        val pending = planned.filterNot { it.utterances.first().id in finished }
+        Log.i(TAG, "windows total=$windowsTotal planned=$windowsPlanned restored=${results.size}")
         if (pending.isEmpty()) return outcome(null)
 
         val failure = loadModel()
         if (failure != null) return failure
-        onProgress(results.size.toFloat() / windowsTotal, "${results.size}/$windowsTotal")
+        reportProgress()
         return generate(job, LlmWindows.coverageOrder(pending))
     }
 
@@ -129,11 +130,9 @@ internal class LlmWorker(
 
     private fun generate(job: LlmJob, windows: List<LlmWindow>): LlmResult {
         val started = SystemClock.elapsedRealtime()
-        val tokens = { utterance: Utterance -> LlmWindows.estimateTokens(utterance, job.language ?: Language.RU) }
-        for (planned in windows) {
+        for (window in windows) {
             val elapsed = SystemClock.elapsedRealtime() - started
-            val window = fitToBudget(planned, elapsed, tokens) ?: return outcome(ErrorCode.LLM_TIMEOUT.name)
-            val limit = LlmBudgetPolicy.windowLimitMs(results.size, elapsed, request.budgetMs)
+            val limit = LlmBudgetPolicy.windowLimitMs(elapsed, request.budgetMs)
             if (limit <= 0) return outcome(ErrorCode.LLM_TIMEOUT.name)
 
             val language = LlmPrompts.languageFor(job.language, window)
@@ -152,21 +151,15 @@ internal class LlmWorker(
         return outcome(null)
     }
 
-    /** Сокращает окно под остаток бюджета по замеренной скорости. Значение null означает конец стадии. */
-    private fun fitToBudget(window: LlmWindow, elapsed: Long, tokens: (Utterance) -> Int): LlmWindow? {
-        val measured = speed ?: return window
-        val remaining = request.budgetMs - elapsed
-        val fit = LlmBudgetPolicy.nextWindowTokens(remaining, measured, request.maxChunkTokens) ?: return null
-        val cut = LlmWindows.split(window.utterances, fit, tokens).first().copy(index = window.index)
-        if (cut.utterances.size < window.utterances.size) shortened = true
-        return cut
-    }
-
     private fun accept(job: LlmJob, window: LlmWindow, raw: String) {
         files.appendWindow(window, raw)
         results += WindowResult(window, parseWindowOutput(raw, window))
         files.replace(files.protocol, FileJson.encodeToString(ProtocolAssembler.assemble(results, job.totalMs)))
-        onProgress(results.size.toFloat() / windowsTotal, "${results.size}/$windowsTotal")
+        reportProgress()
+    }
+
+    private fun reportProgress() {
+        onProgress(results.size.toFloat() / windowsPlanned, "${results.size}/$windowsPlanned")
     }
 
     private fun outcome(detail: String?): LlmResult {
@@ -186,12 +179,6 @@ internal class LlmWorker(
         promptMs += answer.promptMs
         generationMs += answer.generationMs
         samplingMs += answer.samplingMs
-        if (decodedPromptTokens > 0 && promptMs > 0 && completionTokens > 0 && generationMs + samplingMs > 0) {
-            speed = LlmSpeed(
-                prefillTps = decodedPromptTokens * MS_PER_SECOND / promptMs,
-                decodeTps = completionTokens * MS_PER_SECOND / (generationMs + samplingMs),
-            )
-        }
         Log.i(TAG, "window status=${answer.status} prompt=${answer.promptTokens} " +
             "decoded=${answer.decodedPromptTokens} generated=${answer.generatedTokens} " +
             "promptMs=${answer.promptMs} generationMs=${answer.generationMs} samplingMs=${answer.samplingMs}")
@@ -210,7 +197,6 @@ internal class LlmWorker(
 
     private companion object {
         const val TAG = "StenokotLlm"
-        const val MS_PER_SECOND = 1000.0
         val FileJson = Json { encodeDefaults = true }
     }
 }

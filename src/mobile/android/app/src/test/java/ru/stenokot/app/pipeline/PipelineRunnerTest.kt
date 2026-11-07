@@ -781,12 +781,11 @@ class PipelineRunnerTest {
     }
 
     @Test
-    fun budgetIsComputedFromRecordingAndCoreTime() = runTest {
+    fun languageModelGetsStageLimits() = runTest {
         val h = harness()
         val id = h.import("budget")
         h.await(done(id))
-        val job = h.runner.jobs.value.getValue(id)
-        assertEquals(LlmBudgetPolicy.budget(60_000, job.coreMs), h.engines.llmRuns.single())
+        assertEquals(LlmBudgetPolicy.budget(), h.engines.llmRuns.single())
     }
 
     @Test

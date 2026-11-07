@@ -30,14 +30,13 @@ data class EtaProgress(
     val stageFraction: Float? = null,
     val stageElapsedMs: Long = 0,
     val finishedStageMs: Map<Stage, Long> = emptyMap(),
-    val llmBudgetMs: Long? = null,
 )
 
 /**
  * Честная оценка времени. Опирается на скорость этого устройства и ход текущей задачи. Пока нет ни
  * того ни другого, оставшееся время неизвестно, и пользователь его не видит. Предварительная оценка
  * в этом случае даётся как широкий диапазон с пометкой приблизительной. Время протокола в оценку
- * файла не входит: стенограмма появляется раньше, а стадия языковой модели ограничена бюджетом.
+ * файла не входит: стенограмма появляется раньше, а скорость окон видна только по ходу стадии.
  */
 class EtaEstimator(private val speed: DeviceSpeed? = null) {
 
@@ -82,10 +81,9 @@ class EtaEstimator(private val speed: DeviceSpeed? = null) {
         return range(total, if (rough) EtaBasis.ROUGH else EtaBasis.MEASURED)
     }
 
-    private fun remainingLlm(progress: EtaProgress): EtaRange? {
-        val budget = progress.llmBudgetMs ?: return null
-        return EtaRange(0, (budget - progress.stageElapsedMs).coerceAtLeast(0), EtaBasis.MEASURED)
-    }
+    /** Время протокола видно только по ходу окон: заранее оно не известно. */
+    private fun remainingLlm(progress: EtaProgress): EtaRange? =
+        observedRemainingMs(progress)?.let { range(it, EtaBasis.MEASURED) }
 
     private fun observedRemainingMs(progress: EtaProgress): Double? {
         val fraction = progress.stageFraction ?: return null

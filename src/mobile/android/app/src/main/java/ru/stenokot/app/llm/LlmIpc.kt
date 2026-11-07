@@ -16,7 +16,7 @@ internal object LlmMessage {
     const val FINISHED = 5
 }
 
-/** Запуск стадии в процессе :llm. [budgetMs] считается от конца загрузки модели. */
+/** Запуск стадии в процессе :llm. Предел стадии [budgetMs] считается от конца загрузки модели. */
 internal data class LlmRequest(
     val jobDir: String,
     val modelPath: String,

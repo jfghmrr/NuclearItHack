@@ -135,10 +135,11 @@ class MetricsTest {
     }
 
     @Test
-    fun llmStageUsesBudget() {
-        val range = EtaEstimator().remaining(EtaProgress(600_000, Stage.LLM, null, 20_000, llmBudgetMs = 60_000))!!
-        assertEquals(0L, range.minMs)
-        assertEquals(40_000L, range.maxMs)
+    fun llmStageFollowsObservedWindows() {
+        val range = EtaEstimator().remaining(EtaProgress(600_000, Stage.LLM, 0.25f, 20_000))!!
+        assertEquals(51_000L, range.minMs)
+        assertEquals(75_000L, range.maxMs)
         assertNull(EtaEstimator().remaining(EtaProgress(600_000, Stage.LLM)))
+        assertNull(EtaEstimator().remaining(EtaProgress(600_000, Stage.LLM, 0f, 20_000)))
     }
 }

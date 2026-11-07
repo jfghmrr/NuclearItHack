@@ -131,7 +131,7 @@ class RemoteLlmRunner(context: Context) : LlmRunner {
             when (message.what) {
                 LlmMessage.STARTED -> pid = message.arg1
                 LlmMessage.PROGRESS -> {
-                    if (loadedAtMs == null) onModelLoaded()
+                    onWindowBeat()
                     progress.report(LlmProgressBundle.fraction(message.data), LlmProgressBundle.note(message.data))
                 }
                 LlmMessage.FINISHED -> finish(LlmOutcomeBundle.result(message.data))
@@ -139,10 +139,14 @@ class RemoteLlmRunner(context: Context) : LlmRunner {
             return true
         }
 
-        /** Первый прогресс приходит после загрузки модели: бюджет считается от этого момента. */
-        private fun onModelLoaded() {
-            loadedAtMs = SystemClock.elapsedRealtime()
-            if (!cancelling) armWatchdog(LlmBudgetPolicy.generationDeadlineMs(request.budgetMs))
+        /**
+         * Первый прогресс приходит после загрузки модели, дальше по одному на окно. Сторож ждёт
+         * следующее окно и обрывает только зависшую модель, а не долгую работу. Предел всей стадии
+         * соблюдает сам процесс модели.
+         */
+        private fun onWindowBeat() {
+            if (loadedAtMs == null) loadedAtMs = SystemClock.elapsedRealtime()
+            if (!cancelling) armWatchdog(LlmBudgetPolicy.WINDOW_WATCHDOG_MS)
         }
 
         private fun armWatchdog(delayMs: Long) {

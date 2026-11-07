@@ -522,7 +522,7 @@ class PipelineRunner(
         }
         val job = book.mutate(id) { it.copy(phase = JobPhase.RUNNING, stage = Stage.LLM) } ?: book.require(id)
         board.enter(id, Stage.LLM, job.coreMs)
-        val budget = LlmBudgetPolicy.budget(job.durationMs ?: 0, job.coreMs)
+        val budget = LlmBudgetPolicy.budget()
         val progress = Progress { value, note -> board.report(value, note) }
         llmRunning = true
         return try {
