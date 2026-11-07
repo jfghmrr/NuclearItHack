@@ -32,10 +32,7 @@ cd src/mobile/android
 
 | Файл | Содержание |
 |---|---|
-| [docs/PROJECT.md](docs/PROJECT.md) | Состояние проекта, команды, ограничения (англ.) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Архитектура и технические решения |
-| [docs/LOGIC.md](docs/LOGIC.md) | Правила, потоки данных, инварианты (англ.) |
-| [docs/CHANGES.md](docs/CHANGES.md) | История изменений (англ.) |
 | [docs/AUTOMATION.md](docs/AUTOMATION.md) | Запуск и проверка без участия человека |
 | [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | Ограничения решения |
 | [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md) | Методика и результаты тестирования |
