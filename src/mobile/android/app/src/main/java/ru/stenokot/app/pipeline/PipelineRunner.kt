@@ -431,7 +431,7 @@ class PipelineRunner(
      */
     private suspend fun llmPhase(id: String, isRetry: Boolean) {
         llmPhaseActive = true
-        llmStop.value = if (isRetry || JobQueue.next(book.snapshot()) == null) null else LlmStop.NEW_JOB
+        llmStop.value = if (JobQueue.next(book.snapshot()) == null) null else LlmStop.NEW_JOB
         val startedAt = clock()
         val result = if (llmStop.value == null) attemptLlm(id, isRetry) else null
         val stop = llmStop.value

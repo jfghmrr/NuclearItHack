@@ -505,6 +505,24 @@ class PipelineRunnerTest {
     }
 
     @Test
+    fun importArrivingAsRetryStartsTakesPriorityOverRetry() = runTest {
+        val h = harness()
+        val first = h.import("first")
+        h.await(done(first))
+        h.runner.updateJob(first) { it.copy(llm = it.llm.copy(status = LlmStatus.DEFERRED)) }
+        h.engines.llmRuns.clear()
+        h.engines.llmBehavior = { awaitCancellation() }
+        h.runner.onForeground()
+        h.await { it[first]?.phase == JobPhase.RUNNING && it[first]?.stage == Stage.LLM }
+        delay(50)
+        val second = h.import("second")
+        h.await { it[second]?.stage == Stage.DECODE || it[second]?.phase == JobPhase.RUNNING }
+        h.await(done(first))
+        assertEquals(LlmStatus.DEFERRED, h.runner.jobs.value.getValue(first).llm.status)
+        assertFalse("отмена новым импортом не расходует повтор", h.runner.jobs.value.getValue(first).llm.retryUsed)
+    }
+
+    @Test
     fun budgetSkipGetsOneRetryThenIsFinal() = runTest {
         val h = harness {
             engines.llmBehavior = { LlmResult(LlmStatus.SKIPPED_BY_BUDGET, null, null) }
