@@ -7,6 +7,21 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.security.MessageDigest
 
+/** Считает SHA-256 файла. Перед каждым блоком вызывается пауза, как при копировании. */
+suspend fun sha256Of(file: File, beforeBlock: suspend () -> Unit, bufferBytes: Int = 1 shl 20): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    val buffer = ByteArray(bufferBytes)
+    FileInputStream(file).use { input ->
+        while (true) {
+            beforeBlock()
+            val read = input.read(buffer)
+            if (read < 0) break
+            digest.update(buffer, 0, read)
+        }
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
+}
+
 /**
  * Копия большого файла с проверкой SHA-256, которая переживает паузу и смерть процесса.
  *

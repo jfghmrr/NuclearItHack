@@ -2,6 +2,7 @@ package ru.stenokot.app.pipeline
 
 import android.content.Context
 import android.os.storage.StorageManager
+import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -85,13 +86,31 @@ class ModelPreparer(
         val marker = File(versionDir, READY_MARKER)
         removeOtherVersions(versionDir)
         if (marker.exists() && target.length() == total) {
-            ui.update { it.copy(copiedBytes = total, totalBytes = total) }
-            return ModelReadiness.READY
+            if (intact(target)) {
+                ui.update { it.copy(copiedBytes = total, totalBytes = total) }
+                return ModelReadiness.READY
+            }
+            Log.w(LOG_TAG, "Копия языковой модели не совпала с хэшем, копируется заново")
+            marker.delete()
+            target.delete()
         }
         val tmp = File(target.parentFile, target.name + ".tmp")
         val needed = total - tmp.length().coerceAtMost(total)
         if (allocatableBytes(versionDir) < needed + COPY_RESERVE_BYTES) return ModelReadiness.STORAGE_LOW
         return copy(total, tmp, target, marker)
+    }
+
+    /**
+     * Копия сверяется с хэшем при каждом запуске: испорченные веса загрузились бы без ошибки, и протокол
+     * считала бы уже не та модель, что указана в metadata.json. Тяжёлая стадия приостанавливает сверку.
+     */
+    private suspend fun intact(file: File): Boolean {
+        val expected = ledger.sha256Of(ModelLedger.LLM_PATH) ?: return true
+        return try {
+            sha256Of(file, beforeBlock = { busy.first { !it } }).equals(expected, ignoreCase = true)
+        } catch (failure: IOException) {
+            false
+        }
     }
 
     private suspend fun copy(total: Long, tmp: File, target: File, marker: File): ModelReadiness {
@@ -174,5 +193,6 @@ class ModelPreparer(
         const val MODELS_DIR = "models"
         const val READY_MARKER = "llm.READY"
         const val COPY_RESERVE_BYTES = 32L * 1024 * 1024
+        const val LOG_TAG = "StenokotModels"
     }
 }

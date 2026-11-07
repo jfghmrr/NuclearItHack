@@ -231,6 +231,18 @@ class RulesTest {
         MessageDigest.getInstance("SHA-256").digest(data).joinToString("") { "%02x".format(it) }
 
     @Test
+    fun fileHashNoticesOneChangedByteAndYieldsBetweenBlocks() = runBlocking {
+        val data = ByteArray(1_000) { it.toByte() }
+        val file = File(folder.root, "m.gguf").apply { writeBytes(data) }
+        var pauses = 0
+        assertEquals(sha(data), sha256Of(file, beforeBlock = { pauses += 1 }, bufferBytes = 8))
+        assertEquals(1_000 / 8 + 1, pauses)
+        val damaged = data.copyOf().also { it[500] = (it[500] + 1).toByte() }
+        file.writeBytes(damaged)
+        assertFalse(sha(data) == sha256Of(file, beforeBlock = {}))
+    }
+
+    @Test
     fun copyVerifiesHashAndPublishesAtomically() = runBlocking {
         val data = ByteArray(1_000) { it.toByte() }
         val tmp = File(folder.root, "m.tmp")
