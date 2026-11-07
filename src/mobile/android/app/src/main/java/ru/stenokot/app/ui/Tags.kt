@@ -27,9 +27,6 @@ object Tags {
     const val ELAPSED = "txt_elapsed"
     const val REMAINING = "txt_remaining"
     const val LIST_STAGES = "list_stages"
-    const val DELETE_CONFIRM = "btn_delete_confirm"
-    const val DELETE_DISMISS = "btn_delete_dismiss"
-    const val DELETE_EXPORTED = "row_delete_exported"
     const val ERROR_TITLE = "txt_error_title"
     const val ERROR_BODY = "txt_error_body"
     const val ERROR_DETAILS = "btn_error_details"
@@ -51,6 +48,9 @@ object Tags {
     const val LICENSES = "row_licenses"
     const val LIST_LICENSES = "list_licenses"
     const val LICENSE_TEXT = "txt_license"
+    const val DELETE_CONFIRM = "btn_delete_confirm"
+    const val DELETE_DISMISS = "btn_delete_dismiss"
+    const val DELETE_EXPORTED = "row_delete_exported"
 
     /** Строка найденного аудио. */
     fun rowAudio(index: Int) = "row_audio_$index"
