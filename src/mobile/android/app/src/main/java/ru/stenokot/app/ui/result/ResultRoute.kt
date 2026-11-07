@@ -55,7 +55,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -537,15 +536,19 @@ private fun ResultContent(
                         pathOrFailure()
                         buttons(tab == ResultTab.TRANSCRIPT, tab == ResultTab.PROTOCOL)
                         Spacer(Modifier.height(StenoSpace.s))
+                    } else if (failed) {
+                        pathOrFailure()
                     }
                 }
             }
         }
         ResultLayout.RAIL -> Row(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f).fillMaxHeight()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    BackButton(actions.back, Modifier.padding(start = StenoSpace.xs))
-                    ResultTabs(tab, phase, Modifier.weight(1f)) { tab = it }
+                if (!(searchOpen && imeOpen)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        BackButton(actions.back, Modifier.padding(start = StenoSpace.xs))
+                        ResultTabs(tab, phase, Modifier.weight(1f)) { tab = it }
+                    }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     TabPanes(
