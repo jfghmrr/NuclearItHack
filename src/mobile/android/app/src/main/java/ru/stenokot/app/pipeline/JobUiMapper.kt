@@ -63,7 +63,12 @@ object JobUiMapper {
     }
 
     /** Экран обработки. */
-    fun processing(job: JobRecord, live: LiveProgress?, speed: DeviceSpeed?): ProcessingUi {
+    fun processing(
+        job: JobRecord,
+        live: LiveProgress?,
+        speed: DeviceSpeed?,
+        powerSave: Boolean = false,
+    ): ProcessingUi {
         val own = live?.takeIf { it.jobId == job.id }
         val remaining = own?.let { remaining(job, it, speed) }
         return ProcessingUi(
@@ -74,6 +79,8 @@ object JobUiMapper {
             remainingMaxMs = remaining?.second,
             lowMemory = own?.lowMemory ?: false,
             cancelling = own?.cancelling ?: false,
+            powerSave = powerSave,
+            resumed = job.resumed,
         )
     }
 
@@ -169,6 +176,7 @@ object JobUiMapper {
             validated = output.validated,
             sha256 = output.sha256,
             exportFailed = output.exportFailed,
+            contentUri = output.uri,
         )
     }
 

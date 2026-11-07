@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.PowerManager
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -226,7 +227,7 @@ class RealStenoController(
         val showsProcessing = !job.transcriptSaved
         return JobDetailUi(
             summary = JobUiMapper.summary(job, live, all),
-            processing = if (showsProcessing) JobUiMapper.processing(job, live, speed.current()) else null,
+            processing = if (showsProcessing) JobUiMapper.processing(job, live, speed.current(), powerSave()) else null,
             result = if (job.transcriptSaved) {
                 JobUiMapper.result(job, live, utterances, document, modelsUi, store.files(job.id).pcm.path)
             } else {
@@ -239,6 +240,8 @@ class RealStenoController(
             },
         )
     }
+
+    private fun powerSave(): Boolean = app.getSystemService(PowerManager::class.java).isPowerSaveMode
 
     private fun emptyPackage(job: JobRecord): DiagnosticPackage {
         val run = runContext()
@@ -300,6 +303,9 @@ class RealStenoController(
             llmTokens = last?.llm?.let { llm ->
                 listOfNotNull(llm.promptTokens, llm.completionTokens).takeIf { it.isNotEmpty() }?.sum()
             },
+            lastJobId = last?.id,
+            threads = runContext().threads.takeIf { last != null },
+            llmStatus = last?.llm?.status,
         )
     }
 

@@ -21,6 +21,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import ru.stenokot.app.R
 import ru.stenokot.app.StenoApplication
 import ru.stenokot.app.domain.UserStage
 import ru.stenokot.app.pipeline.LiveProgress
@@ -143,7 +144,7 @@ class PipelineService : Service() {
     private fun notification(live: LiveProgress?): Notification {
         val percent = live?.fraction?.let { (it * PERCENT).toInt().coerceIn(0, PERCENT) }
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(APP_TITLE)
             .setContentText(stageLabel(live))
             .setOngoing(true)
