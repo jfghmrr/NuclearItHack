@@ -3,6 +3,7 @@ package ru.stenokot.core.engine
 import java.io.Closeable
 import java.io.File
 import ru.stenokot.core.model.AsrSegment
+import ru.stenokot.core.model.AudioInfo
 import ru.stenokot.core.model.Language
 import ru.stenokot.core.model.LlmBudget
 import ru.stenokot.core.model.LlmResult
@@ -14,6 +15,12 @@ import ru.stenokot.core.model.Utterance
 fun interface Progress {
     /** Сообщает долю выполнения [fraction] и необязательное пояснение [note]. */
     fun report(fraction: Float, note: String?)
+}
+
+/** Декодирование исходного файла в рабочий WAV. */
+interface AudioDecoder {
+    /** Потоково пишет PCM16 16 кГц моно в [outWav]. Память не зависит от длины записи. */
+    suspend fun decode(source: File, outWav: File, progress: Progress): AudioInfo
 }
 
 /** Чтение нормализованной записи 16 кГц моно. */
