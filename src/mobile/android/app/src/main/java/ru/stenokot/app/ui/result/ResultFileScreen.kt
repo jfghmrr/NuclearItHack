@@ -139,10 +139,10 @@ fun ResultFileRoute(route: Route.ResultFile, controller: StenoController, action
     val noShare = stringResource(R.string.scr04_share_unavailable)
     val shareTitle = stringResource(R.string.scr04_action_share)
     val pathLabel = stringResource(R.string.scr04_panel_path)
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
-            StenoTopBar(title, onBack = actions.back)
-            CenteredContent(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+    Column(Modifier.fillMaxSize()) {
+        StenoTopBar(title, onBack = actions.back)
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            CenteredContent(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 Column(
                     modifier = Modifier
                         .testTag(Tags.EXPORT_PANEL)
@@ -206,24 +206,24 @@ fun ResultFileRoute(route: Route.ResultFile, controller: StenoController, action
                     }
                 }
             }
-            BottomActions {
-                PrimaryAction(
-                    text = shareTitle,
-                    onClick = {
-                        scope.launch {
-                            if (!shareOutput(context, output, shareTitle)) snackbar.showSnackbar(noShare)
-                        }
-                    },
-                    icon = R.drawable.ic_share,
-                    tag = Tags.SHARE,
-                )
-            }
+            SnackbarHost(
+                hostState = snackbar,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .semantics { liveRegion = LiveRegionMode.Polite },
+            )
         }
-        SnackbarHost(
-            hostState = snackbar,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .semantics { liveRegion = LiveRegionMode.Polite },
-        )
+        BottomActions {
+            PrimaryAction(
+                text = shareTitle,
+                onClick = {
+                    scope.launch {
+                        if (!shareOutput(context, output, shareTitle)) snackbar.showSnackbar(noShare)
+                    }
+                },
+                icon = R.drawable.ic_share,
+                tag = Tags.SHARE,
+            )
+        }
     }
 }
