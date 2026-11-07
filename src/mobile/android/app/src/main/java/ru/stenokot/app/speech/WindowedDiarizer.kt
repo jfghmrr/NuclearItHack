@@ -40,8 +40,6 @@ class DiarizationJournal(
 class WindowedDiarizer(
     private val models: ModelSource,
     private val threads: Int = EngineThreads.diarization(),
-    /** Узкая полоса: запись созвона, в ней говорящих обычно меньше. */
-    private val narrowband: Boolean = false,
     private val journal: DiarizationJournal = DiarizationJournal(),
     private val isCancelled: () -> Boolean = { false },
     /** Порог кластеризации внутри окна: косинусное расстояние, ниже которого кластеры сливаются. */
@@ -55,7 +53,7 @@ class WindowedDiarizer(
     override fun diarize(pcm: PcmReader, progress: Progress): List<SpeakerTurn> {
         val total = pcm.totalSamples
         if (total == 0L) return emptyList()
-        val book = SpeakerBook(narrowband)
+        val book = SpeakerBook()
         val linked = journal.restored.mapTo(ArrayList()) { book.addWindow(it) }
         val windows = planWindows(total)
         if (journal.restored.size < windows.size) {

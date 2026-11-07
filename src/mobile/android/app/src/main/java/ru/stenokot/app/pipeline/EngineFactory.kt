@@ -38,7 +38,6 @@ class DiarizationRequest(
     val restored: List<DiarJournalLine>,
     val onWindow: (DiarJournalLine) -> Unit,
     val isCancelled: () -> Boolean,
-    val sourceSampleRate: Int?,
 )
 
 /**
@@ -85,8 +84,7 @@ interface PipelineEngines {
 
 /**
  * Единственная точка подключения настоящих движков. Каждый метод создаёт новый объект: стадия сама
- * закрывает свой движок, и тяжёлая модель не переживает стадию. Частота источника до 11 кГц включает
- * узкополосный режим книги говорящих.
+ * закрывает свой движок, и тяжёлая модель не переживает стадию.
  */
 class EngineFactory(context: Context, modelSetVersion: String) : PipelineEngines {
     private val app = context.applicationContext
@@ -113,7 +111,6 @@ class EngineFactory(context: Context, modelSetVersion: String) : PipelineEngines
 
     override fun diarizer(request: DiarizationRequest): Diarizer = WindowedDiarizer(
         models = models,
-        narrowband = (request.sourceSampleRate ?: Int.MAX_VALUE) <= NARROWBAND_MAX_RATE,
         journal = DiarizationJournal(request.restored, request.onWindow),
         isCancelled = request.isCancelled,
     )
@@ -124,8 +121,4 @@ class EngineFactory(context: Context, modelSetVersion: String) : PipelineEngines
 
     override fun errorCode(failure: Throwable): ErrorCode? =
         (failure as? EngineFailure)?.code ?: (failure as? EngineException)?.code
-
-    private companion object {
-        const val NARROWBAND_MAX_RATE = 11_025
-    }
 }

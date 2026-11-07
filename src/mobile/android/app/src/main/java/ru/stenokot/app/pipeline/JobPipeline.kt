@@ -309,7 +309,6 @@ class JobPipeline(
                 done += line
             },
             isCancelled = run.control::isStopRequested,
-            sourceSampleRate = book.require(run.id).audio?.sourceSampleRate,
         )
         val diarizer = loading { engines.diarizer(request) }
         return try {

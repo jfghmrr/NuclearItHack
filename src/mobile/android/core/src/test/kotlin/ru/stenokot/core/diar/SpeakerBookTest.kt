@@ -1,6 +1,5 @@
 package ru.stenokot.core.diar
 
-import kotlin.math.cos
 import kotlin.math.sin
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -156,27 +155,15 @@ class SpeakerBookTest {
         assertEquals(2, short.map { it.speaker }.toSet().size)
     }
 
-    private fun manySpeakers(count: Int): DiarJournalLine {
+    @Test
+    fun speakerCountIsNotLimited() {
+        val count = 20
         val turns = List(count) { turn(it, it * 20_000L, (it + 1) * 20_000L) }
-        val clusters = List(count) { cluster(it, 20_000, axis(it)) }
-        return line(0, 0, 300_000, turns, clusters)
-    }
-
-    @Test
-    fun speakerCountIsLimited() {
-        val out = SpeakerBook().run(
-            manySpeakers(8),
-            line(1, 300_000, 600_000,
-                List(4) { turn(it, 300_000 + it * 20_000L, 300_000 + (it + 1) * 20_000L) },
-                List(4) { cluster(it, 20_000, List(8) { d -> cos(it + d * 1.0).toFloat() }) }),
-        )
-        assertTrue(out.map { it.speaker }.toSet().size <= 8)
-    }
-
-    @Test
-    fun narrowbandLimitIsFour() {
-        val out = SpeakerBook(narrowband = true).run(manySpeakers(7))
-        assertEquals(4, out.map { it.speaker }.toSet().size)
+        val clusters = List(count) { index ->
+            cluster(index, 20_000, List(count) { if (it == index) 1f else 0f })
+        }
+        val out = SpeakerBook().run(line(0, 0, 400_000, turns, clusters))
+        assertEquals(count, out.map { it.speaker }.toSet().size)
     }
 
     @Test

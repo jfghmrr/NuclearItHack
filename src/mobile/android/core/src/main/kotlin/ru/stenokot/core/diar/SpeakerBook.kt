@@ -14,8 +14,6 @@ data class SpeakerBookConfig(
     val minSpeakerShare: Double = 0.02,
     val minSpeakerMinMs: Long = 2_000,
     val minSpeakerMaxMs: Long = 6_000,
-    val maxSpeakers: Int = 8,
-    val maxSpeakersNarrowband: Int = 4,
     val conflictOverlapMs: Long = 500,
 )
 
@@ -32,10 +30,7 @@ private data class BookEntry(val centroid: List<Float>?, val weightMs: Long)
  * порядку. Состояние сохраняется после каждого окна как непрозрачная строка, поэтому результат не
  * зависит от того, прерывалась ли обработка. Сами интервалы книга не хранит: их держит чекпойнт.
  */
-class SpeakerBook(
-    private val narrowband: Boolean = false,
-    private val config: SpeakerBookConfig = SpeakerBookConfig(),
-) {
+class SpeakerBook(private val config: SpeakerBookConfig = SpeakerBookConfig()) {
     private class Entry(var centroid: FloatArray?, var weightMs: Long)
 
     private val entries = ArrayList<Entry>()
@@ -182,12 +177,11 @@ class SpeakerBook(
         for (turn in turns) speech[turn.speaker] += turn.endMs - turn.startMs
         val minMs = (unionMs(turns) * config.minSpeakerShare).roundToLong()
             .coerceIn(config.minSpeakerMinMs, config.minSpeakerMaxMs)
-        val limit = if (narrowband) config.maxSpeakersNarrowband else config.maxSpeakers
         while (true) {
             val alive = entries.indices.filter { owner[it] == it && speech[it] > 0 }
             if (alive.size < 2) return
             val smallest = alive.minWith(compareBy({ speech[it] }, { it }))
-            if (speech[smallest] >= minMs && alive.size <= limit) return
+            if (speech[smallest] >= minMs) return
             val target = nearestSpeaker(smallest, alive, turns)
             owner[smallest] = target
             speech[target] += speech[smallest]
@@ -282,11 +276,10 @@ class SpeakerBook(
         /** Восстанавливает книгу из строки чекпойнта. */
         fun restore(
             state: String,
-            narrowband: Boolean = false,
             config: SpeakerBookConfig = SpeakerBookConfig(),
         ): SpeakerBook {
             val saved = ServiceJson.decodeFromString(BookState.serializer(), state)
-            val book = SpeakerBook(narrowband, config)
+            val book = SpeakerBook(config)
             saved.entries.mapTo(book.entries) { Entry(it.centroid?.toFloatArray(), it.weightMs) }
             book.lastSpeaker = saved.last
             return book
