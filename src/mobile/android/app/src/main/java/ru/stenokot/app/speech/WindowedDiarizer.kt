@@ -14,6 +14,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import ru.stenokot.core.diar.SpeakerBook
+import ru.stenokot.core.diar.SpeakerBookConfig
 import ru.stenokot.core.engine.Diarizer
 import ru.stenokot.core.engine.PcmReader
 import ru.stenokot.core.engine.Progress
@@ -53,7 +54,7 @@ class WindowedDiarizer(
     override fun diarize(pcm: PcmReader, progress: Progress): List<SpeakerTurn> {
         val total = pcm.totalSamples
         if (total == 0L) return emptyList()
-        val book = SpeakerBook()
+        val book = SpeakerBook(SpeakerBookConfig.EXPORT)
         val linked = journal.restored.mapTo(ArrayList()) { book.addWindow(it) }
         val windows = planWindows(total)
         if (journal.restored.size < windows.size) {

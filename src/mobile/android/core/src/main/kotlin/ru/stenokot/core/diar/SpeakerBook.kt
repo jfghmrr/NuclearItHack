@@ -15,7 +15,16 @@ data class SpeakerBookConfig(
     val minSpeakerMinMs: Long = 2_000,
     val minSpeakerMaxMs: Long = 6_000,
     val conflictOverlapMs: Long = 500,
-)
+    val distinctCosine: Float = -1f,
+) {
+    companion object {
+        /**
+         * Настройка экспорта. Малый говорящий с косинусом к ближайшему ниже [distinctCosine] остаётся:
+         * это другой голос, а не осколок кластера. Малого говорящего без отпечатка сравнить не с чем.
+         */
+        val EXPORT = SpeakerBookConfig(distinctCosine = 0.4f)
+    }
+}
 
 /** Сохранённое состояние книги: центроиды говорящих и последний говорящий. */
 @Serializable
@@ -177,17 +186,30 @@ class SpeakerBook(private val config: SpeakerBookConfig = SpeakerBookConfig()) {
         for (turn in turns) speech[turn.speaker] += turn.endMs - turn.startMs
         val minMs = (unionMs(turns) * config.minSpeakerShare).roundToLong()
             .coerceIn(config.minSpeakerMinMs, config.minSpeakerMaxMs)
+        val distinct = HashSet<Int>()
         while (true) {
             val alive = entries.indices.filter { owner[it] == it && speech[it] > 0 }
             if (alive.size < 2) return
-            val smallest = alive.minWith(compareBy({ speech[it] }, { it }))
+            val candidates = alive.filter { it !in distinct }
+            if (candidates.isEmpty()) return
+            val smallest = candidates.minWith(compareBy({ speech[it] }, { it }))
             if (speech[smallest] >= minMs) return
             val target = nearestSpeaker(smallest, alive, turns)
+            if (isDistinctVoice(entries[smallest], entries[target])) {
+                distinct += smallest
+                continue
+            }
             owner[smallest] = target
             speech[target] += speech[smallest]
             speech[smallest] = 0
             mergeCentroid(entries[target], entries[smallest])
         }
+    }
+
+    private fun isDistinctVoice(small: Entry, nearest: Entry): Boolean {
+        val own = small.centroid ?: return false
+        val other = nearest.centroid ?: return false
+        return cosine(own, other) < config.distinctCosine
     }
 
     private fun nearestSpeaker(speaker: Int, alive: List<Int>, turns: List<SpeakerTurn>): Int {
