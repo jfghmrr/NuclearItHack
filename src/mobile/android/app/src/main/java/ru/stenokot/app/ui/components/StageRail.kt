@@ -90,7 +90,7 @@ private fun spokenRow(label: String, stage: StageUi): String = when (stage.statu
 
 /**
  * Рельс этапов: пять строк с кружками. Текущая выделена начертанием и номером на акценте,
- * готовые отмечены галочкой и словом. Время этапа озвучивается, значения приходят от конвейера.
+ * готовые отмечены галочкой, словом и настоящим временем этапа от конвейера.
  */
 @Composable
 fun StageRail(stages: List<StageUi>, modifier: Modifier = Modifier, paused: Boolean = false) {
@@ -109,7 +109,8 @@ private fun RailRow(number: Int, stage: StageUi, paused: Boolean) {
     val label = userStageLabel(stage.stage)
     val spoken = spokenRow(label, stage)
     val tail = when (stage.status) {
-        StageStatus.DONE -> stringResource(R.string.scr03_stage_done)
+        StageStatus.DONE -> stage.tookMs?.let { stringResource(R.string.scr03_stage_done_took, formatTimecode(it)) }
+            ?: stringResource(R.string.scr03_stage_done)
         StageStatus.SKIPPED -> stringResource(R.string.scr03_stage_skipped)
         StageStatus.FAILED -> stringResource(R.string.scr03_stage_failed)
         else -> null

@@ -17,8 +17,9 @@
     <string name="scr03_progress_spoken">%1$s, %2$s</string>
     <string name="scr03_headline">Стенокот слушает.</string>
     <string name="scr03_on_device">Всё происходит на вашем устройстве.</string>
-    <string name="scr03_percent_unit">%% этапа</string>
+    <string name="scr03_percent_unit" formatted="false">% этапа</string>
     <string name="scr03_stage_done">Готово</string>
+    <string name="scr03_stage_done_took">Готово · %1$s</string>
     <string name="scr03_stage_skipped">Пропущено</string>
     <string name="scr03_stage_failed">Ошибка</string>
     <string name="scr03_to_library">К записям</string>

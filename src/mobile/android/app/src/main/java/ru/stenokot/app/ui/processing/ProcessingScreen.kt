@@ -246,9 +246,10 @@ private fun ProcessingScreen(
             CancelledSummary()
         } else {
             active?.let { StageCard(it, processing, pipelineStage) }
-            ProcessingHint(processing, paused, showAlreadyRunning)
+            ProcessingBanner(processing, paused, showAlreadyRunning)
         }
         StageRail(processing.stages, paused = paused)
+        if (!cancelled) ProcessingNote(processing, paused, showAlreadyRunning)
     }
     val dock: @Composable () -> Unit = { ProcessingDock(cancelled, onBack, onStart, onImport) }
     if (layout.twoPane) {
@@ -451,10 +452,12 @@ private fun StagePercent(fraction: Float) {
     }
 }
 
+/** Предупреждение важнее этапов и стоит над ними. Спокойная подсказка уходит под этапы. */
+private fun ProcessingUi.warnsAboutMemory(showAlreadyRunning: Boolean): Boolean =
+    lowMemory && !cancelling && !showAlreadyRunning
+
 @Composable
-private fun ProcessingHint(processing: ProcessingUi, paused: Boolean, showAlreadyRunning: Boolean) {
-    val type = StenoTheme.type
-    val colors = StenoTheme.colors
+private fun ProcessingBanner(processing: ProcessingUi, paused: Boolean, showAlreadyRunning: Boolean) {
     when {
         paused -> StatusBanner(
             tone = BannerTone.WARNING,
@@ -464,33 +467,36 @@ private fun ProcessingHint(processing: ProcessingUi, paused: Boolean, showAlread
             tag = Tags.STATUS_HINT,
             polite = true,
         )
-        processing.lowMemory && !processing.cancelling && !showAlreadyRunning -> StatusBanner(
+        processing.warnsAboutMemory(showAlreadyRunning) -> StatusBanner(
             tone = BannerTone.WARNING,
             icon = R.drawable.ic_memory,
             body = stringResource(R.string.scr03_hint_low_memory),
             tag = Tags.STATUS_HINT,
             polite = true,
         )
-        else -> {
-            val hint = when {
-                processing.cancelling -> R.string.scr03_cancelling
-                showAlreadyRunning -> R.string.scr03_hint_already_running
-                processing.powerSave -> R.string.scr03_hint_power_save
-                processing.resumed -> R.string.scr03_hint_resumed
-                else -> R.string.scr03_hint_keep_screen
-            }
-            Text(
-                text = stringResource(hint),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .semantics { liveRegion = LiveRegionMode.Polite }
-                    .testTag(Tags.STATUS_HINT),
-                style = type.meta,
-                color = colors.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-        }
     }
+}
+
+@Composable
+private fun ProcessingNote(processing: ProcessingUi, paused: Boolean, showAlreadyRunning: Boolean) {
+    if (paused || processing.warnsAboutMemory(showAlreadyRunning)) return
+    val hint = when {
+        processing.cancelling -> R.string.scr03_cancelling
+        showAlreadyRunning -> R.string.scr03_hint_already_running
+        processing.powerSave -> R.string.scr03_hint_power_save
+        processing.resumed -> R.string.scr03_hint_resumed
+        else -> R.string.scr03_hint_keep_screen
+    }
+    Text(
+        text = stringResource(hint),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .testTag(Tags.STATUS_HINT),
+        style = StenoTheme.type.meta,
+        color = StenoTheme.colors.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable
