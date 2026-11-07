@@ -673,7 +673,7 @@ private fun ResultContent(
                 title = stringResource(R.string.scr04_menu_diagnostics),
                 subtitle = stringResource(R.string.scr04_menu_diagnostics_hint),
                 icon = R.drawable.ic_chart,
-                onClick = closing { actions.navigator.push(Route.Verification) },
+                onClick = closing { actions.navigator.push(Route.Diagnostics) },
                 tag = Tags.DIAGNOSTICS_ROW,
             )
             ActionSheetRow(
