@@ -62,6 +62,7 @@ import ru.stenokot.app.ui.components.ListBlock
 import ru.stenokot.app.ui.components.SectionHeader
 import ru.stenokot.app.ui.components.StenoIcon
 import ru.stenokot.app.ui.components.StenoTopBar
+import ru.stenokot.app.ui.components.resourceTags
 import ru.stenokot.app.ui.format.modelsLabel
 import ru.stenokot.app.ui.layout.CenteredContent
 import ru.stenokot.app.ui.layout.LocalWindowLayout
@@ -240,6 +241,7 @@ private fun ThemeRow(current: ThemeMode, onSelect: (ThemeMode) -> Unit) {
                 DropdownMenu(
                     expanded = open,
                     onDismissRequest = { open = false },
+                    modifier = Modifier.resourceTags(),
                     containerColor = colors.surface,
                     shape = RoundedCornerShape(StenoRadius.field),
                 ) {
