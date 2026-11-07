@@ -95,4 +95,20 @@ class TranscriptModelTest {
         assertEquals("en", english.rows[0].text.spanStyles.single().item.localeList?.get(0)?.language)
         assertTrue(model.rows[0].text.spanStyles.isEmpty())
     }
+
+    @Test
+    fun `восьмичасовая запись и сотня говорящих разбираются целиком`() {
+        val total = 20_000
+        val step = 28_800_000L / total
+        val long = List(total) { index ->
+            utt(index, index % 100, index * step, index * step + step - 100, "Реплика номер $index про полив.")
+        }
+        val big = buildTranscriptModel(long, Language.RU)
+        assertEquals(100, big.speakers.size)
+        assertEquals(100, big.speakers.last())
+        assertEquals("7:59:58 - 7:59:59", big.rows.last().time)
+        assertEquals(total - 1, big.indexAt(Long.MAX_VALUE))
+        val found = buildTranscriptView(big, "номер 19999", emptySet(), style)
+        assertEquals(listOf(19_999), found.rows.map { it.row.id })
+    }
 }

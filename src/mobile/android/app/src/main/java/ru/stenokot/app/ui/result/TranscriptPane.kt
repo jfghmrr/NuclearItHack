@@ -9,6 +9,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -72,6 +74,9 @@ import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 
+/** Сколько значков ещё переносится по строкам. Больше листается в одну строку. */
+internal const val MAX_WRAPPED_SPEAKERS = 8
+
 private const val MIN_LEDGER_WIDTH_DP = 340
 private const val DIMMED_ALPHA = 0.45f
 private const val KEY_STRIP = "strip"
@@ -117,8 +122,9 @@ private fun SpeakerChip(number: Int, selected: Boolean, dimmed: Boolean, label: 
 }
 
 /**
- * Значки говорящих, счётчик и вход в поиск. Легенда заодно служит фильтром. Значки переносятся
- * на вторую строку: скрытый за краем участник хуже лишней строки, а цель нажатия не уменьшается.
+ * Значки говорящих, счётчик и вход в поиск. Легенда заодно служит фильтром. Несколько значков
+ * переносятся на вторую строку, чтобы участник не прятался за краем. Говорящих может быть сколько
+ * угодно, и когда их много, значки листаются в одну строку: иначе фильтр занял бы весь экран.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -140,12 +146,7 @@ private fun SpeakerStrip(
             .padding(start = gutter - StenoSpace.s, end = StenoSpace.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FlowRow(
-            modifier = Modifier
-                .weight(1f)
-                .testTag(Tags.LIST_SPEAKERS)
-                .semantics { contentDescription = spoken },
-        ) {
+        val chips: @Composable () -> Unit = {
             speakers.forEach { number ->
                 SpeakerChip(
                     number = number,
@@ -155,6 +156,15 @@ private fun SpeakerStrip(
                     onToggle = { onToggle(number) },
                 )
             }
+        }
+        val chipsModifier = Modifier
+            .weight(1f)
+            .testTag(Tags.LIST_SPEAKERS)
+            .semantics { contentDescription = spoken }
+        if (speakers.size <= MAX_WRAPPED_SPEAKERS) {
+            FlowRow(chipsModifier) { chips() }
+        } else {
+            Row(chipsModifier.horizontalScroll(rememberScrollState())) { chips() }
         }
         Text(
             text = count,

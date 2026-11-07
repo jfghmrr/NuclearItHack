@@ -64,7 +64,6 @@ private val KnobRadius = 5.dp
 private val MaxLaneThickness = 8.dp
 private val LaneGapWide = 2.dp
 private val LaneGapTight = 1.dp
-private const val MANY_SPEAKERS = 4
 private const val DIMMED_ALPHA = 0.25f
 private const val MS_IN_SECOND = 1_000L
 
@@ -77,23 +76,12 @@ class TimelineInput(
     val durationMs: Long,
 )
 
-/** Толщина и положение дорожек для заданного числа говорящих. */
-private class LaneGeometry(count: Int, top: Float, height: Float, gapWide: Float, gapTight: Float, maxThickness: Float) {
-    private val gap = if (count > MANY_SPEAKERS) gapTight else gapWide
-    val thickness = ((height - gap * (count - 1)) / count.coerceAtLeast(1)).coerceAtMost(maxThickness)
-    private val used = thickness * count + gap * (count - 1)
-    private val first = top + (height - used) / 2f + thickness / 2f
-
-    /** Середина дорожки [slot]. */
-    fun centerY(slot: Int): Float = first + slot * (thickness + gap)
-}
-
 /** Заготовки одной дорожки: координаты отрезков уже разложены для пакетной отрисовки. */
 private class LaneDraw(val points: FloatArray, val y: Float, val color: Color)
 
 private fun laneDraws(
     model: RibbonModel,
-    geometry: LaneGeometry,
+    geometry: LaneLayout,
     palette: SpeakerPalette,
     selected: Set<Int>,
 ): List<LaneDraw> = model.lanes.mapIndexed { slot, lane ->
@@ -136,13 +124,14 @@ private fun CacheDrawScope.ribbonLayer(
     palette: SpeakerPalette,
 ): DrawResult {
     val lanes = model?.lanes.orEmpty()
-    val geometry = LaneGeometry(
-        count = lanes.size.coerceAtLeast(1),
+    val geometry = laneLayout(
+        speakers = lanes.size,
         top = LanesTop.toPx(),
-        height = LanesHeight.toPx(),
+        heightPx = LanesHeight.toPx(),
         gapWide = LaneGapWide.toPx(),
         gapTight = LaneGapTight.toPx(),
-        maxThickness = MaxLaneThickness.toPx(),
+        minThicknessPx = 1f,
+        maxThicknessPx = MaxLaneThickness.toPx(),
     )
     val draws = model?.let { laneDraws(it, geometry, palette, selected) }.orEmpty()
     val marks = model?.marks.orEmpty()
@@ -165,8 +154,10 @@ private fun CacheDrawScope.ribbonLayer(
     }
     val ink = colors.onSurfaceVariant
     return onDrawBehind {
-        draws.forEach { lane ->
-            drawLine(colors.outlineVariant, Offset(0f, lane.y), Offset(size.width, lane.y), strokeWidth = 1f)
+        if (geometry.gap > 0f) {
+            draws.forEach { lane ->
+                drawLine(colors.outlineVariant, Offset(0f, lane.y), Offset(size.width, lane.y), strokeWidth = 1f)
+            }
         }
         drawIntoCanvas { canvas ->
             draws.forEach { lane ->

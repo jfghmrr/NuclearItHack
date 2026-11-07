@@ -92,4 +92,43 @@ class RibbonTest {
         assertEquals(0, timeAtX(-5f, 100f, 1_000))
         assertEquals(1_000, timeAtX(500f, 100f, 1_000))
     }
+
+    private fun lanes(speakers: Int, height: Float = 58f) =
+        laneLayout(speakers, top = 10f, heightPx = height, gapWide = 5f, gapTight = 3f, minThicknessPx = 1f, maxThicknessPx = 21f)
+
+    @Test
+    fun `дорожки всегда укладываются в высоту и толщина положительна`() {
+        for (speakers in listOf(0, 1, 2, 3, 4, 5, 8, 9, 12, 20, 30, 57, 58, 59, 100, 500)) {
+            val layout = lanes(speakers)
+            assertTrue("толщина при $speakers", layout.thickness >= 1f)
+            val last = layout.centerY(layout.lanes - 1) + layout.thickness / 2f
+            assertTrue("низ при $speakers: $last", last <= 10f + 58f + 0.01f)
+            assertTrue("верх при $speakers", layout.centerY(0) - layout.thickness / 2f >= 10f - 0.01f)
+        }
+    }
+
+    @Test
+    fun `говорящий получает свою дорожку, пока они есть`() {
+        val layout = lanes(30)
+        assertEquals(30, layout.lanes)
+        assertEquals(29, layout.laneOf(29))
+        assertEquals(0f, layout.gap, 0f)
+    }
+
+    @Test
+    fun `когда дорожки кончаются, говорящие делят их по кругу`() {
+        val layout = lanes(500)
+        assertEquals(58, layout.lanes)
+        assertEquals(0, layout.laneOf(58))
+        assertEquals(layout.centerY(1), layout.centerY(59), 0f)
+    }
+
+    @Test
+    fun `много говорящих не теряются при построении ленты`() {
+        val speakers = (1..64).toList()
+        val spans = speakers.map { span(it, it * 1_000L, it * 1_000L + 500) }
+        val model = buildRibbon(spans, emptyList(), speakers, 100_000, 400)
+        assertEquals(64, model.lanes.size)
+        assertTrue(model.lanes.all { it.runs.isNotEmpty() })
+    }
 }

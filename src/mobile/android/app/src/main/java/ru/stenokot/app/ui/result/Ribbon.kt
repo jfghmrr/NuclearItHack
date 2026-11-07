@@ -22,6 +22,46 @@ class RibbonLane(val speaker: Int, val runs: FloatArray)
 @Immutable
 class RibbonModel(val widthPx: Int, val lanes: List<RibbonLane>, val marks: List<RibbonMark>)
 
+/**
+ * Раскладка дорожек по высоте ленты. Число говорящих не ограничено, поэтому дорожки могут
+ * закончиться раньше них: тогда говорящие делят дорожки по кругу, как и цвета палитры.
+ */
+@Immutable
+class LaneLayout(val lanes: Int, val thickness: Float, val gap: Float, private val first: Float) {
+    /** Дорожка говорящего с порядковым номером [slot]. */
+    fun laneOf(slot: Int): Int = slot % lanes
+
+    /** Середина дорожки говорящего с порядковым номером [slot]. */
+    fun centerY(slot: Int): Float = first + laneOf(slot) * (thickness + gap)
+}
+
+/**
+ * Считает дорожки для [speakers] говорящих в полосе высотой [heightPx]. Зазоры только у небольшого
+ * числа дорожек: когда их много, зазор съел бы всю высоту и толщина ушла бы в минус. Дорожка не
+ * тоньше [minThicknessPx] и не толще [maxThicknessPx].
+ */
+fun laneLayout(
+    speakers: Int,
+    top: Float,
+    heightPx: Float,
+    gapWide: Float,
+    gapTight: Float,
+    minThicknessPx: Float,
+    maxThicknessPx: Float,
+): LaneLayout {
+    val wanted = speakers.coerceAtLeast(1)
+    val gap = when {
+        wanted <= WIDE_GAP_SPEAKERS -> gapWide
+        wanted <= MAX_GAP_SPEAKERS -> gapTight
+        else -> 0f
+    }
+    val capacity = ((heightPx + gap) / (minThicknessPx + gap)).toInt().coerceAtLeast(1)
+    val lanes = wanted.coerceAtMost(capacity)
+    val thickness = ((heightPx - gap * (lanes - 1)) / lanes).coerceIn(minThicknessPx, maxThicknessPx)
+    val used = thickness * lanes + gap * (lanes - 1)
+    return LaneLayout(lanes, thickness, gap, top + (heightPx - used) / 2f + thickness / 2f)
+}
+
 /** Интервал речи на входе. Отдельный тип, чтобы лента не зависела от строк интерфейса. */
 class RibbonSpan(val speaker: Int, val startMs: Long, val endMs: Long)
 
@@ -29,6 +69,8 @@ class RibbonSpan(val speaker: Int, val startMs: Long, val endMs: Long)
 class RibbonMoment(val atMs: Long, val kind: RibbonMarkKind)
 
 private const val MARK_GAP_PX = 3f
+private const val WIDE_GAP_SPEAKERS = 4
+private const val MAX_GAP_SPEAKERS = 8
 
 /**
  * Раскладывает реплики по дорожкам говорящих и сливает их до целых пикселей. Трёхчасовая запись

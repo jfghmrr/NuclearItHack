@@ -368,8 +368,9 @@ private fun ResultContent(
         (if (outputInList) 1 else 0)
 
     val rowsOffset by rememberUpdatedState(headerItems + 1)
-    val pinnedStrip = (!window.short || searchOpen) &&
-        (prep?.model?.speakers?.size ?: 0) <= MAX_PINNED_SPEAKERS
+    val speakerCount = prep?.model?.speakers?.size ?: 0
+    val stripWraps = speakerCount in (MAX_PINNED_SPEAKERS + 1)..MAX_WRAPPED_SPEAKERS
+    val pinnedStrip = (!window.short || searchOpen) && !stripWraps
     var stripHeight by remember { mutableIntStateOf(0) }
     val pinnedPx by rememberUpdatedState(if (pinnedStrip) stripHeight else 0)
     val view = prep?.let {

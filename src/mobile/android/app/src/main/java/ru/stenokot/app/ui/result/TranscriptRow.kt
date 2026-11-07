@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -137,7 +138,9 @@ private fun LedgerContent(item: VisibleRow, layout: RowLayout, strings: RowStrin
         ) {
             Text(
                 text = row.startLabel,
-                modifier = Modifier.padding(top = StenoSpace.xs / 2),
+                modifier = Modifier
+                    .wrapContentWidth(Alignment.End, unbounded = true)
+                    .padding(top = StenoSpace.xs / 2),
                 style = type.monoMedium,
                 color = colors.onSurfaceVariant,
                 maxLines = 1,

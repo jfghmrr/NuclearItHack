@@ -503,6 +503,11 @@ private fun resultScene(id: String): DemoScene? {
             ),
             id = "perf",
         )
+        "S04-Y" -> resultScene(
+            done(LlmStatus.APPLIED),
+            result(DemoData.FILE_DS2, DemoData.DURATION_DS2, DemoData.MANY_SPEAKERS, DemoData.utterancesMany, applied),
+            id = "many",
+        )
         "S04-E2" -> resultScene(
             done(LlmStatus.CANCELLED_BY_NEW_JOB),
             ds1Result(protocol(LlmStatus.CANCELLED_BY_NEW_JOB, windowsDone = 2, retryUsed = true)),

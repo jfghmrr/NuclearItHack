@@ -36,9 +36,11 @@ internal object DemoData {
     const val DURATION_DS5 = 380_000L
     const val DURATION_DS6 = 45_000L
     const val DURATION_DS8 = 1_120_000L
-    const val DURATION_PERF = 10_800_000L
-    const val PERF_ROWS = 5_200
-    const val FILE_PERF = "zasedanie_tri_chasa.mp3"
+    const val DURATION_PERF = 28_800_000L
+    const val PERF_ROWS = 16_000
+    const val FILE_PERF = "konferenciya_vosem_chasov.mp3"
+    const val MANY_SPEAKERS = 24
+    private const val MANY_ROWS = 600
 
     private const val FREE_BYTES = 12_400_000_000L
 
@@ -195,7 +197,7 @@ internal object DemoData {
         (before + tail + after).mapIndexed { index, item -> item.copy(id = index + 1) }
     }
 
-    /** Длинная запись для проверки скорости списка: шесть говорящих, тысячи реплик. */
+    /** Предельная запись для проверки скорости списка: восемь часов и шестнадцать тысяч реплик. */
     val utterancesPerf: List<Utterance> by lazy {
         val phrases = ds1Base.map { it.text } + LONG_TEXT
         val step = DURATION_PERF / PERF_ROWS
@@ -204,6 +206,16 @@ internal object DemoData {
             val text = phrases[index % phrases.size]
             val start = index * step
             Utterance(index + 1, speaker, start, start + step - 200, emptyList(), text, index % 37 == 0)
+        }
+    }
+
+    /** Запись с большим числом участников: их количество ничем не ограничено. */
+    val utterancesMany: List<Utterance> by lazy {
+        val step = DURATION_DS2 / MANY_ROWS
+        List(MANY_ROWS) { index ->
+            val text = ds1Base[index % ds1Base.size].text
+            val start = index * step
+            Utterance(index + 1, (index * 5 + index / 7) % MANY_SPEAKERS, start, start + step - 200, emptyList(), text)
         }
     }
 
