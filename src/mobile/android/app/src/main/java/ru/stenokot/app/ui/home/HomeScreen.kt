@@ -107,6 +107,7 @@ import ru.stenokot.core.model.PreflightInfo
 import ru.stenokot.core.model.Stage
 
 private const val META_DOT = " · "
+private const val SPOKEN_SEPARATOR = ", "
 
 /** Действия главного экрана. Один объект на экран, чтобы строки списка не пересоздавали лямбды. */
 @Stable
@@ -641,7 +642,10 @@ private fun AudioRow(index: Int, audio: AudioFileUi, onAudio: (AudioFileUi) -> U
         title = audio.name,
         subtitle = "$size$META_DOT${audio.folder}",
         marginFallback = listOfNotNull(duration, size, audio.folder).joinToString(META_DOT),
-        description = stringResource(R.string.scr01_spoken_audio, audio.name, duration.orEmpty(), size),
+        description = stringResource(
+            R.string.scr01_spoken_audio,
+            listOfNotNull(audio.name, duration, size).joinToString(SPOKEN_SEPARATOR),
+        ),
         tag = Tags.rowAudio(index),
         onClick = { onAudio(audio) },
     )

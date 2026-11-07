@@ -23,7 +23,7 @@
     <string name="scr01_interrupted_title">Обработка прервалась</string>
     <string name="scr01_interrupted_body">Сохранён этап «%1$s». Продолжим с этого места</string>
     <string name="scr01_spoken_file">Выбран файл %1$s, %2$s</string>
-    <string name="scr01_spoken_audio">%1$s, %2$s, %3$s, запустить обработку</string>
+    <string name="scr01_spoken_audio">%1$s, запустить обработку</string>
     <string name="scr01_spoken_history">%1$s, %2$s, %3$s, открыть результат</string>
     <string name="scr01_spoken_job">Идёт обработка %1$s, %2$s, %3$s. Открыть</string>
     <string name="scr01_spoken_queue">%1$s, ожидает, номер в очереди %2$d</string>
