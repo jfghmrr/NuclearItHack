@@ -603,6 +603,7 @@ private fun RunFacts(state: VerificationScreenState) {
     val verification = state.verification
     val facts = state.facts
     val llm = verification.stageMetrics.firstOrNull { it.stage == Stage.LLM }
+    val llmStatus = verification.llmStatus?.name?.lowercase()
     Column {
         FactRow(stringResource(R.string.scr08_metric_audio), measured(verification.audioDurationMs?.let(::formatTimecode)))
         FactRow(stringResource(R.string.scr08_metric_processing), measured(verification.processingMs?.let(::formatTimecode)))
@@ -619,14 +620,10 @@ private fun RunFacts(state: VerificationScreenState) {
         FactRow(
             stringResource(R.string.scr08_metric_llm),
             measured(
-                if (llm != null && verification.llmStatus != null) {
-                    stringResource(
-                        R.string.scr08_metric_llm_value,
-                        formatTimecode(llm.tookMs),
-                        verification.llmStatus.name.lowercase(),
-                    )
+                if (llm != null && llmStatus != null) {
+                    stringResource(R.string.scr08_metric_llm_value, formatTimecode(llm.tookMs), llmStatus)
                 } else {
-                    null
+                    llmStatus
                 },
             ),
         )

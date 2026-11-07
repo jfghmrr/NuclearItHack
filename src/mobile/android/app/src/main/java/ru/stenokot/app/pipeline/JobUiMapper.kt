@@ -108,7 +108,7 @@ object JobUiMapper {
             fraction = if (active) fraction(stage, job, live) else null,
             counterDone = counters?.first,
             counterTotal = counters?.second,
-            tookMs = took(stage, job),
+            tookMs = took(stage, job, live),
         )
     }
 
@@ -162,9 +162,12 @@ object JobUiMapper {
         return (whole * fraction).toInt() to whole
     }
 
-    private fun took(stage: UserStage, job: JobRecord): Long? {
+    /** Время этапа: завершённые стадии и идущая, чтобы строка рельса не отставала от общего времени. */
+    private fun took(stage: UserStage, job: JobRecord, live: LiveProgress?): Long? {
         if (stage == UserStage.BUILD_PROTOCOL) return job.llm.tookMs.takeIf { it > 0 }
-        return stage.stages.mapNotNull { job.stageMs[it] }.takeIf { it.isNotEmpty() }?.sum()
+        val finished = stage.stages.mapNotNull { job.stageMs[it] }
+        val running = live?.takeIf { it.stage in stage.stages && it.stage !in job.completedStages }?.stageElapsedMs
+        return (finished + listOfNotNull(running)).takeIf { it.isNotEmpty() }?.sum()
     }
 
     /** Сведения о контрактном файле. */
@@ -224,8 +227,11 @@ object JobUiMapper {
         )
     }
 
-    /** Замеры стадий для экрана проверки. */
-    fun stageMetrics(job: JobRecord): List<StageMetricUi> = job.stageMs.entries
-        .sortedBy { it.key }
-        .map { (stage, ms) -> StageMetricUi(stage, ms, job.durationMs?.let { RtfCalculator.stage(ms, it) }) }
+    /** Замеры стадий для экрана проверки. Время языковой модели хранится отдельно от основных стадий. */
+    fun stageMetrics(job: JobRecord): List<StageMetricUi> {
+        val llm = job.llm.tookMs.takeIf { it > 0 }?.let { mapOf(Stage.LLM to it) }.orEmpty()
+        return (job.stageMs + llm).entries
+            .sortedBy { it.key }
+            .map { (stage, ms) -> StageMetricUi(stage, ms, job.durationMs?.let { RtfCalculator.stage(ms, it) }) }
+    }
 }

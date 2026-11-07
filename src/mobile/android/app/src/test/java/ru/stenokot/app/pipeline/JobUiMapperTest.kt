@@ -60,6 +60,29 @@ class JobUiMapperTest {
         JobUiMapper.processing(job, live, null).stages.first { it.stage == stage }
 
     @Test
+    fun activeStageTimeKeepsPaceWithTheRunningStage() {
+        val job = job(stage = Stage.DECODE, completed = setOf(Stage.IMPORT)).copy(stageMs = mapOf(Stage.IMPORT to 2_000L))
+        assertEquals(7_000L, row(job, live(Stage.DECODE, 0.4f), UserStage.PREPARE_AUDIO).tookMs)
+        assertEquals(2_000L, row(job, null, UserStage.PREPARE_AUDIO).tookMs)
+        assertNull(row(job, live(Stage.DECODE, 0.4f), UserStage.RECOGNIZE).tookMs)
+    }
+
+    @Test
+    fun finishedStageTimeIgnoresLiveStage() {
+        val job = job(completed = beforeAsr).copy(stageMs = mapOf(Stage.VAD to 1_000L))
+        assertEquals(1_000L, row(job, live(Stage.ASR, 0.4f), UserStage.PREPARE_AUDIO).tookMs)
+    }
+
+    @Test
+    fun verificationGetsLlmTimeFromItsOwnRecord() {
+        val job = job().copy(stageMs = mapOf(Stage.ASR to 3_000L), llm = LlmRecord(status = LlmStatus.FAILED, tookMs = 78_000))
+        val metrics = JobUiMapper.stageMetrics(job).associateBy { it.stage }
+        assertEquals(78_000L, metrics.getValue(Stage.LLM).tookMs)
+        assertEquals(3_000L, metrics.getValue(Stage.ASR).tookMs)
+        assertTrue(JobUiMapper.stageMetrics(job.copy(llm = LlmRecord())).none { it.stage == Stage.LLM })
+    }
+
+    @Test
     fun activeStageShowsRealCounterAndFinishedOnesDone() {
         val job = job(completed = beforeAsr)
         val ui = JobUiMapper.processing(job, live(Stage.ASR, 0.42f, 19, 45), null)
