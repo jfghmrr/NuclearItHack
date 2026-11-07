@@ -104,7 +104,6 @@ object Preflight {
     /** Декодирует начало дорожки: контейнер мог открыться, а данные оказаться мусором. */
     private fun trialDecode(track: AudioTrackSource): String {
         val codec = track.createCodec()
-        val input = ByteBuffer.allocate(PROBE_BUFFER)
         val info = MediaCodec.BufferInfo()
         val deadline = System.currentTimeMillis() + TRIAL_TIMEOUT_MS
         var packets = 0
@@ -114,7 +113,7 @@ object Preflight {
                 if (!inputDone) {
                     val slot = codec.dequeueInputBuffer(DEQUEUE_US)
                     if (slot >= 0) {
-                        val target = codec.getInputBuffer(slot) ?: input
+                        val target = codec.getInputBuffer(slot) ?: throw IllegalStateException("Нет входного буфера")
                         val read = track.extractor.readSampleData(target, 0)
                         if (read < 0 || packets >= TRIAL_PACKETS) {
                             codec.queueInputBuffer(slot, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
