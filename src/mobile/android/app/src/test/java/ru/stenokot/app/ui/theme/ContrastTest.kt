@@ -4,6 +4,8 @@ import androidx.compose.ui.graphics.Color
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -111,8 +113,25 @@ class ContrastTest {
     }
 
     @Test
-    fun speakerNumberWrapsAroundPalette() {
-        assertTrue(LightSpeakers.style(9) == LightSpeakers.style(1))
-        assertTrue(LightSpeakers.style(16) == LightSpeakers.style(8))
+    fun firstEightSpeakersKeepTheirOwnShapes() {
+        listOf(LightSpeakers, DarkSpeakers).forEach { palette ->
+            assertEquals(SpeakerShape.entries, (1..8).map { palette.style(it).shape })
+            assertEquals(palette.all, (1..8).map(palette::style))
+        }
+    }
+
+    @Test
+    fun speakerPastPaletteKeepsColourButNotLookOfEarlierSpeaker() {
+        listOf(LightSpeakers, DarkSpeakers).forEach { palette ->
+            assertEquals(palette.style(1).fill, palette.style(9).fill)
+            assertNotEquals(palette.style(1).shape, palette.style(9).shape)
+            assertEquals(64, (1..64).map(palette::style).toSet().size)
+        }
+    }
+
+    @Test
+    fun speakerNumberPastAllPairsStillResolves() {
+        assertEquals(LightSpeakers.style(1), LightSpeakers.style(65))
+        assertEquals(LightSpeakers.style(64), LightSpeakers.style(128))
     }
 }

@@ -159,11 +159,21 @@ enum class SpeakerShape(val path: String, val digitOffsetDp: Int) {
 @Immutable
 data class SpeakerStyle(val fill: Color, val onFill: Color, val shape: SpeakerShape)
 
-/** Палитра восьми говорящих одной темы. Номер больше восьми берёт оформление по кругу. */
+/**
+ * Палитра одной темы: восемь цветов и восемь форм. Цвет идёт по кругу, а на каждом новом круге форма
+ * сдвигается на одну, поэтому пара цвет и форма не повторяется у первых 64 говорящих. Дальше пары
+ * идут заново и говорящих различает номер. Таблица готовится один раз: лента и строки только читают её.
+ */
 @Immutable
 class SpeakerPalette(private val styles: List<SpeakerStyle>) {
+    private val pairs = List(styles.size * styles.size) { slot ->
+        val colour = slot % styles.size
+        val round = slot / styles.size
+        styles[colour].copy(shape = styles[(colour + round) % styles.size].shape)
+    }
+
     /** Оформление говорящего с номером [number], начиная с единицы. */
-    fun style(number: Int): SpeakerStyle = styles[(number - 1).mod(styles.size)]
+    fun style(number: Int): SpeakerStyle = pairs[(number - 1).mod(pairs.size)]
 
     /** Все оформления палитры по порядку. */
     val all: List<SpeakerStyle> get() = styles
