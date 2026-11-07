@@ -86,7 +86,7 @@ class ModelPreparer(
         val marker = File(versionDir, READY_MARKER)
         removeOtherVersions(versionDir)
         if (marker.exists() && target.length() == total) {
-            if (intact(target)) {
+            if (intact(target, marker)) {
                 ui.update { it.copy(copiedBytes = total, totalBytes = total) }
                 return ModelReadiness.READY
             }
@@ -101,17 +101,26 @@ class ModelPreparer(
     }
 
     /**
-     * Копия сверяется с хэшем при каждом запуске: испорченные веса загрузились бы без ошибки, и протокол
-     * считала бы уже не та модель, что указана в metadata.json. Тяжёлая стадия приостанавливает сверку.
+     * Испорченные веса загрузились бы без ошибки, и протокол считала бы не та модель, что указана в
+     * metadata.json. Полная сверка занимает секунды и задержала бы протокол при каждом запуске,
+     * поэтому она повторяется, только если файл менялся после прошлой сверки. Об этом говорит
+     * [stamp]. Тяжёлая стадия приостанавливает сверку.
      */
-    private suspend fun intact(file: File): Boolean {
+    private suspend fun intact(file: File, marker: File): Boolean {
         val expected = ledger.sha256Of(ModelLedger.LLM_PATH) ?: return true
-        return try {
+        if (marker.readText() == stamp(file)) return true
+        val same = try {
             sha256Of(file, beforeBlock = { busy.first { !it } }).equals(expected, ignoreCase = true)
         } catch (failure: IOException) {
             false
         }
+        if (same) AtomicFiles.replaceText(marker, stamp(file))
+        return same
     }
+
+    /** Отметка сверенного файла: любая запись в него меняет время изменения. */
+    private fun stamp(file: File): String =
+        "${ledger.sha256Of(ModelLedger.LLM_PATH).orEmpty()} ${file.length()} ${file.lastModified()}"
 
     private suspend fun copy(total: Long, tmp: File, target: File, marker: File): ModelReadiness {
         val expected = ledger.sha256Of(ModelLedger.LLM_PATH)
@@ -122,7 +131,7 @@ class ModelPreparer(
                 onProgress = { copied -> reportCopy(copied, total) },
             )
             if (verified) {
-                AtomicFiles.replaceText(marker, expected.orEmpty())
+                AtomicFiles.replaceText(marker, stamp(target))
                 ModelReadiness.READY
             } else {
                 ModelReadiness.LLM_UNAVAILABLE
