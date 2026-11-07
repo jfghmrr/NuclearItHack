@@ -1156,6 +1156,108 @@ class PipelineRunnerTest {
     }
 
     @Test
+    fun recognizerLoadsWhenAppIsIdleAndAgainAfterJob() = runTest {
+        val h = harness()
+        h.runner.onForeground()
+        delay(1_000)
+        assertEquals(listOf("warm"), h.engines.events)
+
+        val id = h.import("first")
+        h.await(done(id))
+        delay(1_000)
+        assertEquals(1, h.engines.events.count { it == "take" })
+        assertEquals(1, h.engines.events.count { it == "open:asr-RU" })
+        assertEquals("warm", h.engines.events.last())
+        assertTrue(h.engines.warm)
+        assertEquals(0, h.engines.warmCollisions)
+
+        val next = h.import("second")
+        h.await(done(next))
+        assertEquals(2, h.engines.events.count { it == "take" })
+        assertEquals(0, h.engines.warmCollisions)
+    }
+
+    @Test
+    fun recognizerStaysUnloadedUntilAppIsOnScreen() = runTest {
+        val h = harness()
+        delay(1_000)
+        assertFalse("warm" in h.engines.events)
+    }
+
+    @Test
+    fun jobLoadsMissingRecognizerBesideDecoding() = runTest {
+        val h = harness()
+        val id = h.import("direct")
+        h.await(done(id))
+        val warm = h.engines.events.indexOf("warm")
+        val decode = h.engines.events.indexOfFirst { it.startsWith("decode") }
+        assertTrue(warm in 0 until decode)
+        assertEquals(1, h.engines.events.count { it == "open:asr-RU" })
+    }
+
+    @Test
+    fun englishRecordingReleasesWaitingRecognizerBeforeItsModel() = runTest {
+        val h = harness { engines.language = Language.EN }
+        val id = h.import("english")
+        h.await(done(id))
+        assertEquals(1, h.engines.events.count { it == "open:asr-RU" })
+        assertEquals(0, h.engines.warmCollisions)
+    }
+
+    @Test
+    fun finishedRecognitionDoesNotLoadRecognizerAgain() = runTest {
+        val h = harness()
+        h.engines.onWindow = { index ->
+            if (index == 1) {
+                h.die()
+                throw CancellationException("смерть процесса")
+            }
+        }
+        val id = h.import("diar")
+        h.await { it[id]?.stage == Stage.DIARIZE }
+        delay(1_000)
+
+        val reopened = Harness(this, folder.root)
+        reopened.await { it[id]?.phase == JobPhase.INTERRUPTED }
+        reopened.runner.resume(id)
+        reopened.await(done(id))
+        assertEquals(0, reopened.engines.warmCollisions)
+        assertFalse("open:asr-RU" in reopened.engines.events)
+    }
+
+    @Test
+    fun recognizerWaitingInIdleLeavesBeforeDiarizationOfResumedJob() = runTest {
+        val h = harness()
+        h.engines.onWindow = { index ->
+            if (index == 1) {
+                h.die()
+                throw CancellationException("смерть процесса")
+            }
+        }
+        val id = h.import("diar")
+        h.await { it[id]?.stage == Stage.DIARIZE }
+        delay(1_000)
+
+        val reopened = Harness(this, folder.root)
+        reopened.await { it[id]?.phase == JobPhase.INTERRUPTED }
+        reopened.engines.warmUp()
+        reopened.runner.resume(id)
+        reopened.await(done(id))
+        assertTrue("cool" in reopened.engines.events)
+        assertEquals(0, reopened.engines.warmCollisions)
+    }
+
+    @Test
+    fun deferredLanguageModelReleasesRecognizerBeforeRetry() = runTest {
+        val h = harness()
+        val first = h.import("first")
+        val second = h.import("second")
+        h.await(done(second))
+        h.await(done(first))
+        assertEquals(0, h.engines.warmCollisions)
+    }
+
+    @Test
     fun deleteRemovesFilesAndKeepsExportUnlessAsked() = runTest {
         val h = harness()
         val keep = h.import("keep")

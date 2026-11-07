@@ -74,6 +74,24 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
     var llmBehavior: suspend (Int) -> LlmResult = { LlmResult(LlmStatus.APPLIED, null, null) }
     override var configHash: String = "cfg"
 
+    /** Распознаватель ждёт в памяти. В счётчик тяжёлых моделей не входит, у него своя проверка. */
+    var warm = false
+        private set
+
+    /** Сколько раз другая тяжёлая модель запустилась рядом с ждущим распознавателем. */
+    var warmCollisions = 0
+        private set
+
+    override fun warmUp() {
+        events += "warm"
+        warm = true
+    }
+
+    override fun coolDown() {
+        if (warm) events += "cool"
+        warm = false
+    }
+
     private fun opened(name: String) {
         events += "open:$name"
         openHeavy += 1
@@ -119,6 +137,8 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
         private val name = "asr-$language"
 
         init {
+            if (warm && language == Language.RU) events += "take"
+            warm = false
             opened(name)
         }
 
@@ -136,6 +156,7 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
 
     override fun diarizer(request: DiarizationRequest): Diarizer = object : Diarizer {
         init {
+            if (warm) warmCollisions += 1
             opened("diar")
             restoredPerPass += request.restored.size
         }
@@ -176,6 +197,7 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
     override val llm: LlmRunner = object : LlmRunner {
         override suspend fun run(jobDir: File, budget: LlmBudget, progress: Progress): LlmResult {
             llmRuns += budget
+            if (warm) warmCollisions += 1
             events += "llm"
             return llmBehavior(llmRuns.size)
         }

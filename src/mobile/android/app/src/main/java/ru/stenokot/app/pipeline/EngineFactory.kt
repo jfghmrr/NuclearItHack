@@ -43,7 +43,8 @@ class DiarizationRequest(
 
 /**
  * Движки, которыми пользуется конвейер. Каждая стадия создаёт свой движок и закрывает его сама,
- * поэтому в памяти никогда не лежат две тяжёлые модели.
+ * поэтому в памяти никогда не лежат две тяжёлые модели. Исключение одно: основной распознаватель
+ * может ждать задачу в памяти, см. [warmUp], и освобождается до любой другой тяжёлой модели.
  */
 interface PipelineEngines {
     /** Отпечаток настроек и моделей. Его смена отменяет всё после декодирования. */
@@ -63,6 +64,12 @@ interface PipelineEngines {
 
     /** Создаёт распознаватель для языка [language]. */
     fun asr(language: Language): Asr
+
+    /** Загружает основной распознаватель заранее, если хватает памяти. Вызов мгновенный. */
+    fun warmUp() = Unit
+
+    /** Освобождает заранее загруженный распознаватель. Идущая загрузка дожидается конца. */
+    fun coolDown() = Unit
 
     /** Создаёт определитель языка. */
     fun languageDetector(): LanguageDetector
@@ -85,11 +92,16 @@ interface PipelineEngines {
 
 /**
  * Единственная точка подключения настоящих движков. Каждый метод создаёт новый объект: стадия сама
- * закрывает свой движок, и тяжёлая модель не переживает стадию.
+ * закрывает свой движок, и тяжёлая модель не переживает стадию. Русский распознаватель берётся из
+ * [warm], если он уже загружен.
  */
-class EngineFactory(context: Context, modelSetVersion: String) : PipelineEngines {
+class EngineFactory(context: Context, modelSetVersion: String, availableMemory: () -> Long) : PipelineEngines {
     private val app = context.applicationContext
     private val models by lazy { ModelSource.from(app) }
+    private val warm = WarmAsr(
+        load = { GigaAsr(models) },
+        hasRoom = { availableMemory() >= StageBudgets.WARM_ASR_BYTES },
+    )
 
     override val configHash: String = modelSetVersion
 
@@ -105,8 +117,16 @@ class EngineFactory(context: Context, modelSetVersion: String) : PipelineEngines
 
     override fun vad(): Vad = SileroVadEngine(models)
 
-    override fun asr(language: Language): Asr =
-        if (language == Language.EN) ParakeetAsr(models) else GigaAsr(models)
+    override fun asr(language: Language): Asr {
+        val ready = warm.take()
+        if (language != Language.EN) return ready ?: GigaAsr(models)
+        ready?.close()
+        return ParakeetAsr(models)
+    }
+
+    override fun warmUp() = warm.prepare()
+
+    override fun coolDown() = warm.release()
 
     override fun languageDetector(): LanguageDetector = LanguageVote()
 

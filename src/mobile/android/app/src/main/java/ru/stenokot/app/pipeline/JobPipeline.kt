@@ -293,6 +293,7 @@ class JobPipeline(
      * процесс, не дала бы закончить файл. Сбой с кодом, например нет модели, окном не лечится.
      */
     private suspend fun diarize(run: Run) {
+        engines.coolDown()
         val journal = DiarJournal(run.files.diar)
         val done = journal.restore().toMutableList()
         val attempts = AttemptLog(run.files.diarAttempt)

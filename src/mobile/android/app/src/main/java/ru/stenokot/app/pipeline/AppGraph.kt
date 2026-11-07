@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import ru.stenokot.app.BuildConfig
 import ru.stenokot.app.ControllerProvider
 import ru.stenokot.app.audio.AndroidMic
@@ -51,6 +52,7 @@ class AppGraph(context: Context) {
     private val speed = SpeedBook { File(app.filesDir, SPEED_FILE) }
     private val publisher = ResultPublisher(app)
     private val hashes = { ledger.modelHashes(modelSizes) }
+    private val engines = EngineFactory(app, ledger.version, device::availableMemoryBytes)
 
     /** Готовность моделей. */
     val models = ModelPreparer(app, ledger, scope, io)
@@ -58,7 +60,7 @@ class AppGraph(context: Context) {
     /** Очередь и стадии. */
     val runner = PipelineRunner(
         store = store,
-        engines = EngineFactory(app, ledger.version),
+        engines = engines,
         device = device,
         sources = AndroidSources(app, { jobsRoot }, { recordingsRoot }),
         outputs = publisher,
@@ -108,6 +110,11 @@ class AppGraph(context: Context) {
         runner.launch()
         models.start()
         controller.start()
+    }
+
+    /** Система просит память: ждущий распознаватель уходит, если свободной памяти уже мало. */
+    fun onMemoryPressure() {
+        if (device.availableMemoryBytes() < StageBudgets.WARM_ASR_BYTES) scope.launch(io) { engines.coolDown() }
     }
 
     private companion object {

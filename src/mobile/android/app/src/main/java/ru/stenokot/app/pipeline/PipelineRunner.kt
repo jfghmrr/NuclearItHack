@@ -30,6 +30,7 @@ import ru.stenokot.core.audio.FileAudioInput
 import ru.stenokot.core.engine.Progress
 import ru.stenokot.core.llm.LlmBudgetPolicy
 import ru.stenokot.core.model.ErrorCode
+import ru.stenokot.core.model.Language
 import ru.stenokot.core.model.LlmResult
 import ru.stenokot.core.model.LlmStatus
 import ru.stenokot.core.model.META_PUBLISH_FAILED
@@ -483,14 +484,22 @@ class PipelineRunner(
                         if (interrupted == null) llmPhase(retry.id, isRetry = true)
                         continue
                     }
+                    engines.warmUp()
                 }
             }
             wake.receive()
         }
     }
 
+    /**
+     * Если распознаватель ещё не готов, его загрузка идёт рядом с декодированием и не добавляется к
+     * нему: записи малы, а модель нужна сразу после них. Задаче без распознавания она не нужна.
+     */
     private suspend fun runJob(id: String) {
         val control = control(id)
+        book.require(id).let { job ->
+            if (Stage.ASR !in job.completedStages && job.language != Language.EN) engines.warmUp()
+        }
         val finished = try {
             pipeline.run(id, control)
             true
@@ -610,6 +619,7 @@ class PipelineRunner(
 
     private suspend fun llmBody(id: String, isRetry: Boolean): LlmResult {
         if (!isRetry) delay(config.jsonPauseMs)
+        engines.coolDown()
         if (device.availableMemoryBytes() < LlmRules.MIN_MEMORY_BYTES) {
             return LlmResult(LlmStatus.SKIPPED_LOW_MEMORY, null, ErrorCode.LLM_LOW_MEMORY.name)
         }

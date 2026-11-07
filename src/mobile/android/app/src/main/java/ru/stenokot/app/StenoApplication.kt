@@ -30,6 +30,11 @@ class StenoApplication : Application() {
         )
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (getProcessName() == packageName) graph.onMemoryPressure()
+    }
+
     /** Сообщает о выходе приложения на экран: только тогда система разрешает запуск службы. */
     private class ForegroundTracker(
         private val onForeground: () -> Unit,

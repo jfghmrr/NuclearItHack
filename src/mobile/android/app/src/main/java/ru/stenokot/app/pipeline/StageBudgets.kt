@@ -7,6 +7,12 @@ import ru.stenokot.core.model.Stage
 object StageBudgets {
     private const val MIB = 1024L * 1024
 
+    /**
+     * Свободная память, при которой распознаватель можно держать наготове: бюджет стадии плюс сама
+     * модель. После загрузки на устройстве всё ещё остаётся бюджет стадии.
+     */
+    const val WARM_ASR_BYTES: Long = (850L + 600L) * MIB
+
     /** Сколько памяти стадии нужно сверх занятого. Ниже бюджета запуск всё равно идёт. */
     fun memoryBytes(stage: Stage): Long = when (stage) {
         Stage.IMPORT -> 0
