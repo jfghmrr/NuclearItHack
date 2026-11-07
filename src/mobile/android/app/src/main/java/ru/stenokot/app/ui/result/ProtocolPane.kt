@@ -271,7 +271,7 @@ private fun ProtocolRow(index: Int, item: ProtocolItem, onOpen: (ProtocolItem) -
     val time = formatTimecode(item.startMs)
     val spoken = stringResource(R.string.scr05_item_spoken, kindLabel, speaker, spokenTimecode(item.startMs), item.text)
     val clickLabel = stringResource(R.string.scr05_item_click)
-    val ruleColor = StenoTheme.speakers.style(number).fill
+    val ruleColor = StenoTheme.speakers.style(number).line
     Row(
         modifier = Modifier
             .fillMaxWidth()

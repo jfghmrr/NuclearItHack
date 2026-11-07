@@ -12,7 +12,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -20,6 +22,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -42,10 +46,16 @@ import ru.stenokot.app.ui.nav.routeForJob
 import ru.stenokot.app.ui.nav.stateKey
 import ru.stenokot.app.ui.nav.Navigator
 import ru.stenokot.app.ui.processing.ProcessingRoute
+import ru.stenokot.app.ui.record.MicPermissionRoute
 import ru.stenokot.app.ui.record.RecordRoute
 import ru.stenokot.app.ui.result.ResultRoute
+import ru.stenokot.app.ui.settings.SettingsRoute
+import ru.stenokot.app.ui.theme.LocalAppearance
+import ru.stenokot.app.ui.theme.LocalMotionEnabled
 import ru.stenokot.app.ui.theme.StenoMotion
 import ru.stenokot.app.ui.theme.StenoTheme
+import ru.stenokot.app.ui.theme.appearanceSettings
+import ru.stenokot.app.ui.theme.rememberSystemMotion
 import ru.stenokot.app.ui.verification.VerificationRoute
 import ru.stenokot.core.model.JobState
 import ru.stenokot.core.model.Stage
@@ -56,7 +66,9 @@ private val Route.jobId: String?
         is Route.Processing -> jobId
         is Route.Result -> jobId
         is Route.Failure -> jobId
-        Route.Home, Route.Record, Route.Verification, Route.Licenses, is Route.LicenseText -> null
+        Route.Home, Route.Record, Route.MicPermission, Route.Settings,
+        Route.Verification, Route.Licenses, is Route.LicenseText,
+        -> null
     }
 
 /**
@@ -70,73 +82,97 @@ fun StenoApp(
     externalRoute: Route?,
     onExternalRouteHandled: () -> Unit,
 ) {
-    StenoTheme {
-        ProvideWindowLayout(activity) {
-            val navigator = rememberNavigator()
-            val screens = rememberSaveableStateHolder()
-            var awaitedJob by rememberSaveable { mutableStateOf<String?>(null) }
-
-            val importFiles: (List<Uri>) -> Unit = remember(controller) {
-                { uris ->
-                    val busy = controller.home.value.jobs.any { it.state.isHeavy() }
-                    val id = controller.import(uris)
-                    if (id != null && !busy) awaitedJob = id
-                }
-            }
-            val openPicker = rememberAudioPicker(importFiles)
-            val actions = remember(navigator, openPicker) { AppActions(navigator, openPicker, importFiles) }
-
-            LaunchedEffect(externalRoute) {
-                if (externalRoute != null) {
-                    navigator.resetTo(externalRoute)
-                    onExternalRouteHandled()
-                }
-            }
-            LaunchedEffect(awaitedJob) {
-                val id = awaitedJob ?: return@LaunchedEffect
-                val started = controller.job(id).filterNotNull().first { it.summary.state != JobState.Queued }
-                val target = routeForJob(id, started.summary.state)
-                if (navigator.current is Route.Failure) navigator.replaceTop(target) else navigator.push(target)
-                awaitedJob = null
-            }
-
-            LaunchedEffect(controller, navigator) {
-                controller.recording.collect { followRecording(it, controller, navigator) }
-            }
-
-            BackHandler(enabled = navigator.canGoBack) { navigator.back() }
-
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .background(StenoTheme.colors.background)
-                    .resourceTags(),
-            ) {
-                AnimatedContent(
-                    targetState = navigator.current,
-                    modifier = Modifier.weight(1f).screenInsets(),
-                    transitionSpec = {
-                        fadeIn(tween(StenoMotion.MEDIUM)) togetherWith fadeOut(tween(StenoMotion.SHORT))
-                    },
-                    contentKey = { it::class },
-                    label = "screen",
-                ) { route ->
-                    screens.SaveableStateProvider(route.stateKey) {
-                        when (route) {
-                            Route.Home -> HomeRoute(controller, actions)
-                            Route.Record -> RecordRoute(controller)
-                            is Route.Processing -> ProcessingRoute(route.jobId, controller, actions)
-                            is Route.Result -> ResultRoute(route, controller, actions)
-                            is Route.Failure -> FailureRoute(route.jobId, controller, actions)
-                            Route.Verification -> VerificationRoute(controller, actions)
-                            Route.Licenses -> LicensesRoute(actions)
-                            is Route.LicenseText -> LicenseTextRoute(route.entryId, actions)
-                        }
-                    }
-                }
-                StatusLine(rememberStatusCode(controller, navigator.current))
+    val appearance = remember(activity) { appearanceSettings(activity) }
+    StenoTheme(appearance.theme) {
+        val dark = StenoTheme.colors.isDark
+        val view = LocalView.current
+        SideEffect {
+            WindowCompat.getInsetsController(activity.window, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
             }
         }
+        CompositionLocalProvider(
+            LocalAppearance provides appearance,
+            LocalMotionEnabled provides (appearance.mascotMotion && rememberSystemMotion()),
+        ) {
+            ProvideWindowLayout(activity) { StenoShell(activity, controller, externalRoute, onExternalRouteHandled) }
+        }
+    }
+}
+
+@Composable
+private fun StenoShell(
+    activity: Activity,
+    controller: StenoController,
+    externalRoute: Route?,
+    onExternalRouteHandled: () -> Unit,
+) {
+    val navigator = rememberNavigator()
+    val screens = rememberSaveableStateHolder()
+    var awaitedJob by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val importFiles: (List<Uri>) -> Unit = remember(controller) {
+        { uris ->
+            val busy = controller.home.value.jobs.any { it.state.isHeavy() }
+            val id = controller.import(uris)
+            if (id != null && !busy) awaitedJob = id
+        }
+    }
+    val openPicker = rememberAudioPicker(importFiles)
+    val actions = remember(navigator, openPicker) { AppActions(navigator, openPicker, importFiles) }
+
+    LaunchedEffect(externalRoute) {
+        if (externalRoute != null) {
+            navigator.resetTo(externalRoute)
+            onExternalRouteHandled()
+        }
+    }
+    LaunchedEffect(awaitedJob) {
+        val id = awaitedJob ?: return@LaunchedEffect
+        val started = controller.job(id).filterNotNull().first { it.summary.state != JobState.Queued }
+        val target = routeForJob(id, started.summary.state)
+        if (navigator.current is Route.Failure) navigator.replaceTop(target) else navigator.push(target)
+        awaitedJob = null
+    }
+
+    LaunchedEffect(controller, navigator) {
+        controller.recording.collect { followRecording(it, controller, navigator) }
+    }
+
+    BackHandler(enabled = navigator.canGoBack) { navigator.back() }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(StenoTheme.colors.background)
+            .resourceTags(),
+    ) {
+        AnimatedContent(
+            targetState = navigator.current,
+            modifier = Modifier.weight(1f).screenInsets(),
+            transitionSpec = {
+                fadeIn(tween(StenoMotion.MEDIUM)) togetherWith fadeOut(tween(StenoMotion.SHORT))
+            },
+            contentKey = { it::class },
+            label = "screen",
+        ) { route ->
+            screens.SaveableStateProvider(route.stateKey) {
+                when (route) {
+                    Route.Home -> HomeRoute(controller, actions)
+                    Route.Record -> RecordRoute(controller)
+                    Route.MicPermission -> MicPermissionRoute(controller, actions)
+                    Route.Settings -> SettingsRoute(controller, actions)
+                    is Route.Processing -> ProcessingRoute(route.jobId, controller, actions)
+                    is Route.Result -> ResultRoute(route, controller, actions)
+                    is Route.Failure -> FailureRoute(route.jobId, controller, actions)
+                    Route.Verification -> VerificationRoute(controller, actions)
+                    Route.Licenses -> LicensesRoute(actions)
+                    is Route.LicenseText -> LicenseTextRoute(route.entryId, actions)
+                }
+            }
+        }
+        StatusLine(rememberStatusCode(controller, navigator.current))
     }
 }
 

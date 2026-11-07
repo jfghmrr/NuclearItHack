@@ -97,7 +97,7 @@ private fun laneDraws(
         cursor += 4
         run += 2
     }
-    val fill = palette.style(lane.speaker).fill
+    val fill = palette.style(lane.speaker).line
     val visible = selected.isEmpty() || lane.speaker in selected
     LaneDraw(points, y, if (visible) fill else fill.copy(alpha = DIMMED_ALPHA))
 }

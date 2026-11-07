@@ -100,6 +100,22 @@ object Tags {
     const val DETAILS = "btn_details"
     const val DETAILS_CODE = "txt_details_code"
     const val COPY_DIAGNOSTICS = "btn_copy_diagnostics"
+    const val SETTINGS = "btn_settings"
+    const val LIBRARY_SEARCH = "txt_library_search"
+    const val LIBRARY_SEARCH_CLEAR = "btn_library_search_clear"
+    const val LIBRARY_RESET = "btn_library_reset"
+    const val MIC_CONTINUE = "btn_mic_continue"
+    const val REC_DISCARD = "btn_rec_discard"
+    const val PROCESSING_MENU = "btn_processing_menu"
+    const val CANCEL_CONFIRM = "btn_cancel_confirm"
+    const val CANCEL_DISMISS = "btn_cancel_dismiss"
+    const val TO_LIBRARY = "btn_to_library"
+    const val DONE_TITLE = "txt_done_title"
+    const val THEME_ROW = "row_theme"
+    const val MOTION_ROW = "row_motion"
+    const val DIAGNOSTICS_ROW = "row_diagnostics"
+    const val ABOUT_ROW = "row_about"
+    const val MODELS_ROW = "row_models"
 
     /** Строка найденного аудио. */
     fun rowAudio(index: Int) = "row_audio_$index"
@@ -124,6 +140,12 @@ object Tags {
 
     /** Реплика стенограммы. Номер считается по всей записи и не меняется при сужении списка. */
     fun rowUtt(index: Int) = "row_utt_$index"
+
+    /** Фильтр библиотеки. */
+    fun chipFilter(name: String) = "chip_filter_$name"
+
+    /** Вариант темы в настройках. */
+    fun themeOption(name: String) = "row_theme_$name"
 
     /** Значок говорящего в фильтре. */
     fun chipSpeaker(number: Int) = "chip_speaker_$number"

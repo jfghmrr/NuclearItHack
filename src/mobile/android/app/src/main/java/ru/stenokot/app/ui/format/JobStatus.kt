@@ -54,6 +54,15 @@ fun userStageLabel(stage: UserStage): String = when (stage) {
     UserStage.BUILD_PROTOCOL -> "Формирование протокола"
 }
 
+/** Что приложение делает на этапе сейчас: подпись активного этапа в карточках. */
+fun userStageAction(stage: UserStage): String = when (stage) {
+    UserStage.PREPARE_AUDIO -> "Готовим аудио"
+    UserStage.RECOGNIZE -> "Распознаём речь"
+    UserStage.DIARIZE -> "Определяем говорящих"
+    UserStage.SAVE_TRANSCRIPT -> "Сохраняем стенограмму"
+    UserStage.BUILD_PROTOCOL -> "Формируем протокол"
+}
+
 /** Этап пользователя, в который входит стадия конвейера [stage]. */
 fun userStageOf(stage: Stage): UserStage = UserStage.entries.first { stage in it.stages }
 

@@ -16,6 +16,12 @@ sealed interface Route {
     /** Запись с микрофона. */
     data object Record : Route
 
+    /** Объяснение перед системным запросом микрофона. */
+    data object MicPermission : Route
+
+    /** Настройки приложения. */
+    data object Settings : Route
+
     /** SCR-03. */
     data class Processing(val jobId: String) : Route
 
@@ -67,6 +73,8 @@ internal val Route.stateKey: String
 internal fun Route.encode(): String = when (this) {
     Route.Home -> "home"
     Route.Record -> "record"
+    Route.MicPermission -> "mic"
+    Route.Settings -> "settings"
     Route.Verification -> "verification"
     Route.Licenses -> "licenses"
     is Route.LicenseText -> "license|$entryId"
@@ -80,6 +88,8 @@ internal fun decodeRoute(value: String): Route {
     val parts = value.split('|')
     return when (parts[0]) {
         "record" -> Route.Record
+        "mic" -> Route.MicPermission
+        "settings" -> Route.Settings
         "verification" -> Route.Verification
         "licenses" -> Route.Licenses
         "license" -> Route.LicenseText(parts[1])

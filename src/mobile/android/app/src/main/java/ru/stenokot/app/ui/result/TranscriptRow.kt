@@ -212,7 +212,7 @@ internal fun TranscriptRow(
 ) {
     val row = item.row
     val colors = StenoTheme.colors
-    val speakerColor = StenoTheme.speakers.style(row.speaker).fill
+    val speakerColor = StenoTheme.speakers.style(row.speaker).line
     Column(
         modifier = modifier
             .fillMaxWidth()

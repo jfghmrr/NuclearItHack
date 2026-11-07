@@ -1,6 +1,7 @@
 package ru.stenokot.app.ui.format
 
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -19,6 +20,11 @@ private const val HOUR_MS = 3_600_000L
 
 private val MONTHS = arrayOf(
     "янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек",
+)
+
+private val MONTHS_GENITIVE = arrayOf(
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря",
 )
 
 private fun twoDigits(value: Long): String = if (value < 10) "0$value" else value.toString()
@@ -126,6 +132,25 @@ fun formatHistoryDate(epochMs: Long, zone: ZoneId = ZoneId.systemDefault()): Str
     val time = Instant.ofEpochMilli(epochMs).atZone(zone)
     val month = MONTHS[time.monthValue - 1]
     return "${time.dayOfMonth} $month, ${twoDigits(time.hour.toLong())}:${twoDigits(time.minute.toLong())}"
+}
+
+/** Подпись дня в библиотеке: «Сегодня», «Вчера» или «5 ноября», с годом для прошлых лет. */
+fun formatDayLabel(day: LocalDate, today: LocalDate): String = when {
+    day == today -> "Сегодня"
+    day == today.minusDays(1) -> "Вчера"
+    day.year == today.year -> "${day.dayOfMonth} ${MONTHS_GENITIVE[day.monthValue - 1]}"
+    else -> "${day.dayOfMonth} ${MONTHS_GENITIVE[day.monthValue - 1]} ${day.year}"
+}
+
+/** Дата записи в карточке: «Сегодня, 14:32», «Вчера, 19:45» или день, месяц и время. */
+fun formatRecordDate(epochMs: Long, today: LocalDate, zone: ZoneId = ZoneId.systemDefault()): String {
+    val time = Instant.ofEpochMilli(epochMs).atZone(zone)
+    val clock = "${twoDigits(time.hour.toLong())}:${twoDigits(time.minute.toLong())}"
+    return when (time.toLocalDate()) {
+        today -> "Сегодня, $clock"
+        today.minusDays(1) -> "Вчера, $clock"
+        else -> formatHistoryDate(epochMs, zone)
+    }
 }
 
 /** Длительность словами: «45 секунд», «42 минуты», «2 часа 49 минут». */

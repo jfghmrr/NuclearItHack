@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Стенокот</string>
     <string name="common_btn_import">Импорт аудио</string>
-    <string name="common_btn_record">Запись</string>
+    <string name="common_btn_record">Записать</string>
     <string name="common_btn_start">Запустить транскрибацию</string>
     <string name="common_btn_cancel">Отмена</string>
     <string name="common_btn_export">Экспорт JSON</string>

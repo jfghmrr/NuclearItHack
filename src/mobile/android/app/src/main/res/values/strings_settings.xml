@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">Настройки</string>
+    <string name="settings_section_data">Обработка и данные</string>
+    <string name="settings_models">Модели на устройстве</string>
+    <string name="settings_models_ready">%1$s · Готовы к работе</string>
+    <string name="settings_models_partial">%1$s · Нужно внимание</string>
+    <string name="settings_privacy">Приватность и разрешения</string>
+    <string name="settings_privacy_hint">Аудио обрабатывается локально</string>
+    <string name="settings_section_comfort">Удобство</string>
+    <string name="settings_theme">Оформление</string>
+    <string name="settings_theme_hint">Тема приложения</string>
+    <string name="settings_theme_system">Как в системе</string>
+    <string name="settings_theme_light">Светлое</string>
+    <string name="settings_theme_dark">Тёмное</string>
+    <string name="settings_motion">Анимации маскота</string>
+    <string name="settings_motion_hint">Спокойное движение</string>
+    <string name="settings_section_more">Дополнительно</string>
+    <string name="settings_diagnostics">Диагностика записи</string>
+    <string name="settings_diagnostics_hint">Время, память и этапы</string>
+    <string name="settings_about">О приложении</string>
+    <string name="settings_about_hint">Версия, компоненты и лицензии</string>
+    <string name="settings_footer">Стенокот · Всё важное под рукой</string>
+</resources>

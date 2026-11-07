@@ -40,6 +40,10 @@ fun windowsLabel(n: Int): String =
 fun filesLabel(n: Int): String =
     "${formatThousands(n.toLong())}$NBSP${pluralRu(n.toLong(), "файл", "файла", "файлов")}"
 
+/** «6 моделей». */
+fun modelsLabel(n: Int): String =
+    "${formatThousands(n.toLong())}$NBSP${pluralRu(n.toLong(), "модель", "модели", "моделей")}"
+
 /** «42 минуты». */
 fun minutesLabel(n: Long): String = "$n$NBSP${pluralRu(n, "минута", "минуты", "минут")}"
 
