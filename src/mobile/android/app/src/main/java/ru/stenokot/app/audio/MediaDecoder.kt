@@ -12,6 +12,7 @@ import java.security.MessageDigest
 import kotlin.coroutines.coroutineContext
 import kotlin.math.min
 import kotlin.math.roundToLong
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -79,6 +80,8 @@ class MediaDecoder : AudioDecoder {
             try {
                 pump(track, codec, sink, pacer)
                 return
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: IllegalStateException) {
                 restarts = nextRestart(track, sink, restarts, error)
             } catch (error: IllegalArgumentException) {
