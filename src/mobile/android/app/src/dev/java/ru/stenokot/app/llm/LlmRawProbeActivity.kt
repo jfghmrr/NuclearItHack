@@ -5,10 +5,10 @@ import android.os.Bundle
 import android.util.Log
 import java.io.File
 import kotlin.concurrent.thread
+import ru.stenokot.core.llm.LlmSampler
 import ru.stenokot.llm.ContextConfig
 import ru.stenokot.llm.LlamaBridge
 import ru.stenokot.llm.LoadStatus
-import ru.stenokot.llm.SamplingConfig
 
 /** Прямой запуск модели без службы и грамматики: печатает возможности процессора, токены и пик памяти. */
 class LlmRawProbeActivity : Activity() {
@@ -34,7 +34,7 @@ class LlmRawProbeActivity : Activity() {
         val body = "Расскажи подробно, почему важно вести протокол совещаний. ".repeat(intent.getIntExtra("pad", 0))
         val prompt = "<|im_start|>user\n$body$question<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
         val tokens = intent.getIntExtra("tokens", 48)
-        val result = LlamaBridge.generate(prompt, null, SamplingConfig(maxTokens = tokens), 0)
+        val result = LlamaBridge.generate(prompt, null, LlmSampler(maxOutputTokens = tokens), 0)
         Log.i(TAG, "status=${result.status} prompt=${result.promptTokens} generated=${result.generatedTokens}")
         Log.i(TAG, "promptMs=${result.promptMs} generationMs=${result.generationMs} samplingMs=${result.samplingMs}")
         Log.i(TAG, "text=${result.text}")

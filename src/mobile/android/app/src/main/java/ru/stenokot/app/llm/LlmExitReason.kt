@@ -17,13 +17,13 @@ internal object LlmExitReason {
     /** Читает последнюю запись о процессе :llm. Значение [pid], равное 0, означает любой номер процесса. */
     fun inspect(context: Context, pid: Int): LlmDeath {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            return LlmDeath(null, "exit reason unavailable below API 30")
+            return LlmDeath(null, "причина завершения недоступна ниже API 30")
         }
         val manager = context.getSystemService(ActivityManager::class.java)
         val process = context.packageName + LLM_PROCESS_SUFFIX
         val exit = manager.getHistoricalProcessExitReasons(context.packageName, pid, RECORDS_TO_READ)
             .firstOrNull { it.processName == process }
-            ?: return LlmDeath(null, "no exit record")
+            ?: return LlmDeath(null, "нет записи о завершении процесса")
         val code = classify(exit.reason, exit.status)
         return LlmDeath(code, "${code?.name ?: "LLM_DIED"} reason=${exit.reason} status=${exit.status} " +
             "pss_kb=${exit.pss} rss_kb=${exit.rss}")

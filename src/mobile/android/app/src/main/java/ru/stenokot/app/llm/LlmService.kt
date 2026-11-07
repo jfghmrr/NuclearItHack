@@ -41,7 +41,7 @@ class LlmService : Service() {
 
     private fun start(request: LlmRequest, client: Messenger) {
         if (worker?.isAlive == true) {
-            val busy = LlmResult(LlmStatus.FAILED, null, "stage already running")
+            val busy = LlmResult(LlmStatus.FAILED, null, "стадия уже выполняется")
             client.post(LlmMessage.FINISHED, data = LlmOutcomeBundle.of(busy))
             return
         }

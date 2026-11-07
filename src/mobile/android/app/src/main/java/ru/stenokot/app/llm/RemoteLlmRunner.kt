@@ -77,7 +77,7 @@ class RemoteLlmRunner(context: Context) : LlmRunner {
             val executor = Executor { handler.post(it) }
             bound = appContext.bindService(intent, Context.BIND_AUTO_CREATE, executor, this)
             if (!bound) {
-                finish(LlmResult(LlmStatus.FAILED, null, "bindService refused"))
+                finish(LlmResult(LlmStatus.FAILED, null, "система отказала в связи со службой"))
                 return
             }
             handler.postDelayed(::onWatchdog, this, request.budgetMs + WATCHDOG_MARGIN_MS)
@@ -115,7 +115,7 @@ class RemoteLlmRunner(context: Context) : LlmRunner {
         override fun onBindingDied(name: ComponentName?) = onProcessDied()
 
         override fun onNullBinding(name: ComponentName?) {
-            finish(LlmResult(LlmStatus.FAILED, null, "service returned no binder"))
+            finish(LlmResult(LlmStatus.FAILED, null, "служба не вернула канал связи"))
         }
 
         private fun handleReply(message: Message): Boolean {

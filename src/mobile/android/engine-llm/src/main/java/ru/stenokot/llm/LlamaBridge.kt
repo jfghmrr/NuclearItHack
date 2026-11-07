@@ -1,5 +1,7 @@
 package ru.stenokot.llm
 
+import ru.stenokot.core.llm.LlmSampler
+
 /** Итог загрузки модели. Порядок значений совпадает с кодами в llama_bridge.cpp. */
 enum class LoadStatus { LOADED, CANCELLED, MODEL_FAILED, CONTEXT_FAILED }
 
@@ -23,15 +25,6 @@ data class ContextConfig(
     val contextTokens: Int = 1024,
     val batchTokens: Int = 256,
     val repackWeights: Boolean = false,
-)
-
-/** Настройки выбора токенов для одного запроса. */
-data class SamplingConfig(
-    val temperature: Float = 0.2f,
-    val topK: Int = 20,
-    val topP: Float = 0.9f,
-    val seed: Int = 42,
-    val maxTokens: Int = 48,
 )
 
 /** Ответ модели и счётчики запроса. */
@@ -72,16 +65,16 @@ object LlamaBridge {
      * поэтому системный промпт обрабатывается один раз.
      * Положительный [timeoutMs] ограничивает всю генерацию, включая обработку промпта.
      */
-    fun generate(prompt: String, grammar: String?, sampling: SamplingConfig, timeoutMs: Long): GenerationResult {
+    fun generate(prompt: String, grammar: String?, sampler: LlmSampler, timeoutMs: Long): GenerationResult {
         val stats = LongArray(SLOT_COUNT)
         val answer = nativeGenerate(
             prompt.encodeToByteArray(),
             grammar?.encodeToByteArray(),
-            sampling.maxTokens,
-            sampling.temperature,
-            sampling.topK,
-            sampling.topP,
-            sampling.seed,
+            sampler.maxOutputTokens,
+            sampler.temperature,
+            sampler.topK,
+            sampler.topP,
+            sampler.seed,
             timeoutMs,
             stats,
         )
