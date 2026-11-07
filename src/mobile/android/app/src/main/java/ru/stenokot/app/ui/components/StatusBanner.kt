@@ -3,11 +3,13 @@ package ru.stenokot.app.ui.components
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,6 +50,8 @@ fun toneColors(tone: BannerTone): ToneColors {
 
 /**
  * Статусная плашка: значок, заголовок, пояснение и необязательное действие в слоте [action].
+ * Значок стоит в поле размером со значок строки списка, поэтому текст плашки начинается на одной
+ * линии с текстом строк над ней.
  * При [polite] изменения озвучиваются TalkBack, не перебивая речь.
  */
 @Composable
@@ -75,7 +79,9 @@ fun StatusBanner(
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.m),
     ) {
-        StenoIcon(icon, palette.icon, size = StenoSize.iconMedium)
+        Box(Modifier.size(StenoSize.icon), contentAlignment = Alignment.Center) {
+            StenoIcon(icon, palette.icon, size = StenoSize.iconMedium)
+        }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(StenoSpace.xs / 2)) {
             title?.let {
                 Text(it, style = type.bodySmall.copy(fontWeight = FontWeight.W700), color = palette.content)
