@@ -21,6 +21,7 @@ import ru.stenokot.app.data.SpeedBook
 import ru.stenokot.app.service.AndroidDevice
 import ru.stenokot.app.service.PipelineService
 import ru.stenokot.app.service.RecordingService
+import ru.stenokot.core.model.Stage
 import java.io.File
 
 /**
@@ -112,9 +113,13 @@ class AppGraph(context: Context) {
         controller.start()
     }
 
-    /** Система просит память: ждущий распознаватель уходит, если свободной памяти уже мало. */
+    /**
+     * Система просит память: ждущий распознаватель уходит, только если свободной памяти меньше бюджета
+     * стадии. Порог загрузки здесь не годится: он считает память до модели. Сигнал приходит и при уходе
+     * с экрана, например к системному выбору файла, и с таким порогом модель пропадала бы перед импортом.
+     */
     fun onMemoryPressure() {
-        if (device.availableMemoryBytes() < StageBudgets.WARM_ASR_BYTES) scope.launch(io) { engines.coolDown() }
+        if (device.availableMemoryBytes() < StageBudgets.memoryBytes(Stage.ASR)) scope.launch(io) { engines.coolDown() }
     }
 
     private companion object {
