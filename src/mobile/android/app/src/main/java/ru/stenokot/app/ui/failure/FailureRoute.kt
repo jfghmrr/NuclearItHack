@@ -397,7 +397,7 @@ private fun DetailsBlock(detail: JobDetailUi, copy: DiagnosticsCopy) {
                 text = stringResource(if (copy.copied) R.string.scr07_copied else R.string.scr07_copy),
                 onClick = copy::copy,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                tag = Tags.COPY_DIAGNOSTICS,
+                tag = Tags.COPY_REPORT,
             )
         }
         AnimatedVisibility(

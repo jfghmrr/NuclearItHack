@@ -118,7 +118,7 @@ internal fun VerificationScreen(
                 onClick = copy::copy,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 icon = R.drawable.ic_content_copy,
-                tag = Tags.COPY_DIAGNOSTICS,
+                tag = Tags.COPY_REPORT,
             )
             Text(
                 text = stringResource(R.string.scr08_package_hint),
@@ -470,7 +470,7 @@ private fun MetricsSection(state: VerificationScreenState, callbacks: Verificati
             tone = BannerTone.ERROR,
             icon = R.drawable.ic_error,
             body = stringResource(R.string.scr08_export_failed),
-            tag = Tags.EXPORT_ERROR,
+            tag = Tags.META_EXPORT_ERROR,
             polite = true,
         )
     }
