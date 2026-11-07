@@ -28,6 +28,12 @@ sealed interface Route {
 
     /** SCR-08. */
     data object Verification : Route
+
+    /** Шрифты, модели и библиотеки с их лицензиями. */
+    data object Licenses : Route
+
+    /** Текст лицензии записи [entryId] из перечня. */
+    data class LicenseText(val entryId: String) : Route
 }
 
 /** Экран, на котором должна быть видна задача в состоянии [state]. */
@@ -58,6 +64,8 @@ internal val Route.stateKey: String
 internal fun Route.encode(): String = when (this) {
     Route.Home -> "home"
     Route.Verification -> "verification"
+    Route.Licenses -> "licenses"
+    is Route.LicenseText -> "license|$entryId"
     is Route.Processing -> "processing|$jobId"
     is Route.Failure -> "failure|$jobId"
     is Route.Result -> "result|$jobId|${tab.name}|${focusUtterance ?: ""}"
@@ -68,6 +76,8 @@ internal fun decodeRoute(value: String): Route {
     val parts = value.split('|')
     return when (parts[0]) {
         "verification" -> Route.Verification
+        "licenses" -> Route.Licenses
+        "license" -> Route.LicenseText(parts[1])
         "processing" -> Route.Processing(parts[1])
         "failure" -> Route.Failure(parts[1])
         "result" -> Route.Result(parts[1], ResultTab.valueOf(parts[2]), parts[3].toIntOrNull())

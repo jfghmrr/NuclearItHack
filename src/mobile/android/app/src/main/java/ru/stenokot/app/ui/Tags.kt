@@ -30,6 +30,27 @@ object Tags {
     const val DELETE_CONFIRM = "btn_delete_confirm"
     const val DELETE_DISMISS = "btn_delete_dismiss"
     const val DELETE_EXPORTED = "row_delete_exported"
+    const val ERROR_TITLE = "txt_error_title"
+    const val ERROR_BODY = "txt_error_body"
+    const val ERROR_DETAILS = "btn_error_details"
+    const val ERROR_DETAILS_TEXT = "txt_error_details"
+    const val COPY_DIAGNOSTICS = "btn_copy_diagnostics"
+    const val OPEN_MODELS = "btn_models"
+    const val OFFLINE = "txt_offline"
+    const val PERMISSIONS = "btn_permissions"
+    const val LIST_MODELS = "list_models"
+    const val RTF_CORE = "txt_rtf_core"
+    const val RTF_FULL = "txt_rtf_full"
+    const val LIST_STAGE_METRICS = "list_stage_metrics"
+    const val JSON_VALID = "txt_json_valid"
+    const val JSON_SHA256 = "txt_json_sha256"
+    const val JSON_PATH = "txt_json_path"
+    const val EXPORT_ERROR = "txt_export_error"
+    const val EXPORT_META = "btn_export_meta"
+    const val NOTIFICATIONS = "row_notifications"
+    const val LICENSES = "row_licenses"
+    const val LIST_LICENSES = "list_licenses"
+    const val LICENSE_TEXT = "txt_license"
 
     /** Строка найденного аудио. */
     fun rowAudio(index: Int) = "row_audio_$index"
@@ -42,6 +63,12 @@ object Tags {
 
     /** Кнопка удаления строки истории. */
     fun rowDelete(index: Int) = "btn_delete_$index"
+
+    /** Строка модели на экране проверки. */
+    fun rowModel(index: Int) = "row_model_$index"
+
+    /** Строка лицензии. */
+    fun rowLicense(index: Int) = "row_license_$index"
 
     /** Строка этапа на рельсе. */
     fun rowStage(name: String) = "row_stage_$name"

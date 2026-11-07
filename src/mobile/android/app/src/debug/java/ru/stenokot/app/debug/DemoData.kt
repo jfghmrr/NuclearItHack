@@ -78,6 +78,8 @@ internal object DemoData {
         estimateMeasured = true,
     )
 
+    val preflightDs1NoSpace = preflightDs1.copy(freeBytes = mib(120.0), requiredBytes = mib(962.0))
+
     val preflightDs4Rough = PreflightInfo(
         fileName = FILE_DS4,
         sizeBytes = mib(34.8),
@@ -304,10 +306,23 @@ internal object DemoData {
             StageMetricUi(Stage.DIARIZE, 68_000, 0.09),
             StageMetricUi(Stage.MERGE, 1_000, null),
             StageMetricUi(Stage.VALIDATE, 1_000, null),
+            StageMetricUi(Stage.LLM, 66_000, null),
         ),
         jsonValid = true,
         jsonSha256 = "demo-not-a-real-hash",
         jsonPath = "Download/Stenokot/podcast_gorodskie_sady_ep12.json",
         llmTokens = 4_200,
+        lastJobId = "ds1",
+        threads = 3,
+        llmStatus = LlmStatus.APPLIED,
+    )
+
+    val verificationPartial = verificationMetrics.copy(
+        rtfFull = null,
+        peakRssMb = null,
+        threads = null,
+        llmStatus = null,
+        llmTokens = null,
+        stageMetrics = verificationMetrics.stageMetrics.filter { it.stage != Stage.LLM },
     )
 }

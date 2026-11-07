@@ -149,7 +149,10 @@ data class JobDetailUi(
 @Immutable
 data class StageMetricUi(val stage: Stage, val tookMs: Long, val rtf: Double?)
 
-/** Экран проверки: доказательства работы на устройстве. */
+/**
+ * Экран проверки: доказательства работы на устройстве. Поле со значением null показывается как
+ * «не измерено», поэтому ни одно значение нельзя подставлять без настоящего замера.
+ */
 @Immutable
 data class VerificationUi(
     val internetPermissionAbsent: Boolean,
@@ -167,6 +170,9 @@ data class VerificationUi(
     val jsonSha256: String?,
     val jsonPath: String?,
     val llmTokens: Long?,
+    val lastJobId: String? = null,
+    val threads: Int? = null,
+    val llmStatus: LlmStatus? = null,
 )
 
 /** Состояние главного экрана. */
