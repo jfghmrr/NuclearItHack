@@ -1,16 +1,22 @@
 package ru.stenokot.core.asr
 
+import kotlin.math.floor
+import kotlin.math.log10
+import kotlin.math.round
 import ru.stenokot.core.model.AsrSegment
 import ru.stenokot.core.model.AsrToken
 import ru.stenokot.core.model.SpeechSegment
 
 /**
- * Параметры дораспознавания пауз внутри среза. Подобраны на отдельной выборке телефонных разговоров,
- * а не на оценочных наборах.
+ * Параметры дораспознавания пауз внутри среза. Подобраны на отдельных данных: телефонные разговоры,
+ * музыка и шум, которые не входят в оценочные наборы.
  *
  * @property minGapMs самая короткая пауза между словами, которую стоит проверять.
- * @property speechProbability вероятность определителя речи, с которой окно считается речью.
- * @property minSpeechMs сколько речи в паузе нужно, чтобы распознать её заново.
+ * @property speechProbability вероятность, с которой окно входит в участок для распознавания.
+ * @property strongProbability вероятность, с которой окно считается уверенной речью.
+ * @property minSpeechMs сколько уверенной речи в паузе нужно, чтобы распознать её заново.
+ * @property minLoudnessDb насколько медианное окно уверенной речи должно быть громче фона среза.
+ * Под музыкой и сплошным шумом фон высокий, и пауза не трогается: там модель сочиняет слова.
  * @property paddingMs запас вокруг речи паузы. Участок не выходит за саму паузу.
  * @property headGuardMs новое слово не может начинаться раньше этого отступа от конца прежнего слова:
  * там распознаватель повторяет хвост уже записанного слова.
@@ -19,11 +25,19 @@ import ru.stenokot.core.model.SpeechSegment
 data class GapFillConfig(
     val minGapMs: Long = 1_000,
     val speechProbability: Float = 0.5f,
+    val strongProbability: Float = 0.8f,
     val minSpeechMs: Long = 640,
+    val minLoudnessDb: Int = 15,
     val paddingMs: Long = 200,
     val headGuardMs: Long = 300,
     val tailGuardMs: Long = 400,
 )
+
+/**
+ * Звук паузы окнами по [GAP_WINDOW_MS]: вероятность речи и энергия в децибелах. Энергий может быть
+ * на одну меньше: неполное последнее окно в них не входит.
+ */
+class GapAudio(val probabilities: FloatArray, val energiesDb: DoubleArray)
 
 /**
  * Пауза между распознанными словами одного среза.
@@ -46,23 +60,45 @@ const val GAP_WINDOW_MS = 32L
  */
 object GapFill {
     /**
-     * Дополняет срез [segment]. [probabilities] возвращает вероятности речи окнами по [GAP_WINDOW_MS]
-     * для отрезка записи в миллисекундах, [decode] распознаёт отрезок и отдаёт токены с временем от
-     * начала записи. Каждая пауза распознаётся один раз, новые паузы внутри вставок не ищутся.
+     * Дополняет срез [segment]. [floorDb] это фон среза, посчитанный по его отсчётам функцией
+     * floorDb. [listen] отдаёт звук отрезка записи в миллисекундах, [decode] распознаёт отрезок и
+     * возвращает токены с временем от начала записи. Каждая пауза распознаётся один раз, новые паузы
+     * внутри вставок не ищутся.
      */
     fun fill(
         segment: AsrSegment,
         config: GapFillConfig,
-        probabilities: (startMs: Long, endMs: Long) -> FloatArray,
+        floorDb: Double,
+        listen: (startMs: Long, endMs: Long) -> GapAudio,
         decode: (SpeechSegment) -> AsrSegment,
     ): AsrSegment {
         var result = segment
         for (gap in findGaps(segment, config).asReversed()) {
-            val span = speechSpan(gap, probabilities(gap.startMs, gap.endMs), config) ?: continue
+            val span = speechSpan(gap, listen(gap.startMs, gap.endMs), floorDb, config) ?: continue
             val decoded = decode(SpeechSegment(segment.segment.index, span.first * SAMPLES_PER_MS, span.last * SAMPLES_PER_MS))
             result = insert(result, gap, decoded, config)
         }
         return result
+    }
+
+    /** Энергия полных окон по 512 отсчётов в децибелах. Тишина ограничена снизу -100 дБ. */
+    fun windowEnergiesDb(samples: FloatArray): DoubleArray {
+        val count = samples.size / WINDOW_SAMPLES
+        return DoubleArray(count) { index ->
+            var sum = 0.0
+            for (k in index * WINDOW_SAMPLES until (index + 1) * WINDOW_SAMPLES) sum += samples[k].toDouble() * samples[k]
+            10 * log10(maxOf(sum / WINDOW_SAMPLES, MIN_POWER))
+        }
+    }
+
+    /** Фон среза: десятый процентиль энергии окон с линейной интерполяцией. */
+    fun floorDb(samples: FloatArray): Double {
+        val energies = windowEnergiesDb(samples).sorted()
+        if (energies.isEmpty()) return SILENCE_DB
+        val position = FLOOR_QUANTILE * (energies.size - 1)
+        val lower = floor(position).toInt()
+        val upper = minOf(lower + 1, energies.size - 1)
+        return energies[lower] + (energies[upper] - energies[lower]) * (position - lower)
     }
 
     /**
@@ -106,19 +142,28 @@ object GapFill {
 
     /**
      * Отрезок для повторного распознавания: от первого до последнего окна речи с запасом
-     * [GapFillConfig.paddingMs], не шире самой паузы. Null, если речи меньше [GapFillConfig.minSpeechMs].
+     * [GapFillConfig.paddingMs], не шире самой паузы. Null, если уверенной речи меньше
+     * [GapFillConfig.minSpeechMs] или она тише [GapFillConfig.minLoudnessDb] над фоном [floorDb].
      */
-    fun speechSpan(gap: SpeechGap, probabilities: FloatArray, config: GapFillConfig): LongRange? {
+    fun speechSpan(gap: SpeechGap, audio: GapAudio, floorDb: Double, config: GapFillConfig): LongRange? {
+        val probabilities = audio.probabilities
         var first = -1
         var last = -1
-        var count = 0
+        var strong = 0
+        val loudness = ArrayList<Int>()
         for (index in probabilities.indices) {
-            if (probabilities[index] < config.speechProbability) continue
+            val probability = probabilities[index]
+            if (probability >= config.strongProbability) {
+                strong++
+                if (index < audio.energiesDb.size) loudness += round(audio.energiesDb[index] - floorDb).toInt()
+            }
+            if (probability < config.speechProbability) continue
             if (first < 0) first = index
             last = index
-            count++
         }
-        if (first < 0 || count * GAP_WINDOW_MS < config.minSpeechMs) return null
+        if (first < 0 || strong * GAP_WINDOW_MS < config.minSpeechMs || loudness.isEmpty()) return null
+        loudness.sort()
+        if (loudness[loudness.size / 2] < config.minLoudnessDb) return null
         val startMs = maxOf(gap.startMs, gap.startMs + first * GAP_WINDOW_MS - config.paddingMs)
         val endMs = minOf(gap.endMs, gap.startMs + (last + 1) * GAP_WINDOW_MS + config.paddingMs)
         return if (endMs > startMs) startMs..endMs else null
@@ -209,6 +254,10 @@ object GapFill {
     }
 
     private const val SAMPLES_PER_MS = 16L
+    private const val WINDOW_SAMPLES = 512
+    private const val MIN_POWER = 1e-10
+    private const val SILENCE_DB = -100.0
+    private const val FLOOR_QUANTILE = 0.1
     private const val FRAME_MS = 40L
     private const val WORD_MARK = '▁'
     private val SERVICE = setOf("<unk>", "<blk>", "<s>", "</s>", "<pad>")

@@ -7,6 +7,7 @@ import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OfflineTransducerModelConfig
 import kotlin.math.min
 import kotlin.math.roundToLong
+import ru.stenokot.core.asr.GapAudio
 import ru.stenokot.core.asr.GapFill
 import ru.stenokot.core.asr.GapFillConfig
 import ru.stenokot.core.engine.Asr
@@ -98,24 +99,29 @@ internal class TransducerEngine(
     }
 
     override fun transcribe(pcm: PcmReader, chunk: SpeechSegment): AsrSegment {
-        val segment = decode(pcm, chunk)
+        val samples = read(pcm, chunk) ?: return AsrSegment(chunk, "", emptyList())
+        val segment = decode(chunk, samples)
         val config = gaps ?: return segment
         val vad = speech ?: return segment
         return GapFill.fill(
             segment = segment,
             config = config,
-            probabilities = { startMs, endMs ->
-                vad.probabilities(pcm.read(startMs * SAMPLES_PER_MS, ((endMs - startMs) * SAMPLES_PER_MS).toInt()))
+            floorDb = GapFill.floorDb(samples),
+            listen = { startMs, endMs ->
+                val part = pcm.read(startMs * SAMPLES_PER_MS, ((endMs - startMs) * SAMPLES_PER_MS).toInt())
+                GapAudio(vad.probabilities(part), GapFill.windowEnergiesDb(part))
             },
-            decode = { decode(pcm, it) },
+            decode = { range -> read(pcm, range)?.let { decode(range, it) } ?: AsrSegment(range, "", emptyList()) },
         )
     }
 
-    private fun decode(pcm: PcmReader, chunk: SpeechSegment): AsrSegment {
+    private fun read(pcm: PcmReader, chunk: SpeechSegment): FloatArray? {
         val length = chunk.endSample - chunk.startSample
-        if (length <= 0) return AsrSegment(chunk, "", emptyList())
-        val samples = pcm.read(chunk.startSample, length.toInt())
-        if (samples.isEmpty()) return AsrSegment(chunk, "", emptyList())
+        if (length <= 0) return null
+        return pcm.read(chunk.startSample, length.toInt()).takeIf { it.isNotEmpty() }
+    }
+
+    private fun decode(chunk: SpeechSegment, samples: FloatArray): AsrSegment {
         val input = if (samples.size < MIN_SAMPLES) samples.copyOf(MIN_SAMPLES) else samples
         val stream = recognizer.createStream()
         try {

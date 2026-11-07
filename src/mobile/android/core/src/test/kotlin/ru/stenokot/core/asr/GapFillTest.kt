@@ -19,6 +19,8 @@ class GapFillTest {
     private fun segment(startMs: Long, endMs: Long, list: List<AsrToken>) =
         AsrSegment(SpeechSegment(0, startMs * 16, endMs * 16), list.joinToString("") { it.text }.trim(), list)
 
+    private fun loud(probabilities: FloatArray) = GapAudio(probabilities, DoubleArray(probabilities.size) { 40.0 })
+
     @Test
     fun longGapBetweenWordsIsFound() {
         val chunk = segment(0, 3_000, tokens(" один" to 0, " два" to 400, " три" to 2_000, "." to 2_100))
@@ -56,19 +58,55 @@ class GapFillTest {
     }
 
     @Test
-    fun speechSpanNeedsEnoughSpeech() {
+    fun speechSpanNeedsEnoughConfidentSpeech() {
         val gap = SpeechGap(1_000, 3_000, 1)
         val short = FloatArray(60).also { it.fill(0.9f, 10, 29) }
-        assertNull(GapFill.speechSpan(gap, short, config))
+        assertNull(GapFill.speechSpan(gap, loud(short), 0.0, config))
+        val unsure = FloatArray(60).also { it.fill(0.7f, 10, 40) }
+        assertNull(GapFill.speechSpan(gap, loud(unsure), 0.0, config))
         val long = FloatArray(60).also { it.fill(0.9f, 10, 30) }
-        assertEquals(1_120L..2_160L, GapFill.speechSpan(gap, long, config))
+        assertEquals(1_120L..2_160L, GapFill.speechSpan(gap, loud(long), 0.0, config))
+    }
+
+    @Test
+    fun spanCoversUnsureSpeechAroundConfidentSpeech() {
+        val gap = SpeechGap(1_000, 3_000, 1)
+        val track = FloatArray(60).also {
+            it.fill(0.6f, 5, 10)
+            it.fill(0.9f, 10, 30)
+            it.fill(0.6f, 30, 40)
+        }
+        assertEquals(1_000L..2_480L, GapFill.speechSpan(gap, loud(track), 0.0, config))
+    }
+
+    @Test
+    fun speechBarelyAboveBackgroundIsSkipped() {
+        val gap = SpeechGap(1_000, 3_000, 1)
+        val track = FloatArray(60) { 0.95f }
+        assertNull(GapFill.speechSpan(gap, GapAudio(track, DoubleArray(60) { -30.0 }), -44.0, config))
+        assertEquals(1_000L..3_000L, GapFill.speechSpan(gap, GapAudio(track, DoubleArray(60) { -29.0 }), -44.0, config))
     }
 
     @Test
     fun speechSpanStaysInsideTheGap() {
         val gap = SpeechGap(1_000, 2_000, 1)
-        val all = FloatArray(32) { 0.8f }
-        assertEquals(1_000L..2_000L, GapFill.speechSpan(gap, all, config))
+        val all = FloatArray(32) { 0.9f }
+        assertEquals(1_000L..2_000L, GapFill.speechSpan(gap, loud(all), 0.0, config))
+    }
+
+    @Test
+    fun floorIsTenthPercentileOfFullWindows() {
+        val samples = FloatArray(3 * 512 + 100)
+        samples.fill(0.001f, 0, 512)
+        samples.fill(0.01f, 512, 1024)
+        samples.fill(0.1f, 1024, 1536)
+        samples.fill(0.9f, 1536, samples.size)
+        val energies = GapFill.windowEnergiesDb(samples)
+        assertEquals(3, energies.size)
+        assertEquals(-60.0, energies[0], 1e-3)
+        assertEquals(-20.0, energies[2], 1e-3)
+        assertEquals(-56.0, GapFill.floorDb(samples), 1e-3)
+        assertEquals(-100.0, GapFill.floorDb(FloatArray(512)), 1e-9)
     }
 
     @Test
@@ -104,8 +142,9 @@ class GapFillTest {
         val filled = GapFill.fill(
             segment = chunk,
             config = config,
-            probabilities = { startMs, endMs ->
-                FloatArray(((endMs - startMs + 31) / 32).toInt()) { if (startMs == 3_040L) 0.9f else 0.1f }
+            floorDb = 0.0,
+            listen = { startMs, endMs ->
+                loud(FloatArray(((endMs - startMs + 31) / 32).toInt()) { if (startMs == 3_040L) 0.9f else 0.1f })
             },
             decode = { range ->
                 asked += range
@@ -118,8 +157,8 @@ class GapFillTest {
 
     /**
      * Запись владельца: реплика второго голоса 7152-9008 мс тише первого на 13-17 дБ и в целом срезе
-     * пропадает. Токены среза взяты из журнала телефона, вероятности и ответ модели на паузу из
-     * прогона той же модели на компьютере.
+     * пропадает. Токены среза взяты из журнала телефона, вероятности, энергия окон над фоном и ответ
+     * модели на паузу из прогона той же модели на компьютере.
      */
     @Test
     fun rec1QuietVoiceLandsInsideItsTurn() {
@@ -142,6 +181,13 @@ class GapFillTest {
             6, 2, 8, 94, 96, 95, 94, 82, 75, 69, 64, 53, 39, 29, 24, 17, 11, 10, 7, 6, 6, 5, 5, 4, 4, 4, 3, 3, 3, 3,
             2, 1,
         )
+        val gapEnergy = intArrayOf(
+            68, 70, 72, 68, 57, 42, 27, 17, 13, 8, 4, 9, 6, 4, -1, -1, 2, 5, 3, 3, 1, 17, 15, 9, 4, 4, -1, 1, -1, 1,
+            -1, -1, 16, 24, 54, 57, 46, 61, 65, 58, 52, 60, 68, 69, 69, 65, 68, 70, 63, 56, 43, 58, 62, 41, 34, 24,
+            60, 63, 40, 36, 37, 52, 55, 58, 67, 63, 59, 65, 57, 47, 43, 38, 32, 55, 60, 56, 49, 51, 38, 51, 55, 49,
+            52, 48, 40, 43, 28, 22, 35, 52, 56, 54, 39, 29, 21, 24, 28, 23, 20, 20, 30, 23, 20, 18, 16, 18, 19, 18,
+            16, 17, 18, 14, 14, 13, 14, 14, 14,
+        )
         val quiet = tokens(
             " Это" to 7208, " я" to 7408, " так" to 7568, " не" to 7728, " хотел" to 7888, "," to 8168,
             " хотел" to 8288, " сам" to 8528, " по" to 8768, "те" to 8888, "сти" to 9088, "ть" to 9248, "." to 9368,
@@ -150,9 +196,14 @@ class GapFillTest {
         val filled = GapFill.fill(
             segment = chunk,
             config = config,
-            probabilities = { startMs, endMs ->
+            floorDb = 0.0,
+            listen = { startMs, endMs ->
                 val count = ((endMs - startMs) * 16 + 511).toInt() / 512
-                FloatArray(count) { if (startMs == 6_040L && it < gapTrack.size) gapTrack[it] / 100f else 0f }
+                val target = startMs == 6_040L
+                GapAudio(
+                    FloatArray(count) { if (target && it < gapTrack.size) gapTrack[it] / 100f else 0f },
+                    DoubleArray(count - 1) { if (target && it < gapEnergy.size) gapEnergy[it].toDouble() else 0.0 },
+                )
             },
             decode = { range ->
                 asked += range
