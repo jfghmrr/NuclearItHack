@@ -54,6 +54,7 @@
     <string name="banner_waiting_model">Ждём модель: %1$s из %2$s МиБ</string>
     <string name="banner_applied">Протокол готов</string>
     <string name="banner_partial">Протокол частичный: %1$s из %2$d</string>
+    <string name="banner_partial_unknown">Протокол частичный</string>
     <string name="banner_deferred">Протокол отложен до простоя</string>
     <string name="banner_cancelled">Протокол отложен: новая запись</string>
     <string name="banner_skipped_memory">Протокол пропущен из-за памяти</string>

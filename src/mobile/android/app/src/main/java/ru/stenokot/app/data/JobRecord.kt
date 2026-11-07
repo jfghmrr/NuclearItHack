@@ -90,6 +90,8 @@ data class LlmRecord(
     val tookMs: Long = 0,
     val promptTokens: Long? = null,
     val completionTokens: Long? = null,
+    val windowsDone: Int? = null,
+    val windowsTotal: Int? = null,
 )
 
 /** Единственный источник правды о задаче. Пишет его только основной процесс. */

@@ -458,6 +458,8 @@ class PipelineRunner(
                     tookMs = job.llm.tookMs + took,
                     promptTokens = stats?.promptTokens ?: job.llm.promptTokens,
                     completionTokens = stats?.completionTokens ?: job.llm.completionTokens,
+                    windowsDone = stats?.windowsDone ?: job.llm.windowsDone,
+                    windowsTotal = stats?.windowsTotal ?: job.llm.windowsTotal,
                 ),
             )
         }

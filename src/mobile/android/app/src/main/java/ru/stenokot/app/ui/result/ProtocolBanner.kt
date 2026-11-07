@@ -85,11 +85,15 @@ internal fun bannerText(phase: ProtocolPhase, protocol: ProtocolUi): String = wh
         formatMibValue(protocol.modelTotalBytes ?: 0),
     )
     ProtocolPhase.APPLIED -> stringResource(R.string.banner_applied)
-    ProtocolPhase.PARTIAL -> stringResource(
-        R.string.banner_partial,
-        windowsLabel(protocol.windowsDone ?: 0),
-        protocol.windowsTotal ?: 0,
-    )
+    ProtocolPhase.PARTIAL -> {
+        val done = protocol.windowsDone
+        val total = protocol.windowsTotal
+        if (done != null && total != null) {
+            stringResource(R.string.banner_partial, windowsLabel(done), total)
+        } else {
+            stringResource(R.string.banner_partial_unknown)
+        }
+    }
     ProtocolPhase.DEFERRED -> stringResource(R.string.banner_deferred)
     ProtocolPhase.CANCELLED_BY_NEW_JOB -> stringResource(R.string.banner_cancelled)
     ProtocolPhase.SKIPPED_MEMORY -> stringResource(R.string.banner_skipped_memory)

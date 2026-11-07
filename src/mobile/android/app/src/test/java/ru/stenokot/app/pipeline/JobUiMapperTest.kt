@@ -74,6 +74,18 @@ class JobUiMapperTest {
     }
 
     @Test
+    fun finishedProtocolKeepsItsRealWindowCount() {
+        val job = job(phase = JobPhase.DONE, stage = Stage.LLM)
+            .copy(llm = LlmRecord(status = LlmStatus.PARTIAL, windowsDone = 1, windowsTotal = 3))
+        val protocol = JobUiMapper.protocol(job, null, null, null)
+        assertEquals(1, protocol.windowsDone)
+        assertEquals(3, protocol.windowsTotal)
+        val unknown = JobUiMapper.protocol(job.copy(llm = LlmRecord(status = LlmStatus.PARTIAL)), null, null, null)
+        assertNull(unknown.windowsDone)
+        assertNull(unknown.windowsTotal)
+    }
+
+    @Test
     fun verificationGetsLlmTimeFromItsOwnRecord() {
         val job = job().copy(stageMs = mapOf(Stage.ASR to 3_000L), llm = LlmRecord(status = LlmStatus.FAILED, tookMs = 78_000))
         val metrics = JobUiMapper.stageMetrics(job).associateBy { it.stage }

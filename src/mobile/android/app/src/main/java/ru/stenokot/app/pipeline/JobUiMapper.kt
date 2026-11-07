@@ -195,8 +195,8 @@ object JobUiMapper {
         return ProtocolUi(
             status = job.llm.status,
             running = job.phase == JobPhase.RUNNING && job.stage == Stage.LLM,
-            windowsDone = own?.counterDone,
-            windowsTotal = own?.counterTotal,
+            windowsDone = own?.counterDone ?: job.llm.windowsDone,
+            windowsTotal = own?.counterTotal ?: job.llm.windowsTotal,
             modelCopiedBytes = models?.copiedBytes?.takeIf { waiting },
             modelTotalBytes = models?.totalBytes?.takeIf { waiting },
             retryUsed = job.llm.retryUsed,
