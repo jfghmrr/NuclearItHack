@@ -11,8 +11,8 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -83,16 +83,22 @@ class PipelineService : Service() {
         super.onDestroy()
     }
 
-    /** Отказ разрешения на уведомления запуску не мешает: тип службы от него не зависит. */
+    /**
+     * Отказ разрешения на уведомления запуску не мешает: тип службы от него не зависит.
+     *
+     * Вызов идёт напрямую, а не через ServiceCompat: core 1.18.0 обрезает тип маской времён API 34,
+     * mediaProcessing превращается в ноль, и система отказывает в запуске.
+     */
     private fun promote(): Boolean = try {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
         } else {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         }
-        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(runner.live.value), type)
+        startForeground(NOTIFICATION_ID, notification(runner.live.value), type)
         true
     } catch (failure: IllegalStateException) {
+        Log.e(LOG_TAG, "Служба не вышла на передний план", failure)
         false
     }
 
@@ -122,6 +128,7 @@ class PipelineService : Service() {
             while (!stopped) {
                 withTimeoutOrNull(START_GRACE_MS) { runner.busy.first { it } }
                 runner.busy.first { !it }
+                Log.i(LOG_TAG, "Работы нет, служба останавливается")
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopped = stopSelfResult(lastStartId)
             }
@@ -177,6 +184,7 @@ class PipelineService : Service() {
     )
 
     companion object {
+        private const val LOG_TAG = "PipelineService"
         private const val ACTION_CANCEL = "ru.stenokot.app.action.CANCEL"
         private const val CHANNEL_ID = "pipeline"
         private const val CHANNEL_NAME = "Обработка записи"
@@ -199,7 +207,7 @@ class PipelineService : Service() {
             try {
                 ContextCompat.startForegroundService(context, Intent(context, PipelineService::class.java))
             } catch (failure: IllegalStateException) {
-                return
+                Log.w(LOG_TAG, "Система не разрешила запуск службы", failure)
             }
         }
     }
