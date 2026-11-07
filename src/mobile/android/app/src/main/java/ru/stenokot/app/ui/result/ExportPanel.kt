@@ -85,15 +85,22 @@ private fun findInDownloads(context: Context, path: String): Uri? {
     }.getOrNull()
 }
 
-/** Открывает системное окно «Поделиться». Значение false означает, что отдавать нечего. */
+/**
+ * Открывает системное окно «Поделиться». Адрес дублируется в ClipData: без него окно не получает
+ * права на чтение и вместо имени файла показывает номер записи. Значение false означает, что
+ * отдавать нечего.
+ */
 internal suspend fun shareOutput(context: Context, output: OutputFileUi, title: String): Boolean {
     val uri = withContext(Dispatchers.IO) {
         output.contentUri?.let(Uri::parse) ?: findInDownloads(context, output.path)
     } ?: return false
+    val name = output.path.substringAfterLast('/')
     val send = Intent(Intent.ACTION_SEND)
         .setType(MIME_JSON)
         .putExtra(Intent.EXTRA_STREAM, uri)
+        .putExtra(Intent.EXTRA_TITLE, name)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    send.clipData = ClipData.newRawUri(name, uri)
     return launch(context, Intent.createChooser(send, title))
 }
 
