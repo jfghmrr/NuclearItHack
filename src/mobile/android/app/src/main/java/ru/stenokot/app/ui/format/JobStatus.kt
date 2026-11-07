@@ -36,7 +36,8 @@ fun protocolLabel(state: JobState): String? = when {
     state is JobState.Done -> when (state.llm) {
         LlmStatus.APPLIED -> "Протокол готов"
         LlmStatus.PARTIAL -> "Протокол частичный"
-        LlmStatus.DEFERRED, LlmStatus.CANCELLED_BY_NEW_JOB -> "Протокол отложен"
+        LlmStatus.DEFERRED -> "Протокол отложен"
+        LlmStatus.CANCELLED_BY_NEW_JOB -> "Протокол остановлен"
         LlmStatus.SKIPPED_BY_BUDGET, LlmStatus.SKIPPED_LOW_MEMORY -> "Протокол пропущен"
         LlmStatus.FAILED -> "Протокол не создан"
     }

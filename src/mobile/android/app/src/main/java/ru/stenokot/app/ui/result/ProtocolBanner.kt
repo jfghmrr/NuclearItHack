@@ -63,7 +63,8 @@ internal val ProtocolPhase.icon: Int
         ProtocolPhase.WAITING_MODEL -> R.drawable.ic_hourglass_top
         ProtocolPhase.APPLIED -> R.drawable.ic_check_circle_fill
         ProtocolPhase.PARTIAL, ProtocolPhase.FAILED, ProtocolPhase.NO_MODEL -> R.drawable.ic_warning
-        ProtocolPhase.DEFERRED, ProtocolPhase.CANCELLED_BY_NEW_JOB -> R.drawable.ic_schedule
+        ProtocolPhase.DEFERRED -> R.drawable.ic_schedule
+        ProtocolPhase.CANCELLED_BY_NEW_JOB -> R.drawable.ic_cancel
         ProtocolPhase.SKIPPED_MEMORY -> R.drawable.ic_memory
         ProtocolPhase.SKIPPED_BUDGET -> R.drawable.ic_timer_off
         ProtocolPhase.NO_SPEECH -> R.drawable.ic_info

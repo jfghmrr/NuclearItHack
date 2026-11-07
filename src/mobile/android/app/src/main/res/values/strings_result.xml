@@ -89,7 +89,7 @@
     <string name="banner_partial">Протокол частичный: %1$s из %2$d</string>
     <string name="banner_partial_unknown">Протокол частичный</string>
     <string name="banner_deferred">Протокол отложен до простоя</string>
-    <string name="banner_cancelled">Протокол отложен: новая запись</string>
+    <string name="banner_cancelled">Протокол остановлен</string>
     <string name="banner_skipped_memory">Протокол пропущен из-за памяти</string>
     <string name="banner_skipped_budget">Протокол пропущен: лимит времени</string>
     <string name="banner_failed">Не удалось сформировать протокол: ошибка LLM</string>
