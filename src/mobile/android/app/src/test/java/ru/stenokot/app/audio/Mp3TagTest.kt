@@ -74,4 +74,11 @@ class Mp3TagTest {
     }
 
     private fun read(file: File): Mp3Tag? = FileAudioInput(file).open().use(Mp3Tag::read)
+
+    @Test
+    fun tailIsProbedOnlyOnLongRecordings() {
+        assertFalse(Preflight.checksTail(1_000_000))
+        assertFalse(Preflight.checksTail(59_999_999))
+        assertTrue(Preflight.checksTail(60_000_000))
+    }
 }

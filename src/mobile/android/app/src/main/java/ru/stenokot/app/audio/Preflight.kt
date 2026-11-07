@@ -36,6 +36,7 @@ object Preflight {
     private const val TRIAL_TIMEOUT_MS = 5_000L
     private const val DEQUEUE_US = 5_000L
     private const val TAIL_POSITION = 0.9
+    private const val TAIL_MIN_DURATION_US = 60_000_000L
     private const val PROBE_BUFFER = 1 shl 18
     private const val LARGE_WAV_MIME = "audio/wav"
     private const val LARGE_WAV_CODEC = "pcm"
@@ -60,7 +61,7 @@ object Preflight {
                 track.isUnwrapped -> source.open().use(OggFlac::durationUs)
                 else -> tag?.durationMs?.times(1000) ?: track.headerDurationUs
             }
-            if (reliable && headerUs != null) requireTail(track, headerUs)
+            if (reliable && headerUs != null && checksTail(headerUs)) requireTail(track, headerUs)
             return AudioProbe(
                 mime = track.mime,
                 codecName = codecName,
@@ -73,6 +74,13 @@ object Preflight {
             )
         }
     }
+
+    /**
+     * Проверка хвоста нужна длинной записи: иначе обрыв выяснился бы только через минуты
+     * декодирования. На короткой записи переход к концу у MP3 уходит за последний кадр и целый файл
+     * выглядит обрезанным, а настоящий обрыв и так виден на декодировании до загрузки моделей.
+     */
+    internal fun checksTail(durationUs: Long): Boolean = durationUs >= TAIL_MIN_DURATION_US
 
     private fun probeLargeWav(wav: LargeWav, size: Long) = AudioProbe(
         mime = LARGE_WAV_MIME,
