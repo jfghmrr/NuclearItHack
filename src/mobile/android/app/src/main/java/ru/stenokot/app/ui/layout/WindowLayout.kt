@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -29,11 +30,14 @@ import androidx.compose.ui.unit.dp
 /** Максимальная ширина колонки текста на средних и широких окнах. */
 val ContentMaxWidth = 640.dp
 
+private const val SHORT_HEIGHT_DP = 640
+
 /** Как экран должен раскладываться в текущем окне. */
 @Immutable
 data class WindowLayout(
     val width: WindowWidthSizeClass,
     val height: WindowHeightSizeClass,
+    val heightDp: Int,
     val fontScale: Float,
 ) {
     /** Широкое окно или телефон в альбомной ориентации: две панели рядом. */
@@ -47,8 +51,17 @@ data class WindowLayout(
     /** Низкое окно: каждую строку высоты надо беречь. */
     val compactHeight: Boolean get() = height == WindowHeightSizeClass.Compact
 
+    /** Короткий экран: маленький телефон или альбомная ориентация. Второстепенное уходит вниз списка. */
+    val short: Boolean get() = heightDp < SHORT_HEIGHT_DP
+
     /** Крупный шрифт системы: колонки складываются в одну, поле с таймкодом уходит в текст. */
     val largeText: Boolean get() = fontScale >= 1.5f
+
+    /** Крупный шрифт на коротком экране: закреплённым остаётся только самое необходимое. */
+    val tiny: Boolean get() = short && largeText
+
+    /** Подсказки к импорту не помещаются рядом с кнопкой и живут в прокручиваемой части. */
+    val hintsInContent: Boolean get() = short || largeText
 
     /** Боковое поле экрана. */
     val gutter: Dp get() = if (compactWidth) 16.dp else 24.dp
@@ -65,8 +78,9 @@ val LocalWindowLayout = staticCompositionLocalOf<WindowLayout> {
 fun ProvideWindowLayout(activity: Activity, content: @Composable () -> Unit) {
     val sizeClass = calculateWindowSizeClass(activity)
     val fontScale = LocalDensity.current.fontScale
-    val layout = remember(sizeClass, fontScale) {
-        WindowLayout(sizeClass.widthSizeClass, sizeClass.heightSizeClass, fontScale)
+    val heightDp = LocalConfiguration.current.screenHeightDp
+    val layout = remember(sizeClass, heightDp, fontScale) {
+        WindowLayout(sizeClass.widthSizeClass, sizeClass.heightSizeClass, heightDp, fontScale)
     }
     CompositionLocalProvider(LocalWindowLayout provides layout, content = content)
 }

@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import ru.stenokot.app.ui.layout.LocalWindowLayout
 import ru.stenokot.app.ui.theme.StenoRadius
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
@@ -29,6 +30,12 @@ import ru.stenokot.app.ui.theme.StenoTheme
 
 private val ActionShape = RoundedCornerShape(StenoRadius.xl)
 private val ActionPadding = PaddingValues(horizontal = 20.dp, vertical = StenoSpace.m)
+private val LargeTextPadding = PaddingValues(horizontal = StenoSpace.m, vertical = StenoSpace.m)
+
+/** Отступы кнопки. При крупном шрифте подпись важнее воздуха: иначе длинное слово разорвётся. */
+@Composable
+private fun actionPadding(): PaddingValues =
+    if (LocalWindowLayout.current.largeText) LargeTextPadding else ActionPadding
 
 /** Подпись прижата влево, значок вправо: кнопка читается как строка документа, а не как плашка. */
 @Composable
@@ -39,7 +46,7 @@ private fun RowScope.ActionContent(text: String, @DrawableRes icon: Int?) {
         style = StenoTheme.type.labelLarge,
         textAlign = TextAlign.Start,
     )
-    if (icon != null) {
+    if (icon != null && !LocalWindowLayout.current.largeText) {
         Spacer(Modifier.width(StenoSpace.m))
         Icon(painterResource(icon), contentDescription = null, Modifier.size(StenoSize.icon))
     }
@@ -60,7 +67,7 @@ fun PrimaryAction(
         modifier = modifier.fillMaxWidth().heightIn(min = StenoSize.actionHeight).tagged(tag),
         enabled = enabled,
         shape = ActionShape,
-        contentPadding = ActionPadding,
+        contentPadding = actionPadding(),
         elevation = null,
     ) { ActionContent(text, icon) }
 }
@@ -81,7 +88,7 @@ fun TonalAction(
         modifier = modifier.fillMaxWidth().heightIn(min = StenoSize.actionHeight).tagged(tag),
         enabled = enabled,
         shape = ActionShape,
-        contentPadding = ActionPadding,
+        contentPadding = actionPadding(),
         elevation = null,
         colors = ButtonDefaults.buttonColors(
             containerColor = colors.secondaryContainer,
@@ -106,7 +113,7 @@ fun OutlinedAction(
         modifier = modifier.fillMaxWidth().heightIn(min = StenoSize.actionHeight).tagged(tag),
         enabled = enabled,
         shape = ActionShape,
-        contentPadding = ActionPadding,
+        contentPadding = actionPadding(),
         border = BorderStroke(StenoSize.hairline, if (enabled) colors.outline else colors.outlineVariant),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
     ) { ActionContent(text, icon) }

@@ -14,8 +14,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -35,6 +39,7 @@ import ru.stenokot.app.domain.StageUi
 import ru.stenokot.app.ui.Tags
 import ru.stenokot.app.ui.format.formatTimecode
 import ru.stenokot.app.ui.format.userStageLabel
+import ru.stenokot.app.ui.layout.LocalWindowLayout
 import ru.stenokot.app.ui.theme.StenoColors
 import ru.stenokot.app.ui.theme.StenoMotion
 import ru.stenokot.app.ui.theme.StenoSize
@@ -99,6 +104,7 @@ private fun spokenRow(label: String, stage: StageUi): String = when (stage.statu
 /**
  * Рельс этапов: вертикальная линия с узлами. У готовых этапов справа реальное время, у текущего
  * строка раскрывается слотом [activeBody], ожидающие стоят тихо. Значения приходят от конвейера.
+ * При смене этапа активная строка сама встаёт в видимую часть прокрутки.
  */
 @Composable
 fun StageRail(
@@ -132,10 +138,15 @@ private fun RailRow(
     val active = stage.status == StageStatus.ACTIVE
     val label = userStageLabel(stage.stage)
     val spoken = spokenRow(label, stage)
+    val visibility = remember { BringIntoViewRequester() }
+    LaunchedEffect(active) {
+        if (active) visibility.bringIntoView()
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = StenoSize.touchTarget)
+            .bringIntoViewRequester(visibility)
             .animateContentSize(tween(StenoMotion.MEDIUM))
             .railLine(lineAbove, lineBelow)
             .then(
@@ -150,35 +161,41 @@ private fun RailRow(
     ) {
         RailNode(stage.status, paused)
         Column(Modifier.weight(1f).padding(top = NodeTop, bottom = if (active) StenoSpace.l else StenoSpace.s)) {
-            Row(
-                modifier = Modifier.heightIn(min = NodeSize),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
-            ) {
+            val title: @Composable (Modifier) -> Unit = { titleModifier ->
                 Text(
                     text = label,
-                    modifier = Modifier
-                        .weight(1f)
-                        .then(
-                            if (active) {
-                                Modifier
-                                    .testTag(Tags.STAGE)
-                                    .semantics {
-                                        contentDescription = spoken
-                                        liveRegion = LiveRegionMode.Polite
-                                    }
-                            } else {
-                                Modifier
-                            },
-                        ),
-                    style = when {
-                        active -> type.titleMedium
-                        else -> type.bodyLarge.copy(fontWeight = FontWeight.W500)
-                    },
+                    modifier = titleModifier.then(
+                        if (active) {
+                            Modifier
+                                .testTag(Tags.STAGE)
+                                .semantics {
+                                    contentDescription = spoken
+                                    liveRegion = LiveRegionMode.Polite
+                                }
+                        } else {
+                            Modifier
+                        },
+                    ),
+                    style = if (active) type.titleMedium else type.bodyLarge.copy(fontWeight = FontWeight.W500),
                     color = if (stage.status == StageStatus.PENDING) colors.onSurfaceVariant else colors.onSurface,
                 )
+            }
+            val time: @Composable () -> Unit = {
                 stage.tookMs?.let {
                     Text(formatTimecode(it), style = type.monoMedium, color = colors.onSurfaceVariant)
+                }
+            }
+            if (LocalWindowLayout.current.largeText) {
+                title(Modifier)
+                time()
+            } else {
+                Row(
+                    modifier = Modifier.heightIn(min = NodeSize),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
+                ) {
+                    title(Modifier.weight(1f))
+                    time()
                 }
             }
             if (active) activeBody(stage)

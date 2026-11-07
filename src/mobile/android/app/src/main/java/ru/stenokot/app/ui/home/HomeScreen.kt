@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -93,6 +94,7 @@ import ru.stenokot.app.ui.format.protocolLabel
 import ru.stenokot.app.ui.format.speakersLabel
 import ru.stenokot.app.ui.format.userStageLabel
 import ru.stenokot.app.ui.format.userStageOf
+import ru.stenokot.app.ui.layout.CenteredContent
 import ru.stenokot.app.ui.layout.ContentMaxWidth
 import ru.stenokot.app.ui.layout.LocalWindowLayout
 import ru.stenokot.app.ui.nav.Route
@@ -191,6 +193,7 @@ private fun HomeSinglePane(state: HomeState, callbacks: HomeCallbacks) {
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val side = ((maxWidth - ContentMaxWidth) / 2).coerceAtLeast(0.dp)
             val viewport = maxHeight
+            val hintsAtEnd = LocalWindowLayout.current.hintsInContent
             LazyColumn(
                 modifier = Modifier.fillMaxSize().testTag(Tags.LIST_AUDIO),
                 contentPadding = PaddingValues(start = side, end = side, bottom = StenoSpace.l),
@@ -199,6 +202,9 @@ private fun HomeSinglePane(state: HomeState, callbacks: HomeCallbacks) {
                     HomeHeader(state.home.models, callbacks)
                 }
                 homeContent(state, callbacks, viewport)
+                if (hintsAtEnd) {
+                    item(key = "hints", contentType = "hints") { ImportHints(callbacks) }
+                }
             }
         }
         HomeDock(state, callbacks)
@@ -212,6 +218,7 @@ private fun HomeTwoPanes(state: HomeState, callbacks: HomeCallbacks) {
         Column(Modifier.weight(0.42f).fillMaxHeight()) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                 HomeHeader(state.home.models, callbacks)
+                if (LocalWindowLayout.current.hintsInContent) ImportHints(callbacks)
             }
             HomeDock(state, callbacks)
         }
@@ -233,12 +240,12 @@ private fun HomeHeader(models: ModelsUi, callbacks: HomeCallbacks) {
     val layout = LocalWindowLayout.current
     val colors = StenoTheme.colors
     val type = StenoTheme.type
-    val titleStyle = if (layout.compactHeight) type.headline else type.display
+    val titleStyle = if (layout.short) type.headline else type.display
     Column(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = layout.gutter)
-            .padding(top = if (layout.compactHeight) StenoSpace.m else StenoSpace.xl),
+            .padding(top = if (layout.short) StenoSpace.m else StenoSpace.xl),
     ) {
         Text(
             text = stringResource(R.string.scr01_title),
@@ -248,18 +255,14 @@ private fun HomeHeader(models: ModelsUi, callbacks: HomeCallbacks) {
             maxLines = 1,
             autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = titleStyle.fontSize),
         )
-        Spacer(Modifier.height(StenoSpace.s))
+        Spacer(Modifier.height(if (layout.short) StenoSpace.xs else StenoSpace.s))
         Text(
             text = stringResource(R.string.scr01_promise),
-            style = type.bodyLarge,
+            style = if (layout.short) type.bodyMedium else type.bodyLarge,
             color = colors.onSurfaceVariant,
         )
-        Spacer(Modifier.height(StenoSpace.l))
+        Spacer(Modifier.height(if (layout.short) StenoSpace.xs else StenoSpace.l))
         ModelsRow(models, callbacks.onModels)
-        if (layout.largeText) {
-            Spacer(Modifier.height(StenoSpace.s))
-            ImportHints(callbacks)
-        }
     }
 }
 
@@ -327,11 +330,12 @@ private fun ModelsRow(models: ModelsUi, onClick: () -> Unit) {
 private fun ImportHints(callbacks: HomeCallbacks) {
     val colors = StenoTheme.colors
     val type = StenoTheme.type
-    Column {
+    Column(Modifier.padding(horizontal = LocalWindowLayout.current.gutter).padding(top = StenoSpace.s)) {
         Text(stringResource(R.string.scr01_formats), style = type.bodySmall, color = colors.onSurfaceVariant)
         QuietAction(
             text = stringResource(R.string.scr01_btn_import_all),
             onClick = callbacks.onImportAll,
+            modifier = Modifier.offset(x = -StenoSpace.s),
             tag = Tags.IMPORT_ALL,
         )
     }
@@ -343,34 +347,22 @@ private fun HomeDock(state: HomeState, callbacks: HomeCallbacks) {
     val colors = StenoTheme.colors
     val type = StenoTheme.type
     val selected = state.sections.selected
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
+    CenteredContent(
+        Modifier
             .background(colors.surface)
             .drawBehind {
                 drawLine(colors.outlineVariant, Offset.Zero, Offset(size.width, 0f), StenoSize.hairline.toPx())
             },
-        contentAlignment = Alignment.TopCenter,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = layout.gutter)
-                .padding(top = StenoSpace.m, bottom = if (layout.largeText) StenoSpace.m else StenoSpace.xs),
+                .padding(top = StenoSpace.m, bottom = if (layout.hintsInContent) StenoSpace.m else StenoSpace.xs),
             verticalArrangement = Arrangement.spacedBy(StenoSpace.s),
         ) {
             if (selected != null) {
-                PrimaryAction(
-                    text = stringResource(R.string.common_btn_start),
-                    onClick = { callbacks.onStart(selected.id) },
-                    icon = R.drawable.ic_play_arrow_fill,
-                    tag = Tags.START,
-                )
-                Text(
-                    text = stringResource(R.string.scr01_autostart_hint),
-                    style = type.bodySmall,
-                    color = colors.onSurfaceVariant,
-                )
+                if (!layout.tiny) StartAction(selected.id, callbacks)
                 OutlinedAction(
                     text = stringResource(R.string.common_btn_import),
                     onClick = callbacks.onImport,
@@ -385,7 +377,7 @@ private fun HomeDock(state: HomeState, callbacks: HomeCallbacks) {
                     tag = Tags.IMPORT,
                 )
             }
-            if (!layout.largeText) {
+            if (!layout.hintsInContent) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -408,13 +400,40 @@ private fun HomeDock(state: HomeState, callbacks: HomeCallbacks) {
     }
 }
 
+@Composable
+private fun StartAction(jobId: String, callbacks: HomeCallbacks) {
+    PrimaryAction(
+        text = stringResource(R.string.common_btn_start),
+        onClick = { callbacks.onStart(jobId) },
+        icon = R.drawable.ic_play_arrow_fill,
+        tag = Tags.START,
+    )
+    Text(
+        text = stringResource(R.string.scr01_autostart_hint),
+        style = StenoTheme.type.bodySmall,
+        color = StenoTheme.colors.onSurfaceVariant,
+    )
+}
+
 private fun LazyListScope.homeContent(state: HomeState, callbacks: HomeCallbacks, viewport: Dp) {
     val sections = state.sections
     state.sections.active?.let { job ->
         item(key = "job", contentType = "job") { JobCard(job, sections.queuedCount, callbacks.onJob) }
     }
     sections.selected?.let { job ->
-        item(key = "selected", contentType = "selected") { SelectedFile(job, state.preflight) }
+        item(key = "selected", contentType = "selected") {
+            SelectedFile(job, state.preflight)
+            if (LocalWindowLayout.current.tiny) {
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = LocalWindowLayout.current.gutter)
+                        .padding(top = StenoSpace.m),
+                    verticalArrangement = Arrangement.spacedBy(StenoSpace.s),
+                ) {
+                    StartAction(job.id, callbacks)
+                }
+            }
+        }
     }
     sections.interrupted?.let { job ->
         item(key = "interrupted", contentType = "interrupted") { InterruptedCard(job, callbacks) }
@@ -433,7 +452,7 @@ private fun LazyListScope.homeContent(state: HomeState, callbacks: HomeCallbacks
                 modifier = Modifier.fillMaxWidth().heightIn(min = viewport * 0.6f),
                 contentAlignment = Alignment.Center,
             ) {
-                EmptyState(stringResource(R.string.scr01_empty)) {
+                EmptyState(stringResource(R.string.scr01_empty), mascotSize = emptyMascotSize()) {
                     if (!state.home.audioPermissionGranted) PermissionRow(callbacks.onPermission)
                 }
             }
@@ -460,6 +479,9 @@ private fun LazyListScope.homeContent(state: HomeState, callbacks: HomeCallbacks
         }
     }
 }
+
+@Composable
+private fun emptyMascotSize(): Dp = if (LocalWindowLayout.current.short) 88.dp else StenoSize.mascot
 
 @Composable
 private fun Section(title: String, tag: String?) {

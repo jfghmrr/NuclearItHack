@@ -2,7 +2,6 @@ package ru.stenokot.app.ui.processing
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -17,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -144,7 +144,7 @@ private fun ProcessingScreen(
         }
     }
     val file: @Composable () -> Unit = {
-        ProcessingFile(detail, processing)
+        ProcessingFile(detail, processing, withPreflight = !layout.short)
     }
     val status: @Composable () -> Unit = {
         if (cancelled) {
@@ -152,38 +152,42 @@ private fun ProcessingScreen(
         } else {
             ProcessingStatus(processing, paused, showAlreadyRunning)
         }
+        if (layout.short) PreflightNote(processing)
     }
     val dock: @Composable () -> Unit = {
         ProcessingDock(cancelled, processing.cancelling, onStart, onCancel, onImport)
     }
+    val dockUnderPanes = layout.compactHeight
     if (layout.twoPane) {
-        Row(Modifier.fillMaxSize()) {
-            Column(Modifier.weight(0.42f).fillMaxHeight()) {
-                StenoTopBar(stringResource(R.string.scr03_title), onBack = onBack)
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = layout.gutter)
-                        .padding(bottom = StenoSpace.l),
-                    verticalArrangement = Arrangement.spacedBy(StenoSpace.m),
-                ) {
-                    file()
-                    status()
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                Column(Modifier.weight(0.42f).fillMaxHeight()) {
+                    StenoTopBar(stringResource(R.string.scr03_title), onBack = onBack)
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = layout.gutter)
+                            .padding(bottom = StenoSpace.l),
+                        verticalArrangement = Arrangement.spacedBy(StenoSpace.m),
+                    ) {
+                        file()
+                        status()
+                    }
+                    if (!dockUnderPanes) dock()
                 }
-            }
-            Spacer(Modifier.width(StenoSize.hairline).fillMaxHeight().background(colors.outlineVariant))
-            Column(Modifier.weight(0.58f).fillMaxHeight()) {
+                Spacer(Modifier.width(StenoSize.hairline).fillMaxHeight().background(colors.outlineVariant))
                 Column(
                     modifier = Modifier
-                        .weight(1f)
+                        .weight(0.58f)
+                        .fillMaxHeight()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = layout.gutter, vertical = StenoSpace.m),
+                        .padding(horizontal = layout.gutter, vertical = StenoSpace.s),
                 ) {
                     rail()
                 }
-                dock()
             }
+            if (dockUnderPanes) dock()
         }
     } else {
         Column(Modifier.fillMaxSize()) {
@@ -195,27 +199,40 @@ private fun ProcessingScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = layout.gutter)
                         .padding(bottom = StenoSpace.l),
-                    verticalArrangement = Arrangement.spacedBy(StenoSpace.l),
+                    verticalArrangement = Arrangement.spacedBy(if (layout.short) StenoSpace.s else StenoSpace.l),
                 ) {
                     file()
                     rail()
                     status()
+                    if (layout.tiny) dock()
                 }
             }
-            dock()
+            if (!layout.tiny) dock()
         }
     }
 }
 
 @Composable
-private fun ProcessingFile(detail: JobDetailUi, processing: ProcessingUi) {
+private fun ProcessingFile(detail: JobDetailUi, processing: ProcessingUi, withPreflight: Boolean) {
     val preflight = processing.preflight
     val duration = (preflight?.durationMs ?: detail.summary.durationMs)?.let(::formatTimecode)
     val size = preflight?.sizeBytes?.let(::formatMib)
     FileCard(
         name = preflight?.fileName ?: detail.summary.title,
         meta = listOfNotNull(duration, size).joinToString(META_DOT).ifEmpty { null },
-        preflight = preflight?.let(::formatPreflight),
+        preflight = if (withPreflight) preflight?.let(::formatPreflight) else null,
+    )
+}
+
+/** Строка проверки файла под рельсом: на коротком экране она не должна отодвигать прогресс. */
+@Composable
+private fun PreflightNote(processing: ProcessingUi) {
+    val line = processing.preflight?.let(::formatPreflight) ?: return
+    Text(
+        text = line,
+        modifier = Modifier.testTag(Tags.PREFLIGHT),
+        style = StenoTheme.type.bodySmall,
+        color = StenoTheme.colors.onSurfaceVariant,
     )
 }
 
@@ -396,7 +413,8 @@ private fun ProcessingDock(
     val layout = LocalWindowLayout.current
     val colors = StenoTheme.colors
     val start = stringResource(R.string.common_btn_start)
-    val sideBySide = !layout.compactWidth && !layout.largeText
+    val sideBySide = !layout.twoPane || layout.compactHeight
+    val inRow = sideBySide && !layout.compactWidth && !layout.largeText
     val first: @Composable (Modifier) -> Unit = { modifier ->
         if (cancelled) {
             PrimaryAction(start, onStart, modifier, icon = R.drawable.ic_play_arrow_fill, tag = Tags.START)
@@ -423,32 +441,28 @@ private fun ProcessingDock(
             )
         }
     }
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .drawBehind {
-                drawLine(colors.outlineVariant, Offset.Zero, Offset(size.width, 0f), StenoSize.hairline.toPx())
-            },
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        CenteredContent {
-            if (sideBySide) {
-                Row(
-                    modifier = Modifier.padding(horizontal = layout.gutter, vertical = StenoSpace.m),
-                    horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
-                ) {
-                    first(Modifier.weight(1.6f))
-                    second(Modifier.weight(1f))
-                }
-            } else {
-                Column(
-                    modifier = Modifier.padding(horizontal = layout.gutter, vertical = StenoSpace.m),
-                    verticalArrangement = Arrangement.spacedBy(StenoSpace.s),
-                ) {
-                    first(Modifier)
-                    second(Modifier)
-                }
+    val actions: @Composable (Modifier) -> Unit = { modifier ->
+        if (inRow || layout.width == WindowWidthSizeClass.Expanded) {
+            Row(modifier, horizontalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
+                first(Modifier.weight(1.6f))
+                second(Modifier.weight(1f))
+            }
+        } else {
+            Column(modifier, verticalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
+                first(Modifier)
+                second(Modifier)
             }
         }
+    }
+    if (layout.tiny) {
+        actions(Modifier)
+        return
+    }
+    CenteredContent(
+        Modifier.drawBehind {
+            drawLine(colors.outlineVariant, Offset.Zero, Offset(size.width, 0f), StenoSize.hairline.toPx())
+        },
+    ) {
+        actions(Modifier.padding(horizontal = layout.gutter, vertical = StenoSpace.m))
     }
 }

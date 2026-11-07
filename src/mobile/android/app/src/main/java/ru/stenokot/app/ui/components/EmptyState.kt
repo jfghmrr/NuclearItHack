@@ -11,7 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 
@@ -21,6 +23,7 @@ fun EmptyState(
     text: String,
     modifier: Modifier = Modifier,
     mascot: MascotKind = MascotKind.EMPTY,
+    mascotSize: Dp = StenoSize.mascot,
     content: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     Column(
@@ -28,7 +31,7 @@ fun EmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(StenoSpace.l),
     ) {
-        Mascot(mascot)
+        Mascot(mascot, size = mascotSize)
         Text(
             text = text,
             modifier = Modifier.widthIn(max = 320.dp),
