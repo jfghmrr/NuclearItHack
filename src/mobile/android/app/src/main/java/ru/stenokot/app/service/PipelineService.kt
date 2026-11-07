@@ -74,7 +74,7 @@ class PipelineService : Service() {
      * Запись на восемь часов при медленном устройстве до него доходит, поэтому служба сразу
      * продолжает работу с типом без лимита. Если система откажет, чекпойнт уже на диске: задача
      * останавливается на границе среза, а служба обязана уйти за секунды, иначе система завершит
-     * процесс с ошибкой. Открытие приложения обнуляет лимит и продолжает задачу.
+     * процесс с ошибкой. Открытие приложения обнуляет лимит, а задача ждёт простоя или нажатия.
      */
     override fun onTimeout(startId: Int, fgsType: Int) {
         foreground = false
@@ -89,6 +89,11 @@ class PipelineService : Service() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
         tellPaused()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        runner.onTaskRemoved()
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
@@ -231,6 +236,11 @@ class PipelineService : Service() {
         private const val START_GRACE_MS = 5_000L
         private const val WAKE_LOCK_TAG = "stenokot:pipeline"
         private const val WAKE_LOCK_TIMEOUT_MS = 24L * 60 * 60 * 1000
+
+        /** Убирает уведомление о паузе: приложение открыто, и прерванную задачу видно на экране. */
+        fun clearPausedNotice(context: Context) {
+            context.getSystemService(NotificationManager::class.java).cancel(PAUSED_NOTIFICATION_ID)
+        }
 
         /**
          * Запускает службу. Вызывается при видимом приложении. Отказ системы не теряет задачу:

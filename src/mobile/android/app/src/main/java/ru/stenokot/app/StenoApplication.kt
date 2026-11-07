@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.Application
 import android.os.Bundle
 import ru.stenokot.app.pipeline.AppGraph
+import ru.stenokot.app.service.PipelineService
 
 /**
  * Только сборка объектов, без работы на диске: запуск приложения должен укладываться в секунду.
@@ -18,11 +19,22 @@ class StenoApplication : Application() {
         if (getProcessName() != packageName) return
         ControllerProvider.production = { graph.controller }
         graph.start()
-        registerActivityLifecycleCallbacks(ForegroundTracker { graph.controller.onForeground() })
+        registerActivityLifecycleCallbacks(
+            ForegroundTracker(
+                onForeground = {
+                    PipelineService.clearPausedNotice(this)
+                    graph.controller.onForeground()
+                },
+                onBackground = { graph.controller.onBackground() },
+            ),
+        )
     }
 
     /** Сообщает о выходе приложения на экран: только тогда система разрешает запуск службы. */
-    private class ForegroundTracker(private val onForeground: () -> Unit) : ActivityLifecycleCallbacks {
+    private class ForegroundTracker(
+        private val onForeground: () -> Unit,
+        private val onBackground: () -> Unit,
+    ) : ActivityLifecycleCallbacks {
         private var started = 0
 
         override fun onActivityStarted(activity: Activity) {
@@ -32,6 +44,7 @@ class StenoApplication : Application() {
 
         override fun onActivityStopped(activity: Activity) {
             started -= 1
+            if (started == 0) onBackground()
         }
 
         override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit

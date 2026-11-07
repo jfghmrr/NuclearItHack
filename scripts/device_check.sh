@@ -43,7 +43,7 @@ trap '"${ADB[@]}" shell cmd connectivity airplane-mode disable' EXIT
 
 final=""
 for _ in $(seq 1 900); do
-  final="$("${ADB[@]}" logcat -d -s PIPELINE:I -v raw | grep -E '^(DONE|DONE_LLM_FAILED|FAILED:.*|CANCELLED)$' | tail -1 || true)"
+  final="$("${ADB[@]}" logcat -d -s PIPELINE:I -v raw | grep -E '^(DONE|DONE_LLM_FAILED|DONE_META_FAILED|FAILED:.*|CANCELLED)$' | tail -1 || true)"
   [ -n "$final" ] && break
   sleep 2
 done

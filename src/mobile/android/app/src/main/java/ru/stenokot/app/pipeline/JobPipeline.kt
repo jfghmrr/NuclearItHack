@@ -53,6 +53,7 @@ data class RunnerConfig(
     val thermalPollMs: Long = 2_000,
     val severeThermalPauseMs: Long = 200,
     val autoResumeLimit: Int = 1,
+    val idleResumeMs: Long = 120_000,
 )
 
 /**
@@ -180,8 +181,13 @@ class JobPipeline(
             ?: throw EngineFailure(ErrorCode.IMPORT_READ_FAILED, "Исходный файл недоступен")
     }
 
+    /** Проход по записи на часах занимает минуты, поэтому остановка проверяется в отчёте о прогрессе. */
     private suspend fun vad(run: Run) {
-        val segments = loading { engines.vad() }.use { it.segments(run.pcm, stageProgress()) }
+        val progress = Progress { value, note ->
+            run.control.check()
+            board.report(value, note)
+        }
+        val segments = loading { engines.vad() }.use { it.segments(run.pcm, progress) }
         val document = VadDocument(segments.map { it.toLine() })
         AtomicFiles.replaceText(run.files.vad, ServiceJson.encodeToString(VadDocument.serializer(), document))
         if (segments.isEmpty()) {
@@ -377,7 +383,8 @@ class JobPipeline(
         val published = publish(job, bytes, run.files)
         book.mutate(run.id) { current ->
             val updated = current.copy(output = published.first)
-            if (published.second) updated.warned(OUTPUT_RENAMED_WARNING) else updated
+            val renamed = published.second || job.stem != StemRules.stem(job.title)
+            if (renamed) updated.warned(OUTPUT_RENAMED_WARNING) else updated
         }
     }
 

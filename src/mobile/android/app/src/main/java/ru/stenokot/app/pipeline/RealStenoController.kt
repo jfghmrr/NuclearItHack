@@ -116,10 +116,19 @@ class RealStenoController(
 
     override fun acknowledgeRecording() = recorder.acknowledge()
 
-    /** Приложение на экране: можно запускать службу и продолжать прерванное. */
+    /** Приложение на экране: можно запускать службу. */
     fun onForeground() {
         runner.onForeground { if (hasPendingWork()) startService() }
         refreshAudio()
+    }
+
+    /** Приложение ушло с экрана. */
+    fun onBackground() = runner.onBackground()
+
+    /** Прерванная задача продолжилась сама при простое. Её статус снова виден на главном экране. */
+    fun onAutoResumed(id: String) {
+        session += id
+        startService()
     }
 
     override fun job(id: String): StateFlow<JobDetailUi?> = jobFlows.getOrPut(id) {

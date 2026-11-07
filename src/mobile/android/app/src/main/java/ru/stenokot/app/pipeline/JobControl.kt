@@ -12,8 +12,11 @@ sealed interface StopRequest {
     /** Отмена пользователем. */
     data object Cancel : StopRequest
 
-    /** Прерывание с возможностью продолжить, например по таймауту службы. */
-    data class Interrupt(val code: ErrorCode) : StopRequest
+    /**
+     * Прерывание с возможностью продолжить, например по таймауту службы. Без кода задача просто
+     * уступила место новому файлу: это не сбой.
+     */
+    data class Interrupt(val code: ErrorCode?) : StopRequest
 }
 
 /** Сигнал остановки на границе стадии, среза или окна. */

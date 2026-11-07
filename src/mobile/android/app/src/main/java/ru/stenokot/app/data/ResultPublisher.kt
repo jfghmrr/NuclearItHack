@@ -53,8 +53,14 @@ class ResultPublisher(context: Context) : OutputGateway {
         }
     }
 
+    /** Запись прошлой установки мешает служебному файлу так же, как и контрактному. */
     override suspend fun publishMeta(stem: String, kind: MetaKind, source: File) {
-        write(META_PATH, "$stem.${kind.suffix}.json", source.readBytes())
+        val name = "$stem.${kind.suffix}.json"
+        try {
+            write(META_PATH, name, source.readBytes())
+        } catch (failure: SQLiteConstraintException) {
+            if (File(publicPath(META_PATH, name)).length() != source.length()) throw failure
+        }
     }
 
     override suspend fun removePublished(stem: String, uri: String?) {
@@ -100,7 +106,7 @@ class ResultPublisher(context: Context) : OutputGateway {
     }
 
     private fun write(relativePath: String, name: String, bytes: ByteArray): Uri {
-        val existing = find(relativePath, name)
+        val existing = find(relativePath, name) ?: findRenamed(relativePath, name)
         val uri = existing ?: resolver.insert(collection, newRow(relativePath, name))
             ?: throw IOException("MediaStore не создал запись")
         try {
@@ -135,6 +141,24 @@ class ResultPublisher(context: Context) : OutputGateway {
         }
     }
 
+    /**
+     * Своя запись вида `name (1).json`: имя занято файлом прошлой установки, а повторная обработка
+     * того же файла обязана заменить свой результат, а не плодить `name (2).json`.
+     */
+    private fun findRenamed(relativePath: String, name: String): Uri? {
+        val stem = name.removeSuffix(JSON_SUFFIX)
+        val selection = "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
+        val projection = arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME)
+        val taken = Regex(Regex.escape(stem) + """ \(\d+\)""" + Regex.escape(JSON_SUFFIX))
+        val query = resolver.query(collection, projection, selection, arrayOf(relativePath, "% (%)$JSON_SUFFIX"), null)
+            ?: return null
+        return query.use { row ->
+            generateSequence { if (row.moveToNext()) row.getLong(0) to row.getString(1) else null }
+                .firstOrNull { (_, shown) -> taken.matches(shown) }
+                ?.let { (id, _) -> Uri.withAppendedPath(collection, id.toString()) }
+        }
+    }
+
     @Suppress("DEPRECATION")
     private fun pendingAware(): Uri =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) collection else MediaStore.setIncludePending(collection)
@@ -161,6 +185,7 @@ class ResultPublisher(context: Context) : OutputGateway {
     private companion object {
         const val TAG = "ResultPublisher"
         const val MIME_JSON = "application/json"
+        const val JSON_SUFFIX = ".json"
         const val ROOT_PATH = "Download/Stenokot/"
         const val META_PATH = "Download/Stenokot/meta/"
         const val FALLBACK_DIR = "export"

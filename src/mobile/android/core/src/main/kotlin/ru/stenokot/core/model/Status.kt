@@ -23,11 +23,15 @@ fun statusCode(state: JobState?): String =
             else -> "FAILED:${state.code.name}"
         }
         JobState.Cancelled -> "CANCELLED"
-        is JobState.Done -> when (state.llm) {
-            LlmStatus.FAILED -> "DONE_LLM_FAILED"
+        is JobState.Done -> when {
+            state.llm == LlmStatus.FAILED -> "DONE_LLM_FAILED"
+            META_PUBLISH_FAILED in state.warnings -> "DONE_META_FAILED"
             else -> "DONE"
         }
     }
+
+/** Предупреждение: служебный файл не опубликован в meta/. Контрактный файл при этом на месте. */
+const val META_PUBLISH_FAILED: String = "META_PUBLISH_FAILED"
 
 /** Код для прерывания без причины, например после убийства процесса системой. */
 private const val INTERRUPTED_CODE = "INTERRUPTED"

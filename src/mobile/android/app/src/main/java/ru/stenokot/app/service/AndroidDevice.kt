@@ -28,13 +28,17 @@ class AndroidDevice(context: Context) : DeviceMonitor {
         }
     }.getOrNull()
 
+    override fun lastExitCode(): ErrorCode? =
+        if (lastExitReason() == ApplicationExitInfo.REASON_LOW_MEMORY) ErrorCode.LOW_MEMORY else null
+
+    override fun stoppedByUser(): Boolean = lastExitReason() == ApplicationExitInfo.REASON_USER_REQUESTED
+
     /** Система хранит причину смерти процесса с API 30. Нас интересует только основной процесс. */
-    override fun lastExitCode(): ErrorCode? {
+    private fun lastExitReason(): Int? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
-        val last = runCatching {
+        return runCatching {
             activity.getHistoricalProcessExitReasons(app.packageName, 0, EXIT_HISTORY)
-        }.getOrNull().orEmpty().firstOrNull { it.processName == app.packageName } ?: return null
-        return if (last.reason == ApplicationExitInfo.REASON_LOW_MEMORY) ErrorCode.LOW_MEMORY else null
+        }.getOrNull().orEmpty().firstOrNull { it.processName == app.packageName }?.reason
     }
 
     /** Общий объём памяти устройства. */

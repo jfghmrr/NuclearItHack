@@ -25,6 +25,7 @@ import ru.stenokot.core.model.ErrorCode
 import ru.stenokot.core.model.Language
 import ru.stenokot.core.model.LlmResult
 import ru.stenokot.core.model.LlmStatus
+import ru.stenokot.core.model.META_PUBLISH_FAILED
 import ru.stenokot.core.model.Stage
 
 /** Поведение очереди, стадий, чекпойнтов и языковой модели на виртуальном времени. */
@@ -683,22 +684,8 @@ class PipelineRunnerTest {
 
         h.runner.onForeground()
         h.await(done(id))
-        assertEquals(0, h.runner.jobs.value.getValue(id).autoResumes)
+        assertEquals(0, h.runner.jobs.value.getValue(id).deaths)
         assertEquals(1, h.engines.events.count { it.startsWith("decode:") })
-    }
-
-    @Test
-    fun foregroundReportsOnlyAfterTheInterruptedJobIsBackInTheQueue() = runTest {
-        val h = harness()
-        h.engines.onTranscribe = { index -> if (index == 1) h.runner.interruptForTimeout() }
-        val id = h.import("service")
-        h.await { it[id]?.phase == JobPhase.INTERRUPTED }
-        h.engines.onTranscribe = {}
-
-        var seen: JobPhase? = null
-        h.runner.onForeground { seen = h.runner.jobs.value.getValue(id).phase }
-        h.await(done(id))
-        assertEquals(JobPhase.QUEUED, seen)
     }
 
     @Test
@@ -714,7 +701,7 @@ class PipelineRunnerTest {
             h.await { it[id]?.phase != JobPhase.INTERRUPTED }
         }
         h.await(done(id))
-        assertEquals(0, h.runner.jobs.value.getValue(id).autoResumes)
+        assertEquals(0, h.runner.jobs.value.getValue(id).deaths)
     }
 
     @Test
@@ -880,6 +867,170 @@ class PipelineRunnerTest {
         third.await(done(id))
     }
 
+    /** Убивает процесс на распознавании и возвращает приложение после перезапуска. */
+    private suspend fun TestScope.killedOnAsr(
+        device: FakeDevice = FakeDevice(),
+        config: RunnerConfig = RunnerConfig(),
+    ): Pair<Harness, String> {
+        val h = Harness(this, folder.root, engines = FakeEngines(segmentCount = 12))
+        h.engines.onTranscribe = { index ->
+            if (index == 6) {
+                h.die()
+                throw CancellationException("смерть процесса")
+            }
+        }
+        val id = h.import("old")
+        h.await { it[id]?.stage == Stage.ASR && it[id]?.phase == JobPhase.RUNNING }
+        delay(1_000)
+        val reopened = Harness(this, folder.root, engines = FakeEngines(segmentCount = 12), device = device, config = config)
+        reopened.await { it[id]?.phase == JobPhase.INTERRUPTED }
+        return reopened to id
+    }
+
+    @Test
+    fun importAfterDeathStartsAtOnceAndOldJobNeverRunsAheadOfIt() = runTest {
+        val (h, old) = killedOnAsr()
+        h.runner.onForeground()
+        val fresh = h.import("fresh")
+        h.await(done(fresh))
+
+        assertEquals(JobPhase.INTERRUPTED, h.runner.jobs.value.getValue(old).phase)
+        assertEquals(listOf("decode:$fresh"), h.engines.events.filter { it.startsWith("decode:") })
+        assertTrue(h.resumed.isEmpty())
+    }
+
+    @Test
+    fun interruptedJobContinuesAloneOnlyAfterIdleOnOpenApp() = runTest {
+        val idle = RunnerConfig().idleResumeMs
+        val (h, old) = killedOnAsr()
+        delay(idle * 2)
+        assertEquals("закрытое приложение ничего не запускает", JobPhase.INTERRUPTED, h.runner.jobs.value.getValue(old).phase)
+
+        h.runner.onForeground()
+        delay(idle - 1_000)
+        assertEquals(JobPhase.INTERRUPTED, h.runner.jobs.value.getValue(old).phase)
+        h.await(done(old))
+        assertEquals(1, h.runner.jobs.value.getValue(old).deaths)
+        assertEquals(listOf(old), h.resumed)
+    }
+
+    @Test
+    fun leavingTheAppRestartsTheIdleWait() = runTest {
+        val idle = RunnerConfig().idleResumeMs
+        val (h, old) = killedOnAsr()
+        h.runner.onForeground()
+        delay(idle - 1_000)
+        h.runner.onBackground()
+        delay(idle * 2)
+        assertEquals(JobPhase.INTERRUPTED, h.runner.jobs.value.getValue(old).phase)
+        h.runner.onForeground()
+        delay(idle - 1_000)
+        assertEquals(JobPhase.INTERRUPTED, h.runner.jobs.value.getValue(old).phase)
+        h.await(done(old))
+    }
+
+    @Test
+    fun forceStoppedJobWaitsForTheButtonEvenWhenIdle() = runTest {
+        val (h, old) = killedOnAsr(device = FakeDevice().apply { stoppedByUser = true })
+        assertTrue(h.runner.jobs.value.getValue(old).manualResume)
+        h.runner.onForeground()
+        delay(RunnerConfig().idleResumeMs * 3)
+        assertEquals(JobPhase.INTERRUPTED, h.runner.jobs.value.getValue(old).phase)
+
+        h.runner.resume(old)
+        h.await(done(old))
+    }
+
+    @Test
+    fun newImportPausesAutoResumedJobAtCheckpointAndItContinuesLater() = runTest {
+        val (h, old) = killedOnAsr(config = RunnerConfig(idleResumeMs = 10_000))
+        var fresh: String? = null
+        h.engines.onTranscribe = { index -> if (index == 9 && fresh == null) fresh = h.import("fresh") }
+        h.runner.onForeground()
+        h.await { fresh != null && it[old]?.phase == JobPhase.INTERRUPTED }
+        assertEquals(null, h.runner.jobs.value.getValue(old).errorCode)
+        h.await(done(checkNotNull(fresh)))
+        assertEquals(1, h.engines.peakHeavy)
+
+        h.await(done(old))
+        val decoded = h.engines.events.filter { it.startsWith("decode:") }
+        assertEquals("старая задача не декодируется заново", listOf("decode:$fresh"), decoded)
+        assertEquals("уступка не считается смертью", 1, h.runner.jobs.value.getValue(old).deaths)
+        assertEquals(listOf(old, old), h.resumed)
+    }
+
+    @Test
+    fun jobGivingWayToNewImportStopsInsideVad() = runTest {
+        val h = harness()
+        var fresh: String? = null
+        h.engines.onVadProgress = {
+            if (fresh == null) {
+                h.runner.onTaskRemoved()
+                fresh = h.import("fresh")
+            }
+        }
+        val id = h.import("old")
+        h.await { it[id]?.phase == JobPhase.INTERRUPTED }
+        assertEquals(Stage.VAD, h.runner.jobs.value.getValue(id).stage)
+        h.await(done(checkNotNull(fresh)))
+    }
+
+    @Test
+    fun appRemovedFromRecentsKeepsWorkingUntilNewImportArrives() = runTest {
+        val h = harness()
+        h.engines.decodeBehavior = { awaitCancellation() }
+        val first = h.import("first")
+        val second = h.import("second")
+        h.await { it[first]?.stage == Stage.DECODE && it[first]?.phase == JobPhase.RUNNING }
+        h.runner.onTaskRemoved()
+        delay(1_000)
+        assertEquals(JobPhase.RUNNING, h.runner.jobs.value.getValue(first).phase)
+
+        h.engines.decodeBehavior = {}
+        val fresh = h.import("fresh")
+        h.await(done(fresh))
+        assertEquals(JobPhase.INTERRUPTED, h.runner.jobs.value.getValue(first).phase)
+        assertEquals(JobPhase.INTERRUPTED, h.runner.jobs.value.getValue(second).phase)
+    }
+
+    @Test
+    fun jobResumedByButtonStandsBehindFilesAlreadyWaiting() = runTest {
+        val (h, old) = killedOnAsr()
+        h.runner.onForeground()
+        h.engines.decodeBehavior = { awaitCancellation() }
+        val first = h.import("first")
+        val second = h.import("second")
+        h.await { it[first]?.stage == Stage.DECODE && it[first]?.phase == JobPhase.RUNNING }
+        h.runner.resume(old)
+        h.await { it[old]?.phase == JobPhase.QUEUED }
+        var recognizedBeforeSecond = -1
+        h.engines.decodeBehavior = { recognizedBeforeSecond = h.engines.transcribed.size }
+        h.runner.cancel(first)
+        h.await(done(old))
+        assertEquals(0, recognizedBeforeSecond)
+    }
+
+    @Test
+    fun filesWithOneStemKeepSeparateOutputsAndRepeatKeepsTheName() = runTest {
+        val h = harness()
+        h.sources.name = "dialog.mp3"
+        val first = h.import("dialog")
+        h.await(done(first))
+        h.sources.name = "dialog.wav"
+        val second = h.import("dialog")
+        h.await(done(second))
+        h.sources.name = "dialog.mp3"
+        val repeat = h.import("dialog")
+        h.await(done(repeat))
+
+        assertEquals("dialog", h.runner.jobs.value.getValue(first).stem)
+        assertEquals("dialog.wav", h.runner.jobs.value.getValue(second).stem)
+        assertEquals("dialog", h.runner.jobs.value.getValue(repeat).stem)
+        assertEquals(setOf("dialog", "dialog.wav"), h.outputs.transcripts.keys)
+        assertTrue(OUTPUT_RENAMED_WARNING in h.runner.jobs.value.getValue(second).warnings)
+        assertFalse(OUTPUT_RENAMED_WARNING in h.runner.jobs.value.getValue(repeat).warnings)
+    }
+
     @Test
     fun englishRecordingDropsRussianProbesAndUsesEnglishModel() = runTest {
         val h = harness { engines.language = Language.EN }
@@ -974,11 +1125,28 @@ class PipelineRunnerTest {
     }
 
     @Test
-    fun failedMetaPublishDoesNotHoldBackDone() = runTest {
+    fun failedMetaPublishIsVisibleAndDoesNotTouchTheJson() = runTest {
         val h = harness()
         h.outputs.failMeta = true
         val id = h.import("sick")
         h.await(done(id))
-        assertEquals("DONE", h.statuses.last())
+        assertNotNull(h.outputs.transcripts["sick"])
+        assertTrue(META_PUBLISH_FAILED in h.runner.jobs.value.getValue(id).warnings)
+        assertEquals("DONE_META_FAILED", h.statuses.last())
+    }
+
+    @Test
+    fun metaPublishRecoveredOnRetryClearsTheWarning() = runTest {
+        val h = harness()
+        h.outputs.failMeta = true
+        h.engines.llmBehavior = { LlmResult(LlmStatus.DEFERRED, null, null) }
+        val id = h.import("sick")
+        h.await(done(id))
+        assertEquals("DONE_META_FAILED", h.statuses.last())
+
+        h.outputs.failMeta = false
+        h.engines.llmBehavior = { LlmResult(LlmStatus.APPLIED, null, null) }
+        h.runner.onForeground()
+        h.await { it[id]?.llm?.retryUsed == true && META_PUBLISH_FAILED !in it.getValue(id).warnings }
     }
 }

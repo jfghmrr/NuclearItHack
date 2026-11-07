@@ -51,6 +51,11 @@ class JobStore(private val root: () -> File) {
         return dirs.mapNotNull { dir -> read(JobFiles(dir).job) }.sortedBy { it.seq }
     }
 
+    /** Убирает недописанные файлы умершего процесса: продолжать их нельзя, а место они занимают. */
+    fun dropPartial(id: String) {
+        files(id).dir.listFiles { file -> file.name.endsWith(".tmp") }?.forEach(File::delete)
+    }
+
     /** Удаляет каталог задачи вместе со всеми файлами. */
     fun delete(id: String) {
         files(id).dir.deleteRecursively()
@@ -80,27 +85,39 @@ class JobStore(private val root: () -> File) {
  * Стадия считается завершённой, только если её результат существует и существуют результаты всех
  * стадий до неё. Обрыв обработки показывается как прерывание с кнопкой «Продолжить». Если же
  * восстановить результат не из чего, задача честно получает отметку о потере результата.
+ *
+ * Очередь прошлого запуска тоже становится прерванной: иначе она встала бы впереди файла, ради
+ * которого приложение открыли заново.
  */
 object JobReconciler {
-    /** Возвращает запись, приведённую к файлам. [exitCode] описывает причину смерти процесса. */
+    /**
+     * Возвращает запись, приведённую к файлам. [exitCode] описывает причину смерти процесса,
+     * [stoppedByUser] означает, что приложение закрыли принудительно: такое решение за человека
+     * не отменяется, и продолжить задачу можно только нажатием.
+     */
     fun reconcile(
         record: JobRecord,
         files: JobFiles,
         exitCode: ErrorCode? = null,
+        stoppedByUser: Boolean = false,
     ): JobRecord {
+        val settled = settle(record, files, exitCode)
+        return if (stoppedByUser && settled.phase == JobPhase.INTERRUPTED) settled.copy(manualResume = true) else settled
+    }
+
+    private fun settle(record: JobRecord, files: JobFiles, exitCode: ErrorCode?): JobRecord {
         val confirmed = confirmed(record, files)
         val first = CoreStages.firstOrNull { it !in confirmed }
         val synced = record.copy(completedStages = confirmed)
         return when (record.phase) {
-            JobPhase.QUEUED, JobPhase.CANCELLED, JobPhase.FAILED -> synced
+            JobPhase.CANCELLED, JobPhase.FAILED -> synced
+            JobPhase.QUEUED -> interrupted(synced, first, exitCode)
             JobPhase.INTERRUPTED -> interrupted(synced, first, record.errorCode)
             JobPhase.RUNNING, JobPhase.PAUSED -> {
-                if (record.stage == Stage.IMPORT && Stage.IMPORT !in confirmed) {
-                    synced.copy(phase = JobPhase.QUEUED, pauseReason = null)
-                } else if (record.stage == Stage.LLM || first == null) {
+                if (record.stage == Stage.LLM || first == null) {
                     afterTranscript(synced, first, exitCode)
                 } else {
-                    interrupted(synced, first, exitCode)
+                    interrupted(synced.copy(deaths = record.deaths + 1), first, exitCode)
                 }
             }
             JobPhase.TRANSCRIPT_READY, JobPhase.WAITING_MODEL -> afterTranscript(synced, first, exitCode)

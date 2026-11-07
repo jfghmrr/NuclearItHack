@@ -54,6 +54,7 @@ class FakePcm : PcmReader {
 
 /** Движки со счётчиками и подменяемым поведением. */
 class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
+    var onVadProgress: () -> Unit = {}
     val events = ArrayList<String>()
     val transcribed = ArrayList<Int>()
     val diarizedWindows = ArrayList<Int>()
@@ -105,8 +106,11 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
             opened("vad")
         }
 
-        override fun segments(pcm: PcmReader, progress: Progress): List<SpeechSegment> =
-            if (noSpeech) emptyList() else List(segmentCount) { SpeechSegment(it, it * 16_000L, (it + 1) * 16_000L) }
+        override fun segments(pcm: PcmReader, progress: Progress): List<SpeechSegment> {
+            onVadProgress()
+            progress.report(0.5f, null)
+            return if (noSpeech) emptyList() else List(segmentCount) { SpeechSegment(it, it * 16_000L, (it + 1) * 16_000L) }
+        }
 
         override fun close() = closed("vad")
     }
@@ -207,10 +211,12 @@ class FakeDevice : DeviceMonitor {
     var memory = 2_000L * 1024 * 1024
     var thermal = 0
     var exitCode: ErrorCode? = null
+    var stoppedByUser = false
     override fun availableMemoryBytes(): Long = memory
     override fun thermalStatus(): Int = thermal
     override fun peakRssKb(): Long? = 123_456
     override fun lastExitCode(): ErrorCode? = exitCode
+    override fun stoppedByUser(): Boolean = stoppedByUser
 }
 
 /** Источник файла, который можно заставить отказать. */
@@ -220,11 +226,12 @@ class FakeSources : SourceGateway {
     var size = 1_000L
     var inPlace: InPlaceSource? = null
     var onCopy: () -> Unit = {}
+    var name: String? = null
     val copied = ArrayList<String>()
 
     override suspend fun describe(job: JobRecord): SourceInfo {
         describeFailure?.let { throw it }
-        return SourceInfo(job.title, size, "audio/mpeg")
+        return SourceInfo(name ?: job.title, size, "audio/mpeg")
     }
 
     override fun inPlace(job: JobRecord): InPlaceSource? = inPlace
@@ -291,11 +298,12 @@ class Harness(
 ) {
     val statuses = ArrayList<String>()
     val metaAtDone = ArrayList<List<String>>()
+    val resumed = ArrayList<String>()
     val store = JobStore { root }
     val lifetime = Job(test.backgroundScope.coroutineContext[Job])
     private val scope = CoroutineScope(test.backgroundScope.coroutineContext + lifetime)
     private val dispatcher = StandardTestDispatcher(test.testScheduler)
-    private var seq = 0L
+    private var seq = root.list()?.size?.toLong() ?: 0L
     private val recorder = MetricsRecorder(
         context = { RunContext("1", "abc", "emu", 36, 4_000_000_000, 3) },
         modelHashes = { listOf(ModelHash("asr-ru/encoder.int8.onnx", "aa")) },
@@ -318,6 +326,7 @@ class Harness(
             statuses += status
             if (status == "DONE") metaAtDone += outputs.meta.toList()
         },
+        onResumed = { resumed += it },
     ).also { it.launch() }
 
     /** Импортирует файл [name] и возвращает номер задачи. */

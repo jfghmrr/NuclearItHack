@@ -171,9 +171,36 @@ class StorageTest {
     }
 
     @Test
-    fun copyInterruptedBeforeImportFinishedGoesBackToQueue() {
+    fun copyCutByDeathWaitsLikeAnyOtherInterruptedJob() {
         val copying = record(stage = Stage.IMPORT)
-        assertEquals(JobPhase.QUEUED, JobReconciler.reconcile(copying, files()).phase)
+        val result = JobReconciler.reconcile(copying, files())
+        assertEquals(JobPhase.INTERRUPTED, result.phase)
+        assertEquals(1, result.deaths)
+    }
+
+    @Test
+    fun queueOfPastLaunchIsInterruptedSoNewFileGoesFirst() {
+        val waiting = record(phase = JobPhase.QUEUED, stage = Stage.IMPORT)
+        val result = JobReconciler.reconcile(waiting, files())
+        assertEquals(JobPhase.INTERRUPTED, result.phase)
+        assertEquals(0, result.deaths)
+    }
+
+    @Test
+    fun forceStopForbidsContinuingWithoutTap() {
+        val running = record(phase = JobPhase.RUNNING, stage = Stage.IMPORT)
+        assertTrue(JobReconciler.reconcile(running, files(), stoppedByUser = true).manualResume)
+        assertFalse(JobReconciler.reconcile(running, files()).manualResume)
+    }
+
+    @Test
+    fun partialFilesOfDeadProcessAreDropped() {
+        val store = JobStore { folder.root }
+        val dir = store.files("a").dir.apply { mkdirs() }
+        File(dir, "pcm16k.wav.tmp").writeText("x")
+        File(dir, "job.json").writeText("x")
+        store.dropPartial("a")
+        assertEquals(listOf("job.json"), dir.list()?.toList())
     }
 
     @Test

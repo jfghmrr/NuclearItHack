@@ -47,4 +47,11 @@ class StatusCodeTest {
             assertEquals(expected, statusCode(JobState.Done(status, emptyList())))
         }
     }
+
+    @Test
+    fun failedServiceFilesAreVisibleInStatus() {
+        val warnings = listOf(META_PUBLISH_FAILED)
+        assertEquals("DONE_META_FAILED", statusCode(JobState.Done(LlmStatus.APPLIED, warnings)))
+        assertEquals("DONE_LLM_FAILED", statusCode(JobState.Done(LlmStatus.FAILED, warnings)))
+    }
 }

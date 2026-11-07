@@ -2,6 +2,7 @@ package ru.stenokot.app.ui.format
 
 import ru.stenokot.core.model.JobState
 import ru.stenokot.core.model.LlmStatus
+import ru.stenokot.core.model.META_PUBLISH_FAILED
 import ru.stenokot.core.model.PauseReason
 import ru.stenokot.core.model.Stage
 
@@ -22,7 +23,11 @@ fun statusCode(state: JobState): String = when (state) {
     is JobState.Interrupted -> "FAILED:${state.code?.name ?: "INTERRUPTED"}"
     is JobState.Failed -> "FAILED:${state.code.name}"
     JobState.Cancelled -> "CANCELLED"
-    is JobState.Done -> if (state.llm == LlmStatus.FAILED) "DONE_LLM_FAILED" else "DONE"
+    is JobState.Done -> when {
+        state.llm == LlmStatus.FAILED -> "DONE_LLM_FAILED"
+        META_PUBLISH_FAILED in state.warnings -> "DONE_META_FAILED"
+        else -> "DONE"
+    }
 }
 
 /** Название стадии конвейера для пользователя. */
@@ -51,6 +56,7 @@ fun statusSpoken(code: String): String = when {
     code == "WAITING_MODEL" -> "Состояние: ожидание языковой модели"
     code == "DONE" -> "Состояние: готово"
     code == "DONE_LLM_FAILED" -> "Состояние: стенограмма готова, протокол не создан"
+    code == "DONE_META_FAILED" -> "Состояние: стенограмма готова, служебные файлы не сохранены"
     code.startsWith("FAILED:") -> "Состояние: ошибка"
     code == "CANCELLED" -> "Состояние: обработка отменена"
     else -> code

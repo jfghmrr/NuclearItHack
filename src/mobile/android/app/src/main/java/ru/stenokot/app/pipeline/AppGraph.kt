@@ -69,6 +69,7 @@ class AppGraph(context: Context) {
         worker = worker,
         io = io,
         onStatus = { Log.i(STATUS_TAG, it) },
+        onResumed = { id -> controller.onAutoResumed(id) },
     )
 
     /** Запись с микрофона. Готовый файл идёт в [controller] как обычный импорт. */

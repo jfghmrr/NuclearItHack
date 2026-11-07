@@ -32,6 +32,7 @@ import ru.stenokot.core.llm.LlmBudgetPolicy
 import ru.stenokot.core.model.ErrorCode
 import ru.stenokot.core.model.LlmResult
 import ru.stenokot.core.model.LlmStatus
+import ru.stenokot.core.model.META_PUBLISH_FAILED
 import ru.stenokot.core.model.Stage
 import java.io.File
 import java.util.Collections
@@ -48,6 +49,10 @@ private enum class LlmStop { NEW_JOB, USER }
  * недолго, а задача может ждать своей очереди часами. Большой файл с постоянным доступом не
  * копируется вовсе и читается на месте. Языковая модель идёт после контрактного файла и всегда
  * уступает новому импорту.
+ *
+ * Работа прошлого запуска никогда не идёт впереди нового файла. После смерти процесса задачи ждут
+ * в прерванном состоянии с кнопкой «Продолжить» и сами продолжаются только при простое на открытом
+ * приложении, а новый импорт останавливает продолженную задачу на ближайшем чекпойнте.
  */
 class PipelineRunner(
     private val store: JobStore,
@@ -64,6 +69,7 @@ class PipelineRunner(
     private val clock: () -> Long = System::currentTimeMillis,
     private val config: RunnerConfig = RunnerConfig(),
     onStatus: (String) -> Unit = {},
+    private val onResumed: (String) -> Unit = {},
 ) {
     private val book = JobBook(store, onStatus)
     private val board = LiveBoard(clock)
@@ -74,6 +80,8 @@ class PipelineRunner(
     private val wake = Channel<Unit>(Channel.CONFLATED)
     private val ready = CompletableDeferred<Unit>()
     private val held = MutableStateFlow(true)
+    private val visible = MutableStateFlow(false)
+    private val yielding: MutableSet<String> = ConcurrentHashMap.newKeySet()
     private val llmStop = MutableStateFlow<LlmStop?>(null)
 
     @Volatile
@@ -102,6 +110,7 @@ class PipelineRunner(
         }
         scope.launch(io) { tickLoop() }
         scope.launch(io) { modelCopyGateLoop() }
+        scope.launch(io) { idleResumeLoop() }
     }
 
     /** Ждёт окончания загрузки задач. */
@@ -119,6 +128,7 @@ class PipelineRunner(
         )
         book.add(record)
         held.value = false
+        yieldToImport()
         scope.launch(io) {
             ready.await()
             book.persist(id)
@@ -185,34 +195,31 @@ class PipelineRunner(
     }
 
     /**
-     * Приложение вышло на передний план. Только здесь можно запускать службу после смерти процесса,
-     * поэтому очередь отпускается и прерванные задачи продолжаются сами, не больше
-     * [RunnerConfig.autoResumeLimit] раз. Дальше решает пользователь кнопкой «Продолжить»: иначе
-     * файл, убивающий процесс, повторялся бы без конца. Лимит службы процесс не убивает и попыткой
-     * не считается: возвращение на экран как раз обнуляет его счётчик в системе. [settled] вызывается,
-     * когда решение принято и задачи снова в очереди: только тогда видно, нужна ли служба.
+     * Приложение вышло на передний план: только теперь можно запускать службу после смерти процесса,
+     * поэтому очередь отпускается. Прерванные задачи здесь не трогаются: в этот момент как раз может
+     * идти новый файл. [settled] вызывается, когда видно, нужна ли служба.
      */
     fun onForeground(settled: () -> Unit = {}) {
+        visible.value = true
         scope.launch(io) {
             ready.await()
             held.value = false
-            book.snapshot()
-                .filter { it.phase == JobPhase.INTERRUPTED }
-                .filter { it.errorCode == ErrorCode.FGS_TIMEOUT || it.autoResumes < config.autoResumeLimit }
-                .sortedBy { it.seq }
-                .forEach { job ->
-                    if (job.errorCode != ErrorCode.FGS_TIMEOUT) {
-                        book.mutate(job.id) { it.copy(autoResumes = it.autoResumes + 1) }
-                    }
-                    requeue(job.id)
-                }
-            book.snapshot()
-                .filter { it.phase == JobPhase.QUEUED && Stage.IMPORT !in it.completedStages }
-                .sortedBy { it.seq }
-                .forEach { sendToIntake(it.id) }
             wake.trySend(Unit)
             settled()
         }
+    }
+
+    /** Приложение ушло с экрана. Окно выбора файла тоже считается: ожидание простоя начнётся заново. */
+    fun onBackground() {
+        visible.value = false
+    }
+
+    /**
+     * Приложение убрали из недавних. Служба работает дальше, но для пользователя это уже прошлый
+     * запуск, поэтому начатое уступит первому новому файлу.
+     */
+    fun onTaskRemoved() {
+        book.snapshot().filter { JobQueue.isActive(it) || it.awaitsWorker }.forEach { yielding += it.id }
     }
 
     /**
@@ -245,13 +252,71 @@ class PipelineRunner(
 
     private suspend fun load() {
         val exitCode = device.lastExitCode()
+        val stoppedByUser = device.stoppedByUser()
         val loaded = store.loadAll().map { record ->
-            JobReconciler.reconcile(record, store.files(record.id), exitCode)
+            JobReconciler.reconcile(record, store.files(record.id), exitCode, stoppedByUser)
         }
         book.merge(loaded)
-        loaded.forEach { book.persist(it.id) }
+        loaded.forEach {
+            store.dropPartial(it.id)
+            book.persist(it.id)
+        }
         ready.complete(Unit)
         wake.trySend(Unit)
+    }
+
+    /**
+     * Продолжает прерванную задачу, когда приложение открыто и [RunnerConfig.idleResumeMs] ничем не
+     * занято. Закрытое приложение ждёт следующего открытия: из фона служба не запустится. Продолжение
+     * запускается отдельно, потому что смена состояния задачи отменяет этот сборщик.
+     */
+    private suspend fun idleResumeLoop() {
+        ready.await()
+        combine(visible, book.flow) { shown, all -> shown && idleWithResumable(all.values) }
+            .distinctUntilChanged()
+            .collectLatest { idle ->
+                if (idle) {
+                    delay(config.idleResumeMs)
+                    scope.launch(io) { resumeOldest() }
+                }
+            }
+    }
+
+    private suspend fun resumeOldest() {
+        val all = book.snapshot()
+        if (!idleWithResumable(all)) return
+        val job = all.filter(::resumesAlone).minBy { it.seq }
+        requeue(job.id)
+        onResumed(job.id)
+    }
+
+    private fun idleWithResumable(all: Collection<JobRecord>): Boolean =
+        all.any(::resumesAlone) && all.none { JobQueue.isActive(it) || it.awaitsWorker }
+
+    /**
+     * Сама продолжается только задача, убитая системой не больше [RunnerConfig.autoResumeLimit] раз.
+     * Дальше решает пользователь: иначе файл, убивающий процесс, повторялся бы без конца. Лимит службы
+     * и уступка новому файлу процесс не убивают и смертью не считаются.
+     */
+    private fun resumesAlone(job: JobRecord): Boolean =
+        job.phase == JobPhase.INTERRUPTED && !job.manualResume && job.deaths <= config.autoResumeLimit
+
+    /** Новый файл важнее продолженной работы: она останавливается на ближайшей безопасной границе. */
+    private fun yieldToImport() {
+        yielding.toList().forEach { id ->
+            yielding -= id
+            val job = book.get(id) ?: return@forEach
+            if (!job.transcriptSaved && (JobQueue.isActive(job) || job.awaitsWorker)) {
+                control(id).request(StopRequest.Interrupt(null))
+            }
+            if (job.phase == JobPhase.QUEUED) scope.launch(io) { park(id) }
+        }
+    }
+
+    private suspend fun park(id: String) {
+        book.mutate(id) { job ->
+            if (job.phase == JobPhase.QUEUED) job.copy(phase = JobPhase.INTERRUPTED, errorCode = null) else job
+        }
     }
 
     private suspend fun tickLoop() {
@@ -310,7 +375,7 @@ class PipelineRunner(
             val named = book.mutate(id) { current ->
                 current.copy(
                     title = info.name,
-                    stem = StemRules.stem(info.name),
+                    stem = StemRules.claim(info.name, stemClaims(id)),
                     preflight = preflightRecord(info, info.sizeBytes, null),
                 )
             } ?: return
@@ -348,6 +413,12 @@ class PipelineRunner(
             fail(id, Stage.IMPORT, code, failure.message ?: failure.toString())
         }
     }
+
+    /** Имена других задач, чей результат лежит в папке или ещё появится там. */
+    private fun stemClaims(id: String): List<StemClaim> = book.snapshot()
+        .filter { it.id != id && it.preflight != null }
+        .filter { it.output != null || (it.phase != JobPhase.FAILED && it.phase != JobPhase.CANCELLED) }
+        .map { StemClaim(it.title, it.stem) }
 
     private fun preflightRecord(
         info: SourceInfo,
@@ -562,29 +633,33 @@ class PipelineRunner(
 
     /**
      * Завершает задачу. Статус DONE появляется последним: тот, кто его дождался, уже находит в
-     * Download/Stenokot/meta и метаданные, и протокол. Сбой записи этих файлов итог не меняет.
+     * Download/Stenokot/meta и метаданные, и протокол. Сбой записи этих файлов контрактный файл не
+     * трогает, но виден в предупреждениях и в статусе.
      */
     private suspend fun finalize(id: String) {
-        writeMetadata(id)
-        publishProtocol(id)
-        book.mutate(id) { it.copy(phase = JobPhase.DONE, stage = Stage.LLM) }
+        val published = writeMetadata(id) and publishProtocol(id)
+        book.mutate(id) { job ->
+            val done = job.copy(phase = JobPhase.DONE, stage = Stage.LLM)
+            if (published) done.copy(warnings = done.warnings - META_PUBLISH_FAILED) else done.warned(META_PUBLISH_FAILED)
+        }
     }
 
-    private suspend fun writeMetadata(id: String) {
+    private suspend fun writeMetadata(id: String): Boolean {
         val job = book.require(id)
         val files = store.files(id)
-        runCatching {
+        return runCatching {
             metrics.writeMetadata(job, files)
             outputs.publishMeta(job.stem, MetaKind.METADATA, files.metadata)
-        }.onFailure { rethrowCancellation(it) }
+        }.onFailure { rethrowCancellation(it) }.isSuccess
     }
 
-    private suspend fun publishProtocol(id: String) {
+    private suspend fun publishProtocol(id: String): Boolean {
         val job = book.require(id)
         val files = store.files(id)
-        if (!files.protocol.exists()) return
-        runCatching { outputs.publishMeta(job.stem, MetaKind.PROTOCOL, files.protocol) }
+        if (!files.protocol.exists()) return true
+        return runCatching { outputs.publishMeta(job.stem, MetaKind.PROTOCOL, files.protocol) }
             .onFailure { rethrowCancellation(it) }
+            .isSuccess
     }
 
     private fun rethrowCancellation(failure: Throwable) {
@@ -596,10 +671,13 @@ class PipelineRunner(
         if (!job.resumed) runCatching { speed.record(job.stageMs, audioMs) }
     }
 
+    /** Возвращённая задача встаёт в конец очереди, а прерванная ещё и уступит следующему импорту. */
     private suspend fun requeue(id: String) {
         controls.remove(id)
+        if (book.get(id)?.phase == JobPhase.INTERRUPTED) yielding += id
         val job = book.mutate(id) { current ->
             current.copy(
+                seq = maxOf(current.seq, clock()),
                 phase = JobPhase.QUEUED,
                 errorCode = null,
                 errorDetail = null,

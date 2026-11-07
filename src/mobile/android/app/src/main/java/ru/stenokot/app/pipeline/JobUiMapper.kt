@@ -48,15 +48,14 @@ object JobUiMapper {
     /**
      * Машинная строка главного экрана. Задача в работе важнее всего. Иначе показывается итог
      * последней задачи этого запуска, а старая история экран не занимает: при свежем открытии там
-     * IDLE. Прерванная задача видна всегда, потому что она ждёт действия пользователя.
+     * IDLE, даже если прошлая задача прервана. Она видна в списке с кнопкой «Продолжить», а новый
+     * файл после открытия приложения обязан начинаться с чистого состояния.
      */
     fun homeStatus(all: Collection<JobRecord>, live: LiveProgress?, session: Set<String>): String {
         val active = all.firstOrNull(JobQueue::isActive)
         if (active != null) return statusCode(state(active, live))
         val waiting = JobQueue.next(all)
         if (waiting != null) return statusCode(state(waiting, live))
-        val interrupted = all.filter { it.phase == JobPhase.INTERRUPTED }.maxByOrNull { it.seq }
-        if (interrupted != null) return statusCode(state(interrupted, live))
         val recent = all.filter { it.id in session }.maxByOrNull { it.seq } ?: return statusCode(null)
         return statusCode(state(recent, live))
     }

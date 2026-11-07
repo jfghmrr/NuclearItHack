@@ -96,6 +96,21 @@ class RulesTest {
     }
 
     @Test
+    fun stemClaimKeepsFirstFileExactAndSeparatesOtherExtensions() {
+        assertEquals("dialog1", StemRules.claim("dialog1.mp3", emptyList()))
+        val first = StemClaim("dialog1.mp3", "dialog1")
+        assertEquals("dialog1", StemRules.claim("dialog1.mp3", listOf(first)))
+        assertEquals("dialog1", StemRules.claim("DIALOG1.MP3", listOf(first)))
+        assertEquals("dialog1.wav", StemRules.claim("dialog1.wav", listOf(first)))
+        assertEquals("Dialog1.wav", StemRules.claim("Dialog1.wav", listOf(first)))
+        val second = StemClaim("dialog1.wav", "dialog1.wav")
+        assertEquals("dialog1.wav", StemRules.claim("dialog1.wav", listOf(first, second)))
+        assertEquals("dialog1.wav.mp3", StemRules.claim("dialog1.wav.mp3", listOf(second)))
+        val taken = listOf(StemClaim("a.mp3", "a"), StemClaim("b.wav", "a.wav"))
+        assertEquals("a.wav (2)", StemRules.claim("a.wav", taken))
+    }
+
+    @Test
     fun extensionIsLowercaseAndRejectsNonsense() {
         assertEquals("mp3", StemRules.extension("X.MP3"))
         assertEquals("", StemRules.extension("noext"))

@@ -94,7 +94,10 @@ data class LlmRecord(
     val windowsTotal: Int? = null,
 )
 
-/** Единственный источник правды о задаче. Пишет его только основной процесс. */
+/**
+ * Единственный источник правды о задаче. Пишет его только основной процесс. [deaths] считает смерти
+ * процесса на этой задаче, [manualResume] запрещает продолжать её без нажатия «Продолжить».
+ */
 @Serializable
 data class JobRecord(
     val id: String,
@@ -129,7 +132,8 @@ data class JobRecord(
     val overheadMs: Long = 0,
     val peakRssKb: Long? = null,
     val configHash: String? = null,
-    val autoResumes: Int = 0,
+    val deaths: Int = 0,
+    val manualResume: Boolean = false,
     val resumed: Boolean = false,
 ) {
     /** Задача ждёт основного потока конвейера. */

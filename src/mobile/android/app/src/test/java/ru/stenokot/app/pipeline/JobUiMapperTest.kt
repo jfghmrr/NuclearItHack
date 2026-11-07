@@ -205,11 +205,10 @@ class JobUiMapperTest {
     }
 
     @Test
-    fun homeAlwaysSurfacesInterruptedJob() {
-        val cut = job(phase = JobPhase.INTERRUPTED, stage = Stage.ASR)
-        assertEquals("FAILED:INTERRUPTED", JobUiMapper.homeStatus(listOf(cut), null, emptySet()))
-        val code = cut.copy(errorCode = ErrorCode.LOW_MEMORY)
-        assertEquals("FAILED:LOW_MEMORY", JobUiMapper.homeStatus(listOf(code), null, emptySet()))
+    fun jobInterruptedInPastLaunchLeavesTheStatusLineClean() {
+        val cut = job(phase = JobPhase.INTERRUPTED, stage = Stage.ASR).copy(errorCode = ErrorCode.LOW_MEMORY)
+        assertEquals("IDLE", JobUiMapper.homeStatus(listOf(cut), null, emptySet()))
+        assertEquals("FAILED:LOW_MEMORY", JobUiMapper.homeStatus(listOf(cut), null, setOf(cut.id)))
     }
 
     @Test
