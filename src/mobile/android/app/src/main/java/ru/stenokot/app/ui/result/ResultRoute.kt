@@ -110,7 +110,27 @@ private val SpeakerSetSaver = Saver<Set<Int>, IntArray>(
 /** Запрос и фильтр вместе: сужение считается одним шагом. */
 private data class Narrowing(val query: String, val speakers: Set<Int>)
 
-/** Вид списка: первый готов сразу, запрос считается в фоне с паузой на набор. */
+/**
+ * Время первой реплики, которую человек реально видит: под закреплёнными значками лежит ещё одна.
+ * Пока список стоит в самом начале, запоминать нечего, значение null.
+ */
+private fun topRowTime(list: LazyListState, view: TranscriptView, rowsOffset: Int, stripPx: Int): Long? {
+    if (list.firstVisibleItemIndex < rowsOffset) return null
+    val item = list.layoutInfo.visibleItemsInfo.firstOrNull {
+        it.index >= rowsOffset && it.offset + it.size > stripPx
+    }
+    return item?.let { view.rows.getOrNull(it.index - rowsOffset) }?.row?.startMs
+}
+
+/** Вид списка вместе с запросом, который его породил. */
+private class NarrowedView(val narrowing: Narrowing, val view: TranscriptView)
+
+/**
+ * Вид списка: первый готов сразу, запрос считается в фоне с паузой на набор. После каждой смены
+ * список ставится на место сам: якорь по ключу теряется, как только верхняя реплика исчезает из
+ * вида, и тогда порядковый номер улетел бы к концу короткого списка. Позиция запрашивается через
+ * `requestScrollToItem`: обычная прокрутка сработала бы по старым строкам ещё до применения новых.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 @Composable
 private fun rememberTranscriptView(
@@ -118,20 +138,46 @@ private fun rememberTranscriptView(
     field: TextFieldState,
     speakers: () -> Set<Int>,
     style: MatchStyle,
+    listState: LazyListState,
+    rowsOffset: () -> Int,
+    stripPx: () -> Int,
 ): State<TranscriptView> {
     val view = remember(prepared, style) { mutableStateOf(prepared.initial) }
     LaunchedEffect(prepared, style) {
         var lastQuery = ""
+        var applied = Narrowing("", emptySet())
+        var readingAtMs: Long? = null
         snapshotFlow { Narrowing(field.text.toString(), speakers()) }
             .distinctUntilChanged()
             .mapLatest { narrowing ->
                 if (narrowing.query != lastQuery) delay(SEARCH_DEBOUNCE_MS)
                 lastQuery = narrowing.query
-                withContext(Dispatchers.Default) {
+                val next = withContext(Dispatchers.Default) {
                     buildTranscriptView(prepared.model, narrowing.query, narrowing.speakers, style)
                 }
+                NarrowedView(narrowing, next)
             }
-            .collect { view.value = it }
+            .collect { result ->
+                val shownAtMs = topRowTime(listState, view.value, rowsOffset(), stripPx())
+                val started = applied.query.isEmpty() && result.narrowing.query.isNotEmpty()
+                val finished = applied.query.isNotEmpty() && result.narrowing.query.isEmpty()
+                val typing = result.narrowing.query != applied.query
+                if (started) readingAtMs = shownAtMs
+                val target = when {
+                    finished -> readingAtMs
+                    typing -> null
+                    else -> shownAtMs
+                }
+                applied = result.narrowing
+                view.value = result.view
+                when {
+                    target != null -> {
+                        val position = result.view.nearestPosition(target).coerceAtLeast(0)
+                        listState.requestScrollToItem(rowsOffset() + position, -stripPx())
+                    }
+                    typing && !finished -> listState.requestScrollToItem(rowsOffset() - 1)
+                }
+            }
     }
     return view
 }
@@ -157,11 +203,10 @@ private class TranscriptNavigator(
     private suspend fun scrollNow(timeMs: Long) {
         val position = view().nearestPosition(timeMs)
         if (position < 0) return
-        val index = rowsOffset() + position
         val offset = stripPx()
-        listState.scrollToItem(index, -offset)
+        listState.requestScrollToItem(rowsOffset() + position, -offset)
         withFrameNanos { }
-        if (stripPx() != offset) listState.scrollToItem(rowsOffset() + position, -stripPx())
+        if (stripPx() != offset) listState.requestScrollToItem(rowsOffset() + position, -stripPx())
     }
 
     /** Снимает сужение, если оно скрывает нужную реплику, и переходит к ней. */
@@ -322,17 +367,27 @@ private fun ResultContent(
         (if (hintText != null) 1 else 0) +
         (if (outputInList) 1 else 0)
 
-    val view = prep?.let { rememberTranscriptView(it, searchField, { selected }, matchStyle) }
-    val currentView = view?.value
-    val activeIndex = remember(prep, player) {
-        derivedStateOf { if (player.engaged && prep != null) prep.model.indexAt(player.positionMs) else -1 }
-    }
-    val active: () -> Int = remember(activeIndex) { { activeIndex.value } }
     val rowsOffset by rememberUpdatedState(headerItems + 1)
     val pinnedStrip = (!window.short || searchOpen) &&
         (prep?.model?.speakers?.size ?: 0) <= MAX_PINNED_SPEAKERS
     var stripHeight by remember { mutableIntStateOf(0) }
     val pinnedPx by rememberUpdatedState(if (pinnedStrip) stripHeight else 0)
+    val view = prep?.let {
+        rememberTranscriptView(
+            prepared = it,
+            field = searchField,
+            speakers = { selected },
+            style = matchStyle,
+            listState = transcriptList,
+            rowsOffset = { rowsOffset },
+            stripPx = { pinnedPx },
+        )
+    }
+    val currentView = view?.value
+    val activeIndex = remember(prep, player) {
+        derivedStateOf { if (player.engaged && prep != null) prep.model.indexAt(player.positionMs) else -1 }
+    }
+    val active: () -> Int = remember(activeIndex) { { activeIndex.value } }
     val navigator = remember(transcriptList, view) {
         TranscriptNavigator(
             scope = scope,
