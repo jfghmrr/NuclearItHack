@@ -16,6 +16,7 @@ class StenoApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         if (getProcessName() != packageName) return
+        ControllerProvider.production = { graph.controller }
         graph.start()
         registerActivityLifecycleCallbacks(ForegroundTracker { graph.controller.onForeground() })
     }

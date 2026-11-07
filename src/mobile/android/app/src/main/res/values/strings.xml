@@ -1,4 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Стенокот</string>
+    <string name="common_btn_import">Импорт аудио</string>
+    <string name="common_btn_start">Запустить транскрибацию</string>
+    <string name="common_btn_cancel">Отмена</string>
+    <string name="common_btn_export">Экспорт JSON</string>
+    <string name="common_btn_export_meta">Экспорт служебных данных</string>
+    <string name="common_btn_export_protocol">Экспорт протокола</string>
+    <string name="common_btn_models">Модели и замеры</string>
+    <string name="common_btn_resume">Продолжить</string>
+    <string name="common_back">Назад</string>
+    <string name="common_play">Воспроизвести</string>
+    <string name="common_pause">Пауза</string>
+    <string name="common_speaker">Говорящий %1$d</string>
+    <string name="common_saved">Сохранено: %1$s</string>
+    <string name="common_tab_transcript">Стенограмма</string>
+    <string name="common_tab_protocol">Протокол</string>
 </resources>

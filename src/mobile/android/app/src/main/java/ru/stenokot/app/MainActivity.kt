@@ -5,50 +5,53 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.material3.Text
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.testTagsAsResourceId
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.mutableStateOf
+import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.pipeline.IntentEntry
+import ru.stenokot.app.ui.StenoApp
+import ru.stenokot.app.ui.nav.Route
 
 /** Единственная активность приложения: принимает входящие аудио и показывает интерфейс. */
 class MainActivity : ComponentActivity() {
+    private val externalRoute = mutableStateOf<Route?>(null)
+    private lateinit var controller: StenoController
     private lateinit var entry: IntentEntry
 
-    @OptIn(ExperimentalComposeUiApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        val controller = (application as StenoApplication).graph.controller
+        window.isNavigationBarContrastEnforced = false
+        controller = ControllerProvider.get(applicationContext, intent)
         entry = IntentEntry(controller)
         setContent {
-            val home by controller.home.collectAsStateWithLifecycle()
-            Text(
-                text = home.statusCode,
-                modifier = Modifier
-                    .semantics { testTagsAsResourceId = true }
-                    .fillMaxSize()
-                    .safeDrawingPadding()
-                    .testTag("txt_status"),
+            StenoApp(
+                activity = this,
+                controller = controller,
+                externalRoute = externalRoute.value,
+                onExternalRouteHandled = { externalRoute.value = null },
             )
         }
-        entry.onCreate(intent, savedInstanceState)
+        openIncoming(intent) { entry.onCreate(intent, savedInstanceState) }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        entry.onNewIntent(intent)
+        openIncoming(intent) { entry.onNewIntent(intent) }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         entry.onSaveInstanceState(outState)
+    }
+
+    /** Открытие файла из другого приложения сразу ведёт на обработку, без лишних шагов. */
+    private fun openIncoming(intent: Intent?, import: () -> String?) {
+        val debugRoute = ControllerProvider.override?.routeFor(intent)
+        if (debugRoute != null) {
+            externalRoute.value = debugRoute
+            return
+        }
+        import()?.let { externalRoute.value = Route.Processing(it) }
     }
 }

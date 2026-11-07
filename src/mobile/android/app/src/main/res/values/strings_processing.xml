@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="scr03_title">Обработка</string>
+    <string name="scr03_stage_index">Этап %1$d из %2$d</string>
+    <string name="scr03_no_counter">Счётчика нет, процент не показываем</string>
+    <string name="scr03_elapsed">Прошло %1$s</string>
+    <string name="scr03_hint_already_running">Обработка уже идёт. Повторный запуск не нужен</string>
+    <string name="scr03_hint_keep_screen">Экран останется включённым до конца обработки</string>
+    <string name="scr03_hint_resumed">Продолжаем с сохранённой точки</string>
+    <string name="scr03_hint_low_memory">Мало свободной памяти. Обработка может идти медленнее</string>
+    <string name="scr03_hint_power_save">Включён режим энергосбережения. Обработка может идти медленнее</string>
+    <string name="scr03_paused_title">Пауза: устройство перегрелось</string>
+    <string name="scr03_paused_body">Продолжим автоматически, когда оно остынет. Готовые этапы сохранены</string>
+    <string name="scr03_cancelling">Останавливаем обработку: дорабатываем текущий шаг</string>
+    <string name="scr03_cancelled_title">Обработка отменена</string>
+    <string name="scr03_cancelled_body">Запись осталась в приложении. Можно запустить её снова или импортировать другую</string>
+    <string name="scr03_progress_spoken">%1$s, %2$s</string>
+</resources>

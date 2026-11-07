@@ -1,0 +1,218 @@
+package ru.stenokot.app.debug
+
+import android.net.Uri
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import ru.stenokot.app.domain.ExportKind
+import ru.stenokot.app.domain.HomeUi
+import ru.stenokot.app.domain.JobDetailUi
+import ru.stenokot.app.domain.ProcessingUi
+import ru.stenokot.app.domain.StenoController
+import ru.stenokot.app.domain.UserStage
+import ru.stenokot.app.domain.VerificationUi
+import ru.stenokot.app.ui.format.STATUS_IDLE
+import ru.stenokot.app.ui.format.statusCode
+import ru.stenokot.app.ui.nav.Route
+import ru.stenokot.core.model.JobState
+import ru.stenokot.core.model.LlmStatus
+import ru.stenokot.core.model.Stage
+
+private const val TICK_MS = 1_000L
+private const val CANCEL_MS = 1_500L
+private const val QUEUE_MS = 1_200L
+
+/** Шаг имитации: стадия конвейера, её счётчик и этап пользователя. */
+private data class LiveStep(val stage: Stage, val user: UserStage, val total: Int?)
+
+private val LiveSteps = listOf(
+    LiveStep(Stage.IMPORT, UserStage.PREPARE_AUDIO, 11_981),
+    LiveStep(Stage.DECODE, UserStage.PREPARE_AUDIO, 768),
+    LiveStep(Stage.VAD, UserStage.PREPARE_AUDIO, 768),
+    LiveStep(Stage.LANG_ID, UserStage.PREPARE_AUDIO, 3),
+    LiveStep(Stage.ASR, UserStage.RECOGNIZE, 45),
+    LiveStep(Stage.DIARIZE, UserStage.DIARIZE, 3),
+    LiveStep(Stage.MERGE, UserStage.SAVE_TRANSCRIPT, null),
+    LiveStep(Stage.VALIDATE, UserStage.SAVE_TRANSCRIPT, null),
+)
+
+/**
+ * Контроллер отладочной сборки. Показывает любое состояние брифа через [show] и умеет проиграть
+ * обработку на демо-данных, чтобы проверить переходы между экранами.
+ */
+internal class FakeController : StenoController {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val homeState = MutableStateFlow(demoScene("S01-D")!!.home)
+    private val verificationState = MutableStateFlow(DemoData.verificationEmpty)
+    private val jobs = MutableStateFlow<Map<String, JobDetailUi>>(emptyMap())
+    private val flows = ConcurrentHashMap<String, StateFlow<JobDetailUi?>>()
+    private var running: Job? = null
+    private var counter = 0
+
+    override val home: StateFlow<HomeUi> = homeState
+    override val verification: StateFlow<VerificationUi> = verificationState
+
+    /** Открывает состояние [id]. Возвращает экран, на который надо перейти. */
+    fun show(id: String): Route? {
+        running?.cancel()
+        if (id == "LIVE") {
+            apply(demoScene("S01-A")!!)
+            return Route.Home
+        }
+        val scene = demoScene(id) ?: return null
+        apply(scene)
+        return scene.route
+    }
+
+    private fun apply(scene: DemoScene) {
+        jobs.value = scene.jobs.associateBy { it.summary.id }
+        homeState.value = scene.home
+        verificationState.value = scene.verification
+    }
+
+    override fun job(id: String): StateFlow<JobDetailUi?> = flows.getOrPut(id) {
+        jobs.map { it[id] }.stateIn(scope, SharingStarted.Eagerly, jobs.value[id])
+    }
+
+    override fun import(uris: List<Uri>): String? {
+        counter += 1
+        val id = "live$counter"
+        val name = uris.firstOrNull()?.lastPathSegment?.substringAfterLast('/')?.ifBlank { null } ?: DemoData.FILE_DS1
+        val busy = running?.isActive == true
+        val summary = DemoData.summary(
+            id = id,
+            title = name,
+            createdAtMs = System.currentTimeMillis(),
+            durationMs = DemoData.DURATION_DS1,
+            speakers = null,
+            state = JobState.Queued,
+            queuePosition = homeState.value.jobs.count { it.state == JobState.Queued } + 1,
+        )
+        val work = ProcessingUi(
+            preflight = DemoData.preflightDs1.copy(fileName = name),
+            stages = railStages(StageSnapshot(null, null, null, null, emptyMap(), null)),
+            elapsedMs = 0,
+            remainingMinMs = null,
+            remainingMaxMs = null,
+            lowMemory = false,
+            cancelling = false,
+        )
+        jobs.update { it + (id to JobDetailUi(summary, work, null, null)) }
+        publish(id, JobState.Queued)
+        if (!busy) start(id)
+        return id
+    }
+
+    override fun start(id: String) {
+        if (running?.isActive == true) return
+        running = scope.launch {
+            delay(QUEUE_MS)
+            live(id)
+        }
+    }
+
+    private suspend fun live(id: String) {
+        val done = mutableMapOf<UserStage, Long>()
+        var elapsed = 0L
+        var stageStart = 0L
+        var current: UserStage? = null
+        LiveSteps.forEach { step ->
+            if (current != step.user) {
+                current?.let { done[it] = elapsed - stageStart }
+                current = step.user
+                stageStart = elapsed
+            }
+            val ticks = if (step.total == null) 2 else 4
+            repeat(ticks) { tick ->
+                val fraction = if (step.total == null) null else (tick + 1f) / ticks
+                val snapshot = StageSnapshot(
+                    active = step.user,
+                    fraction = fraction,
+                    done = step.total?.let { (it * (tick + 1)) / ticks },
+                    total = step.total,
+                    tookMs = done.toMap(),
+                    activeMs = elapsed - stageStart,
+                )
+                update(id, JobState.Running(step.stage, fraction ?: 0f)) {
+                    it.copy(stages = railStages(snapshot), elapsedMs = elapsed)
+                }
+                delay(TICK_MS)
+                elapsed += TICK_MS
+            }
+        }
+        publish(id, JobState.TranscriptReady("Download/Stenokot/live.json"))
+        delay(3 * TICK_MS)
+        publish(id, JobState.Done(LlmStatus.APPLIED, emptyList()))
+        startNextQueued()
+    }
+
+    private fun startNextQueued() {
+        val next = homeState.value.jobs
+            .filter { it.state == JobState.Queued }
+            .minByOrNull { it.queuePosition ?: Int.MAX_VALUE }
+        running = null
+        next?.let { start(it.id) }
+    }
+
+    override fun cancel(id: String) {
+        running?.cancel()
+        jobs.update { map ->
+            val detail = map[id] ?: return@update map
+            map + (id to detail.copy(processing = detail.processing?.copy(cancelling = true)))
+        }
+        running = scope.launch {
+            delay(CANCEL_MS)
+            publish(id, JobState.Cancelled)
+            update(id, JobState.Cancelled) { it.copy(cancelling = false) }
+            startNextQueued()
+        }
+    }
+
+    override fun resume(id: String) = start(id)
+
+    override fun delete(id: String, removeExported: Boolean) {
+        jobs.update { it - id }
+        homeState.update { state -> state.copy(jobs = state.jobs.filter { it.id != id }) }
+    }
+
+    override fun export(id: String, kind: ExportKind, target: Uri) = Unit
+
+    override fun refreshAudio() {
+        homeState.update { it.copy(audioPermissionGranted = true) }
+    }
+
+    override fun diagnosticsPackage(id: String?): String = "демо-данные, задача ${id.orEmpty()}"
+
+    private fun update(id: String, state: JobState, work: (ProcessingUi) -> ProcessingUi) {
+        jobs.update { map ->
+            val detail = map[id] ?: return@update map
+            map + (id to detail.copy(processing = detail.processing?.let(work)))
+        }
+        publish(id, state)
+    }
+
+    private fun publish(id: String, state: JobState) {
+        jobs.update { map ->
+            val detail = map[id] ?: return@update map
+            map + (id to detail.copy(summary = detail.summary.copy(state = state)))
+        }
+        val summary = jobs.value[id]?.summary ?: return
+        homeState.update { current ->
+            val others = current.jobs.filter { it.id != id }
+            current.copy(jobs = listOf(summary) + others, statusCode = statusCode(state))
+        }
+        if (state is JobState.Done || state == JobState.Cancelled) {
+            homeState.update { it.copy(statusCode = STATUS_IDLE) }
+        }
+    }
+}

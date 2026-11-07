@@ -5,5 +5,9 @@
             android:name="ru.stenokot.app.speech.debug.HarnessService"
             android:exported="true"
             android:foregroundServiceType="dataSync" />
+        <provider
+            android:name="ru.stenokot.app.debug.DebugBootstrap"
+            android:authorities="${applicationId}.debug-bootstrap"
+            android:exported="false" />
     </application>
 </manifest>
