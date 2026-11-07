@@ -35,16 +35,16 @@ class DiarizationJournal(
  * Диаризация окнами по 5 минут с нахлёстом 10 с: одна ветка кода для любой длины. Нативный Process
  * держит весь сигнал в куче и строит квадратичную матрицу, поэтому часовой файл целиком не подаётся.
  * Кластеры окон связываются в [SpeakerBook] по эмбеддингам. Обе модели живут только внутри [diarize],
- * поэтому после возврата нативная память уже освобождена. Шаг окна сегментатора зависит от длины
- * записи и задаётся при создании модели, а задать его позже нельзя.
+ * поэтому после возврата нативная память уже освобождена. Шаг окна сегментатора и порог кластеризации
+ * задаются при создании модели, поэтому выбираются один раз на запись, см. [profileFor].
  */
 class WindowedDiarizer(
     private val models: ModelSource,
     private val threads: Int = EngineThreads.diarization(),
     private val journal: DiarizationJournal = DiarizationJournal(),
     private val isCancelled: () -> Boolean = { false },
-    /** Порог кластеризации внутри окна: косинусное расстояние, ниже которого кластеры сливаются. */
-    private val threshold: Float = DEFAULT_THRESHOLD,
+    /** Подмена порога из [profileFor] для проверочных прогонов. Null значит порог по длине записи. */
+    private val thresholdOverride: Float? = null,
     /** Наибольшая длина речи для отпечатка, секунды. Память извлекателя растёт вместе с ней. */
     embeddingSeconds: Int = MAX_EMBEDDING_SECONDS,
 ) : Diarizer {
@@ -72,7 +72,7 @@ class WindowedDiarizer(
         totalSamples: Long,
         block: (OfflineSpeakerDiarization, SpeakerEmbeddingExtractor) -> Unit,
     ) {
-        val shift = if (totalSamples < SHORT_RECORDING_SAMPLES) SHORT_SHIFT_RATIO else SHIFT_RATIO
+        val profile = profileFor(totalSamples)
         val embedding = SpeakerEmbeddingExtractorConfig(
             model = models.path(ModelFiles.DIAR_EMBEDDING),
             numThreads = threads,
@@ -84,12 +84,15 @@ class WindowedDiarizer(
                     segmentation = OfflineSpeakerSegmentationModelConfig(
                         pyannote = OfflineSpeakerSegmentationPyannoteModelConfig(
                             model = models.path(ModelFiles.DIAR_SEGMENTATION),
-                            windowShiftRatio = shift,
+                            windowShiftRatio = profile.shiftRatio,
                         ),
                         numThreads = threads,
                     ),
                     embedding = embedding,
-                    clustering = FastClusteringConfig(threshold = threshold, computeConfidence = true),
+                    clustering = FastClusteringConfig(
+                        threshold = thresholdOverride ?: profile.threshold,
+                        computeConfidence = true,
+                    ),
                     minDurationOn = MIN_DURATION_ON,
                     minDurationOff = MIN_DURATION_OFF,
                 ),
@@ -222,25 +225,39 @@ class WindowedDiarizer(
         val keepTo: Long,
     )
 
-    companion object {
-        /**
-         * Порог подобран на русских диалогах с известной разметкой. Значение 0.9 с английских совещаний
-         * сводило двух собеседников в одного на записях до полутора минут, монолог не дробится и при 0.3.
-         */
-        const val DEFAULT_THRESHOLD = 0.6f
+    /** Шаг окна сегментатора и порог кластеризации: косинусное расстояние, ниже которого кластеры сливаются. */
+    internal data class DiarProfile(val shiftRatio: Float, val threshold: Float)
 
+    companion object {
         private const val SAMPLE_RATE = 16000
         private const val WINDOW_SAMPLES = 300L * SAMPLE_RATE
         private const val OVERLAP_SAMPLES = 10L * SAMPLE_RATE
         private const val TAIL_MERGE_SAMPLES = 30L * SAMPLE_RATE
-        private const val SHORT_RECORDING_SAMPLES = 180L * SAMPLE_RATE
-        private const val SHIFT_RATIO = 0.25f
-        private const val SHORT_SHIFT_RATIO = 0.2f
+        private const val SHORT_RECORDING_SAMPLES = 120L * SAMPLE_RATE
+        private const val SINGLE_WINDOW_SAMPLES = WINDOW_SAMPLES + TAIL_MERGE_SAMPLES
+        private val SHORT_PROFILE = DiarProfile(shiftRatio = 0.25f, threshold = 0.6f)
+        private val FAST_PROFILE = DiarProfile(shiftRatio = 0.5f, threshold = 0.7f)
+        private val LONG_PROFILE = DiarProfile(shiftRatio = 0.25f, threshold = 0.8f)
         private const val MIN_DURATION_ON = 0.1f
         private const val MIN_DURATION_OFF = 0.1f
         private const val MIN_EMBEDDING_SAMPLES = 3 * SAMPLE_RATE / 2
         private const val MAX_EMBEDDING_SECONDS = 30
         private const val MIN_CONFIDENCE = -1f
+
+        /**
+         * Настройки записи длиной [totalSamples]. Значение зависит только от полной длины, поэтому
+         * продолжение с чекпойнта работает с теми же настройками, что и первый запуск.
+         *
+         * Кластеризация полной связи судит о слиянии по самой дальней паре, а это расстояние растёт
+         * с числом отпечатков в окне, поэтому порог растёт вместе с ним. На записях до двух минут
+         * порог 0.8 сводил двух собеседников в одного. Запись из одного окна короче 330 с берёт шаг
+         * 0.5: отпечатков вдвое меньше, точность на чистом звуке та же, а диаризация почти вдвое быстрее.
+         */
+        internal fun profileFor(totalSamples: Long): DiarProfile = when {
+            totalSamples < SHORT_RECORDING_SAMPLES -> SHORT_PROFILE
+            totalSamples < SINGLE_WINDOW_SAMPLES -> FAST_PROFILE
+            else -> LONG_PROFILE
+        }
 
         /**
          * Окна записи. Короткий хвост присоединяется к последнему окну: в нём мало речи для отпечатка.

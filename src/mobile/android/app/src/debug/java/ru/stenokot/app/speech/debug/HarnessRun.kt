@@ -79,6 +79,7 @@ internal class HarnessRun(private val context: Context, private val request: Har
         report.put("sizeBytes", source.length())
         report.put("cores", Runtime.getRuntime().availableProcessors())
         report.put("asrThreads", request.threads ?: EngineThreads.asr())
+        report.put("diarThreads", request.diarThreads ?: EngineThreads.diarization())
         report.put("stages", stageList)
         report.put("startKb", MemoryStats.read().toJson())
         sampler.start()
@@ -169,7 +170,7 @@ internal class HarnessRun(private val context: Context, private val request: Har
         models = models,
         threads = request.diarThreads ?: EngineThreads.diarization(),
         journal = journal,
-        threshold = request.threshold ?: WindowedDiarizer.DEFAULT_THRESHOLD,
+        thresholdOverride = request.threshold,
         embeddingSeconds = request.embeddingSeconds,
     )
 

@@ -49,4 +49,17 @@ class WindowPlanTest {
             assertEquals(a.endSample - 5 * rate, a.keepTo)
         }
     }
+
+    @Test
+    fun `настройки зависят от длины записи и меняются на границах диапазонов`() {
+        val short = WindowedDiarizer.DiarProfile(shiftRatio = 0.25f, threshold = 0.6f)
+        val middle = WindowedDiarizer.DiarProfile(shiftRatio = 0.5f, threshold = 0.7f)
+        val long = WindowedDiarizer.DiarProfile(shiftRatio = 0.25f, threshold = 0.8f)
+        assertEquals(short, WindowedDiarizer.profileFor(1))
+        assertEquals(short, WindowedDiarizer.profileFor(120 * rate - 1))
+        assertEquals(middle, WindowedDiarizer.profileFor(120 * rate))
+        assertEquals(middle, WindowedDiarizer.profileFor(330 * rate - 1))
+        assertEquals(long, WindowedDiarizer.profileFor(330 * rate))
+        assertEquals(long, WindowedDiarizer.profileFor(8 * 3600 * rate))
+    }
 }
