@@ -79,7 +79,7 @@ DONE
 | sherpa-onnx v2.0.1 | Распознавание, определение речи, сегментация и эмбеддинги говорящих на ONNX Runtime |
 | llama.cpp v0.9.0 | Подмодуль `third_party/llama.cpp`, запуск Qwen3-0.6B на CPU |
 
-Код в `src/mobile/android`: `core` - ядро, `engine-llm` - мост к llama.cpp. Внутри `app/src/main/java/ru/stenokot/app`: `pipeline` - очередь и стадии, `data` - задачи и чекпойнты, `audio` и `speech` - звук и движки, `llm` - служба модели, `ui` - экраны. Подробнее - в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Код в `src/mobile/android`: `core` - ядро, `engine-llm` - мост к llama.cpp. Внутри `app/src/main/java/ru/stenokot/app`: `pipeline` - очередь и стадии, `service` - служба обработки, `data` - задачи, чекпойнты и публикация, `audio` и `speech` - звук и движки, `llm` - служба модели, `ui` - экраны. Подробнее - в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Запуск
 
