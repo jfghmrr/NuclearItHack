@@ -9,24 +9,24 @@ import ru.stenokot.core.model.SpeakerTurn
 import ru.stenokot.core.model.Word
 import ru.stenokot.core.storage.DiarJournalLine
 
-/** Параметры уточнения говорящих по фразам. */
+/**
+ * Параметры уточнения говорящих по фразам. Значения выбраны на наборах настройки: косинус между
+ * центроидами людей редко выше 0.6, половины речи одного человека дают от 0.7, в том числе в шуме.
+ */
 data class RefineParams(
     val minPrintMs: Long = 1_500,
     val maxPrintMs: Long = 6_000,
     val maxPhraseMs: Long = 10_000,
     val pauseMs: Long = 700,
-    val anchorMs: Long = 1_500,
-    val linkCosine: Float = 0.5f,
-    val oneVoiceCosine: Float = 0.55f,
-    val gapLowCosine: Float = 0.5f,
-    val gapHighCosine: Float = 0.38f,
-    val passes: Int = 2,
+    val linkCosine: Float = 0.55f,
+    val sameVoiceCosine: Float = 0.65f,
+    val passes: Int = 1,
     val margin: Float = 0.03f,
-    val shortMargin: Float = 0.1f,
-    val minClusterMs: Long = 6_000,
-    val absorbCosine: Float = 0.45f,
+    val minClusterMs: Long = 10_000,
+    val absorbCosine: Float = 0.5f,
+    val weakCosine: Float = 0.3f,
+    val backedPhrases: Int = 2,
     val adoptGapMs: Long = 5_000,
-    val keepUnknown: Boolean = false,
     val maxAnchors: Int = 1_500,
 )
 
@@ -153,7 +153,7 @@ class SpeakerRefiner(private val params: RefineParams = RefineParams()) {
             }
             val fresh = decision.fallback.getValue(speaker)
             if (print == null) {
-                if (!params.keepUnknown) moved[fresh] = NO_GROUP
+                moved[fresh] = NO_GROUP
                 continue
             }
             val best = decision.centroids.toSortedMap().maxByOrNull { cosine(print, it.value) } ?: continue
@@ -195,15 +195,17 @@ class SpeakerRefiner(private val params: RefineParams = RefineParams()) {
         return out
     }
 
-    /** Собирает говорящих заново. Null значит, что длинных фраз мало и решению диаризации нечего противопоставить. */
+    /** Собирает говорящих заново. Null значит, что фраз с отпечатком мало и диаризации нечего противопоставить. */
     fun decide(phrases: List<Phrase>, prints: Array<FloatArray?>): RefineDecision? {
         val anchors = anchors(phrases, prints)
         if (anchors.size < MIN_ANCHORS) return null
         val groups = agglomerate(anchors.map { prints[it]!! })
         val labels = IntArray(phrases.size) { UNSET }
         anchors.forEachIndexed { position, index -> labels[index] = groups[position] }
+        mergeClose(phrases, prints, labels)
         absorbSmall(phrases, prints, labels)
         repeat(params.passes) { pass(phrases, prints, labels, home(phrases, labels)) }
+        mergeClose(phrases, prints, labels)
         absorbSmall(phrases, prints, labels)
         val home = home(phrases, labels)
         val nextFree = (labels.maxOrNull() ?: -1) + 1
@@ -221,9 +223,9 @@ class SpeakerRefiner(private val params: RefineParams = RefineParams()) {
         return RefineDecision(labels, fallback, centroids, unmatched)
     }
 
-    /** Длинные фразы для группировки. На очень длинной записи берётся равномерная выборка: память ограничена. */
+    /** Фразы для группировки. На очень длинной записи берётся равномерная выборка: память ограничена. */
     private fun anchors(phrases: List<Phrase>, prints: Array<FloatArray?>): List<Int> {
-        val all = phrases.indices.filter { prints[it] != null && phrases[it].cleanMs >= params.anchorMs }
+        val all = phrases.indices.filter { prints[it] != null }
         if (all.size <= params.maxAnchors) return all
         return List(params.maxAnchors) { all[(it.toLong() * all.size / params.maxAnchors).toInt()] }
     }
@@ -231,12 +233,18 @@ class SpeakerRefiner(private val params: RefineParams = RefineParams()) {
     /** Группы при среднем сходстве не ниже [RefineParams.linkCosine]. Цепочка ближайших соседей даёт квадратичное время. */
     private fun agglomerate(prints: List<FloatArray>): IntArray {
         val count = prints.size
-        val similar = Array(count) { row -> FloatArray(count) { cosine(prints[row], prints[it]) } }
+        val similar = Array(count) { FloatArray(count) }
+        for (row in 0 until count) {
+            for (column in row + 1 until count) {
+                val value = cosine(prints[row], prints[column])
+                similar[row][column] = value
+                similar[column][row] = value
+            }
+        }
         val size = IntArray(count) { 1 }
         val alive = BooleanArray(count) { true }
         val owner = IntArray(count) { it }
         val chain = IntArray(count)
-        val merges = ArrayList<Merge>(count)
         var top = 0
         var left = count
         while (left > 1) {
@@ -268,35 +276,11 @@ class SpeakerRefiner(private val params: RefineParams = RefineParams()) {
                 }
             }
             size[current] += size[previous]
-            merges += Merge(previous, current, bestValue)
-        }
-        val cut = cutCosine(merges.map { it.similarity }.sorted())
-        for (merge in merges) {
-            if (merge.similarity >= cut) owner[merge.from] = merge.into
+            if (bestValue >= params.linkCosine) owner[previous] = current
         }
         val roots = IntArray(count) { root(owner, it) }
         val numbers = HashMap<Int, Int>()
         return IntArray(count) { numbers.getOrPut(roots[it]) { numbers.size } }
-    }
-
-    /**
-     * Граница слияний. Сходство фраз одного человека зависит от канала записи, а скачок между слияниями
-     * разных людей и одного человека виден почти всегда, поэтому граница ставится в самый большой скачок.
-     * Если все слияния высокие, в записи один голос. Если скачка нет, работает постоянный порог.
-     */
-    private fun cutCosine(sorted: List<Float>): Float {
-        if (params.gapHighCosine > 1f) return params.linkCosine
-        if (sorted.isEmpty() || sorted.first() >= params.oneVoiceCosine) return Float.NEGATIVE_INFINITY
-        var best = NONE
-        var bestGap = 0f
-        for (index in 0 until sorted.lastIndex) {
-            val gap = sorted[index + 1] - sorted[index]
-            if (sorted[index] <= params.gapLowCosine && sorted[index + 1] >= params.gapHighCosine && gap > bestGap) {
-                bestGap = gap
-                best = index
-            }
-        }
-        return if (best == NONE) params.linkCosine else (sorted[best] + sorted[best + 1]) / 2
     }
 
     private fun root(owner: IntArray, index: Int): Int {
@@ -305,24 +289,64 @@ class SpeakerRefiner(private val params: RefineParams = RefineParams()) {
         return current
     }
 
-    /** Группа с малым объёмом речи и похожим голосом растворяется: это осколок, а не новый человек. */
+    /**
+     * Сводит группы с близкими центроидами. Шум у отдельных фраз разный, а у центроидов усредняется,
+     * поэтому косинус между центроидами разделяет людей лучше и почти не зависит от канала и шума.
+     */
+    private fun mergeClose(phrases: List<Phrase>, prints: Array<FloatArray?>, labels: IntArray) {
+        while (true) {
+            val ordered = centroids(phrases, prints, labels).toSortedMap().entries.toList()
+            var keep = NONE
+            var drop = NONE
+            var best = params.sameVoiceCosine
+            for (a in ordered.indices) {
+                for (b in a + 1 until ordered.size) {
+                    val value = cosine(ordered[a].value, ordered[b].value)
+                    if (value >= best) {
+                        best = value
+                        keep = ordered[a].key
+                        drop = ordered[b].key
+                    }
+                }
+            }
+            if (keep == NONE) return
+            labels.indices.forEach { if (labels[it] == drop) labels[it] = keep }
+        }
+    }
+
+    /**
+     * Малая группа растворяется в ближайшей большой, если голос похож. Одна фраза с шумом или смехом
+     * похожа на своего говорящего слабее, чем несколько фраз человека, поэтому порог зависит от того,
+     * сколько у группы подтверждений: фраз, а для одной фразы ещё и отдельного говорящего диаризации.
+     */
     private fun absorbSmall(phrases: List<Phrase>, prints: Array<FloatArray?>, labels: IntArray) {
         while (true) {
-            val centroids = centroids(phrases, prints, labels)
+            val centroids = centroids(phrases, prints, labels).toSortedMap()
             if (centroids.size < 2) return
             val speech = HashMap<Int, Long>()
-            labels.indices.forEach { if (labels[it] != UNSET) speech[labels[it]] = (speech[labels[it]] ?: 0L) + phrases[it].cleanMs }
+            val count = HashMap<Int, Int>()
+            labels.indices.forEach { index ->
+                val label = labels[index]
+                if (label != UNSET && prints[index] != null) {
+                    speech[label] = (speech[label] ?: 0L) + phrases[index].cleanMs
+                    count[label] = (count[label] ?: 0) + 1
+                }
+            }
+            val targets = centroids.keys.toList()
+            val backed = home(phrases, labels).values.toSet()
             var victim = NONE
             var target = NONE
             var smallest = Long.MAX_VALUE
-            for ((group, centroid) in centroids.toSortedMap()) {
+            for ((group, centroid) in centroids) {
                 val total = speech[group] ?: 0L
                 if (total >= params.minClusterMs || total >= smallest) continue
+                val confirmed = (count[group] ?: 0) >= params.backedPhrases || group in backed
+                val required = if (confirmed) params.absorbCosine else params.weakCosine
                 var best = NONE
-                var bestValue = params.absorbCosine
-                for ((other, candidate) in centroids.toSortedMap()) {
+                var bestValue = required
+                for (other in targets) {
                     if (other == group) continue
-                    val value = cosine(centroid, candidate)
+                    val value = cosine(centroid, centroids.getValue(other))
                     if (value >= bestValue) {
                         bestValue = value
                         best = other
@@ -346,7 +370,6 @@ class SpeakerRefiner(private val params: RefineParams = RefineParams()) {
         val ordered = centroids.toSortedMap()
         phrases.indices.forEach { index ->
             val print = prints[index] ?: return@forEach
-            val anchor = phrases[index].cleanMs >= params.anchorMs
             val current = labels[index].takeIf { it != UNSET } ?: home[phrases[index].speaker]
             var best = NONE
             var bestValue = Float.NEGATIVE_INFINITY
@@ -360,10 +383,7 @@ class SpeakerRefiner(private val params: RefineParams = RefineParams()) {
             val own = current?.let(centroids::get)
             when {
                 own == null -> if (bestValue >= params.absorbCosine) labels[index] = best
-                best != current -> {
-                    val required = if (anchor) params.margin else params.shortMargin
-                    labels[index] = if (bestValue >= cosine(print, own) + required) best else current
-                }
+                best != current -> labels[index] = if (bestValue >= cosine(print, own) + params.margin) best else current
                 else -> labels[index] = current
             }
         }
@@ -485,9 +505,6 @@ class SpeakerRefiner(private val params: RefineParams = RefineParams()) {
         }
         return out.sortedBy { it.startMs }
     }
-
-    /** Слияние двух групп при среднем сходстве [similarity]. */
-    private class Merge(val from: Int, val into: Int, val similarity: Float)
 
     companion object {
         private const val PROGRESS_STEPS = 100

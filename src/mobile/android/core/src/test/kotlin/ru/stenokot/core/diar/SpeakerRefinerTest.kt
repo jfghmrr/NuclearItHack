@@ -61,12 +61,14 @@ class SpeakerRefinerTest {
     }
 
     @Test
-    fun shortPhraseStaysWithItsSpeakerWithoutClearEvidence() {
-        val long = List(6) { phrase(it * 5_000L, it * 5_000L + 4_000, it % 2) }
-        val short = phrase(31_000, 32_700, 0)
-        val prints = Array<FloatArray?>(7) { if (it < 6) voice(it % 2, it) else FloatArray(16) { i -> if (i < 2) 0.7071f else 0f } }
-        val decision = refiner.decide(long + short, prints)!!
-        assertEquals(decision.labels[0], decision.labels[6])
+    fun phraseWithoutPrintFollowsItsNeighbour() {
+        val long = List(6) { phrase(it * 5_000L, it * 5_000L + 4_000, 0) }
+        val phrases = (long + phrase(14_100, 14_500, 0)).sortedBy { it.startMs }
+        val prints = arrayOf<FloatArray?>(
+            voice(0, 0), voice(1, 1), voice(0, 2), null, voice(1, 3), voice(0, 4), voice(1, 5),
+        )
+        val decision = refiner.decide(phrases, prints)!!
+        assertEquals(decision.labels[2], decision.labels[3])
     }
 
     @Test
@@ -82,8 +84,8 @@ class SpeakerRefinerTest {
         val long = List(6) { phrase(it * 5_000L, it * 5_000L + 4_000, 0) }
         val other = phrase(31_000, 34_000, 1)
         val near = FloatArray(16).also {
-            it[0] = 0.48f
-            it[1] = 0.8772f
+            it[0] = 0.6f
+            it[1] = 0.8f
         }
         val prints = Array<FloatArray?>(7) { if (it < 6) voice(0, it) else near }
         assertEquals(1, refiner.decide(long + other, prints)!!.labels.toSet().size)
