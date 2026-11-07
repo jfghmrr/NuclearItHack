@@ -22,7 +22,7 @@
 | `RTF_full` | То же плюс стадия протокола |
 | Время до JSON | Внешний таймер: от отправки файла в приложение до появления JSON |
 
-Времена стадий пишутся в `metrics.jsonl` задачи, сводка и оба `RTF` в `metadata.json`. Пик памяти берётся из `VmHWM` процесса.
+Времена стадий пишутся в `metrics.jsonl` задачи, сводка и оба `RTF` в `metadata.json`. Пик памяти берётся из `VmHWM` процесса. Строки прогонов полного приложения собраны в [artifacts/test-results/results.csv](../artifacts/test-results/results.csv).
 
 ### Honor, полный APK
 
