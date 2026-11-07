@@ -3,6 +3,7 @@ package ru.stenokot.core.engine
 import java.io.Closeable
 import java.io.File
 import ru.stenokot.core.audio.AudioInput
+import ru.stenokot.core.diar.VoicePrinter
 import ru.stenokot.core.model.AsrSegment
 import ru.stenokot.core.model.AudioInfo
 import ru.stenokot.core.model.Language
@@ -59,13 +60,13 @@ interface Diarizer : Closeable {
 }
 
 /** Уточнение говорящих по готовым словам и звуку записи. */
-interface TurnRefiner : Closeable {
+fun interface TurnRefiner {
     /** Возвращает новые интервалы [turns]. Слова и текст от них не зависят, меняется только авторство. */
     fun refine(
-        pcm: PcmReader,
         asr: List<AsrSegment>,
         turns: List<SpeakerTurn>,
         lines: List<DiarJournalLine>,
+        printer: VoicePrinter,
         progress: Progress,
     ): List<SpeakerTurn>
 }

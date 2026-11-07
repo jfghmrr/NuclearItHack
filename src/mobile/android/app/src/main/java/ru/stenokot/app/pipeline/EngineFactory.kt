@@ -7,15 +7,16 @@ import ru.stenokot.app.audio.Preflight
 import ru.stenokot.app.audio.WavPcmReader
 import ru.stenokot.app.llm.RemoteLlmRunner
 import ru.stenokot.app.speech.DiarizationJournal
+import ru.stenokot.app.speech.FinishedTurns
 import ru.stenokot.app.speech.GigaAsr
 import ru.stenokot.app.speech.ModelSource
 import ru.stenokot.app.speech.ParakeetAsr
-import ru.stenokot.app.speech.PhraseRefiner
 import ru.stenokot.app.speech.SileroVadEngine
 import ru.stenokot.app.speech.WindowedDiarizer
 import ru.stenokot.core.audio.AudioInput
 import ru.stenokot.core.contract.DefaultTranscriptValidator
 import ru.stenokot.core.contract.TranscriptValidator
+import ru.stenokot.core.diar.PhraseTurnRefiner
 import ru.stenokot.core.engine.Asr
 import ru.stenokot.core.engine.Diarizer
 import ru.stenokot.core.engine.LanguageDetector
@@ -41,6 +42,7 @@ class DiarizationRequest(
     val restored: List<DiarJournalLine>,
     val onWindow: (DiarJournalLine) -> Unit,
     val isCancelled: () -> Boolean,
+    val refine: FinishedTurns = FinishedTurns { turns, _, _, _ -> turns },
 )
 
 /**
@@ -80,7 +82,7 @@ interface PipelineEngines {
     fun diarizer(request: DiarizationRequest): Diarizer
 
     /** Создаёт уточнение говорящих. Null значит, что стадия обходится без него. */
-    fun refiner(audioDurationMs: Long, isCancelled: () -> Boolean): TurnRefiner? = null
+    fun refiner(audioDurationMs: Long): TurnRefiner? = null
 
     /** Создаёт слияние слов и говорящих для записи длиной [audioDurationMs]. */
     fun merger(audioDurationMs: Long): Merger
@@ -137,12 +139,11 @@ class EngineFactory(context: Context, modelSetVersion: String, availableMemory: 
 
     override fun diarizer(request: DiarizationRequest): Diarizer = WindowedDiarizer(
         models = models,
-        journal = DiarizationJournal(request.restored, request.onWindow),
+        journal = DiarizationJournal(request.restored, request.onWindow, request.refine),
         isCancelled = request.isCancelled,
     )
 
-    override fun refiner(audioDurationMs: Long, isCancelled: () -> Boolean): TurnRefiner =
-        PhraseRefiner(models, audioDurationMs, isCancelled)
+    override fun refiner(audioDurationMs: Long): TurnRefiner = PhraseTurnRefiner(audioDurationMs)
 
     override fun merger(audioDurationMs: Long): Merger = DefaultMerger(audioDurationMs)
 

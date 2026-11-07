@@ -5,6 +5,9 @@ import kotlin.math.min
 import kotlin.math.sqrt
 import ru.stenokot.core.asr.endsSentence
 import ru.stenokot.core.engine.Progress
+import ru.stenokot.core.engine.TurnRefiner
+import ru.stenokot.core.merge.DefaultMerger
+import ru.stenokot.core.model.AsrSegment
 import ru.stenokot.core.model.SpeakerTurn
 import ru.stenokot.core.model.Word
 import ru.stenokot.core.storage.DiarJournalLine
@@ -46,6 +49,25 @@ data class Phrase(val startMs: Long, val endMs: Long, val speaker: Int, val clea
 fun interface VoicePrinter {
     /** Возвращает отпечаток склеенных отрезков [spans]. */
     fun print(spans: List<TimeSpan>): FloatArray?
+}
+
+/** Настоящее уточнение для конвейера: слова берутся теми же решениями, что и в слиянии. */
+class PhraseTurnRefiner(
+    private val audioDurationMs: Long,
+    private val params: RefineParams = RefineParams(),
+) : TurnRefiner {
+    override fun refine(
+        asr: List<AsrSegment>,
+        turns: List<SpeakerTurn>,
+        lines: List<DiarJournalLine>,
+        printer: VoicePrinter,
+        progress: Progress,
+    ): List<SpeakerTurn> {
+        val refiner = SpeakerRefiner(params)
+        val overlaps = SpeakerRefiner.overlaps(lines)
+        val phrases = refiner.phrases(DefaultMerger(audioDurationMs).assignWords(asr, turns), overlaps)
+        return if (phrases.isEmpty()) turns else refiner.refine(phrases, turns, overlaps, printer, progress)
+    }
 }
 
 /**

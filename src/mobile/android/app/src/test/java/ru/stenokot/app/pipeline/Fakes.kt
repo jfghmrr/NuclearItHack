@@ -180,27 +180,18 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
                     ),
                 )
             }
-            return listOf(SpeakerTurn(0, windows * 1_000L, 0))
+            val turns = listOf(SpeakerTurn(0, windows * 1_000L, 0))
+            return request.refine.apply(turns, emptyList(), { null }, progress)
         }
 
         override fun close() = closed("diar")
     }
 
-    override fun refiner(audioDurationMs: Long, isCancelled: () -> Boolean): TurnRefiner? {
+    override fun refiner(audioDurationMs: Long): TurnRefiner? {
         val behavior = refineBehavior ?: return null
-        return object : TurnRefiner {
-            override fun refine(
-                pcm: PcmReader,
-                asr: List<AsrSegment>,
-                turns: List<SpeakerTurn>,
-                lines: List<DiarJournalLine>,
-                progress: Progress,
-            ): List<SpeakerTurn> {
-                refineRuns += 1
-                return behavior(turns)
-            }
-
-            override fun close() = Unit
+        return TurnRefiner { _, turns, _, _, _ ->
+            refineRuns += 1
+            behavior(turns)
         }
     }
 

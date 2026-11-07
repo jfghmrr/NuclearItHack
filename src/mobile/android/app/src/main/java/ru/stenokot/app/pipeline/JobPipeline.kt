@@ -25,6 +25,7 @@ import ru.stenokot.core.audio.AudioInput
 import ru.stenokot.core.audio.FileAudioInput
 import ru.stenokot.core.contract.TranscriptEncoder
 import ru.stenokot.core.contract.ValidationResult
+import ru.stenokot.core.diar.VoicePrinter
 import ru.stenokot.core.engine.Asr
 import ru.stenokot.core.engine.PcmReader
 import ru.stenokot.core.engine.Progress
@@ -310,7 +311,7 @@ class JobPipeline(
             run.boundary(Stage.DIARIZE)
             turns = diarizeFrom(run, journal, done)
         }
-        val finished = refined(run, turns.ifEmpty { wholeRecordingTurn(run) }, done)
+        val finished = turns.ifEmpty { wholeRecordingTurn(run) }
         val document = TurnsDocument(finished.map { it.toLine() })
         AtomicFiles.replaceText(run.files.turns, ServiceJson.encodeToString(TurnsDocument.serializer(), document))
     }
@@ -319,16 +320,22 @@ class JobPipeline(
      * Уточнение только улучшает готовый результат, поэтому его сбой задачу не останавливает. После
      * смерти процесса второй попытки нет: отметка попытки говорит, что прошлая кончилась падением.
      */
-    private fun refined(run: Run, turns: List<SpeakerTurn>, lines: List<DiarJournalLine>): List<SpeakerTurn> {
+    private fun refined(
+        run: Run,
+        turns: List<SpeakerTurn>,
+        lines: List<DiarJournalLine>,
+        printer: VoicePrinter,
+        progress: Progress,
+    ): List<SpeakerTurn> {
         if (run.files.refineAttempt.exists()) return turns
-        val refiner = engines.refiner(book.require(run.id).durationMs ?: 0, run.control::isStopRequested) ?: return turns
+        val refiner = engines.refiner(book.require(run.id).durationMs ?: 0) ?: return turns
         run.files.refineAttempt.writeText("1")
         return try {
             val asr = AsrJournal(run.files.asr).restore()
                 .filterNot { it.skipped }
                 .sortedBy { it.index }
                 .map { it.toSegment() }
-            refiner.use { it.refine(run.pcm, asr, turns, lines, stageProgress(DIARIZE_SHARE, 1f)) }
+            refiner.refine(asr, turns, lines, printer, progress)
         } catch (cancelled: CancellationException) {
             run.files.refineAttempt.delete()
             throw cancelled
@@ -348,10 +355,11 @@ class JobPipeline(
                 done += line
             },
             isCancelled = run.control::isStopRequested,
+            refine = { turns, lines, printer, progress -> refined(run, turns, lines, printer, progress) },
         )
         val diarizer = loading { engines.diarizer(request) }
         return try {
-            diarizer.use { it.diarize(run.pcm, stageProgress(0f, DIARIZE_SHARE)) }
+            diarizer.use { it.diarize(run.pcm, stageProgress()) }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
@@ -444,9 +452,6 @@ class JobPipeline(
 
     private fun stageProgress() = Progress { value, note -> board.report(value, note) }
 
-    private fun stageProgress(from: Float, to: Float) =
-        Progress { value, note -> board.report(from + (to - from) * value, note) }
-
     private fun readSegments(files: JobFiles): List<SpeechSegment> =
         ServiceJson.decodeFromString(VadDocument.serializer(), files.vad.readText()).segments.map { it.toSegment() }
 
@@ -525,7 +530,6 @@ class JobPipeline(
         const val THERMAL_SEVERE = 3
         const val THERMAL_CRITICAL = 4
         const val BYTES_IN_MB = 1024L * 1024
-        const val DIARIZE_SHARE = 0.9f
     }
 }
 

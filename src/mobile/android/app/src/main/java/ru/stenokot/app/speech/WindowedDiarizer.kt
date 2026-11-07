@@ -15,6 +15,7 @@ import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import ru.stenokot.core.diar.SpeakerBook
 import ru.stenokot.core.diar.SpeakerBookConfig
+import ru.stenokot.core.diar.VoicePrinter
 import ru.stenokot.core.engine.Diarizer
 import ru.stenokot.core.engine.PcmReader
 import ru.stenokot.core.engine.Progress
@@ -29,7 +30,20 @@ class DiarizationJournal(
     val restored: List<DiarJournalLine> = emptyList(),
     /** Вызывается после каждого окна до перехода к следующему. Здесь строка уходит в журнал. */
     val onWindow: (DiarJournalLine) -> Unit = {},
+    /** Последний шаг: уточнение итоговых интервалов. Модель отпечатков ещё загружена. */
+    val finish: FinishedTurns = FinishedTurns { turns, _, _, _ -> turns },
 )
+
+/** Работа над готовыми интервалами всей записи, пока модель отпечатков в памяти. */
+fun interface FinishedTurns {
+    /** Возвращает интервалы, которые пойдут дальше по конвейеру. */
+    fun apply(
+        turns: List<SpeakerTurn>,
+        lines: List<DiarJournalLine>,
+        printer: VoicePrinter,
+        progress: Progress,
+    ): List<SpeakerTurn>
+}
 
 /**
  * Диаризация окнами по 5 минут с нахлёстом 10 с: одна ветка кода для любой длины. Нативный Process
@@ -60,15 +74,54 @@ class WindowedDiarizer(
         if (total == 0L) return emptyList()
         val book = SpeakerBook(SpeakerBookConfig.EXPORT)
         val linked = journal.restored.mapTo(ArrayList()) { book.addWindow(it) }
+        val lines = journal.restored.toMutableList()
         val windows = planWindows(total)
+        var finished: List<SpeakerTurn>? = null
         if (journal.restored.size < windows.size) {
             models.require(ModelFiles.DIAR_SEGMENTATION, ModelFiles.DIAR_EMBEDDING)
             withModels(total) { diarizer, extractor ->
-                runWindows(pcm, windows, diarizer, extractor, book, linked, progress)
+                runWindows(pcm, windows, diarizer, extractor, book, linked, lines, progress)
+                finished = finish(book.finish(linked), lines, pcm, extractor, progress)
             }
         }
-        return book.finish(linked)
+        return finished ?: finishRestored(book.finish(linked), lines, pcm, progress)
     }
+
+    private fun finish(
+        turns: List<SpeakerTurn>,
+        lines: List<DiarJournalLine>,
+        pcm: PcmReader,
+        extractor: SpeakerEmbeddingExtractor,
+        progress: Progress,
+    ): List<SpeakerTurn> {
+        if (turns.isEmpty()) return turns
+        val rest = Progress { value, note -> progress.report(WINDOWS_SHARE + (1f - WINDOWS_SHARE) * value, note) }
+        return journal.finish.apply(turns, lines, PhrasePrinter(pcm, extractor, isCancelled), rest)
+    }
+
+    /** Все окна уже в журнале: нужна только модель отпечатков. */
+    private fun finishRestored(
+        turns: List<SpeakerTurn>,
+        lines: List<DiarJournalLine>,
+        pcm: PcmReader,
+        progress: Progress,
+    ): List<SpeakerTurn> {
+        if (turns.isEmpty()) return turns
+        models.require(ModelFiles.DIAR_EMBEDDING)
+        val extractor = loadModel(ModelFiles.DIAR_EMBEDDING) {
+            SpeakerEmbeddingExtractor(assetManager = models.assets, config = embeddingConfig())
+        }
+        try {
+            return finish(turns, lines, pcm, extractor, progress)
+        } finally {
+            extractor.release()
+        }
+    }
+
+    private fun embeddingConfig() = SpeakerEmbeddingExtractorConfig(
+        model = models.path(ModelFiles.DIAR_EMBEDDING),
+        numThreads = threads,
+    )
 
     override fun close() = Unit
 
@@ -77,10 +130,7 @@ class WindowedDiarizer(
         block: (OfflineSpeakerDiarization, Lazy<SpeakerEmbeddingExtractor>) -> Unit,
     ) {
         val profile = profileFor(totalSamples)
-        val embedding = SpeakerEmbeddingExtractorConfig(
-            model = models.path(ModelFiles.DIAR_EMBEDDING),
-            numThreads = threads,
-        )
+        val embedding = embeddingConfig()
         val diarizer = loadModel(ModelFiles.DIAR_SEGMENTATION) {
             OfflineSpeakerDiarization(
                 assetManager = models.assets,
@@ -125,6 +175,7 @@ class WindowedDiarizer(
         extractor: Lazy<SpeakerEmbeddingExtractor>,
         book: SpeakerBook,
         linked: MutableList<List<SpeakerTurn>>,
+        lines: MutableList<DiarJournalLine>,
         progress: Progress,
     ) {
         for (index in journal.restored.size until windows.size) {
@@ -134,8 +185,9 @@ class WindowedDiarizer(
             val segments = diarizer.processWithCallback(samples, WindowProgress(progress, index, windows.size))
             val line = describeWindow(index, window, samples, segments, extractor, single = windows.size == 1)
             journal.onWindow(line)
+            lines += line
             linked += book.addWindow(line)
-            progress.report((index + 1f) / windows.size, "${index + 1}/${windows.size}")
+            progress.report(WINDOWS_SHARE * (index + 1f) / windows.size, "${index + 1}/${windows.size}")
         }
     }
 
@@ -257,6 +309,7 @@ class WindowedDiarizer(
         private const val MIN_EMBEDDING_SAMPLES = 3 * SAMPLE_RATE / 2
         private const val MAX_EMBEDDING_SECONDS = 30
         private const val MIN_CONFIDENCE = -1f
+        internal const val WINDOWS_SHARE = 0.9f
 
         /**
          * Настройки записи длиной [totalSamples]. Значение зависит только от полной длины, поэтому
@@ -319,7 +372,7 @@ private class WindowProgress(
         val now = System.currentTimeMillis()
         if (all > 0 && now - lastReport >= REPORT_EVERY_MS) {
             lastReport = now
-            progress.report((window + done.toFloat() / all) / windows, "$window/$windows")
+            progress.report(WindowedDiarizer.WINDOWS_SHARE * (window + done.toFloat() / all) / windows, "$window/$windows")
         }
         return 0
     }
