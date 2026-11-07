@@ -217,6 +217,7 @@ class FakeOutputs : OutputGateway {
     val removed = ArrayList<String>()
     var failPublish = false
     var nameTaken = false
+    var failMeta = false
 
     override suspend fun publishTranscript(stem: String, bytes: ByteArray): PublishedFile {
         if (failPublish) error("Диск недоступен")
@@ -226,6 +227,7 @@ class FakeOutputs : OutputGateway {
     }
 
     override suspend fun publishMeta(stem: String, kind: MetaKind, source: File) {
+        if (failMeta) error("Диск недоступен")
         meta += "$stem:${kind.suffix}"
     }
 
@@ -259,6 +261,7 @@ class Harness(
     private val config: RunnerConfig = RunnerConfig(),
 ) {
     val statuses = ArrayList<String>()
+    val metaAtDone = ArrayList<List<String>>()
     val store = JobStore { root }
     val lifetime = Job(test.backgroundScope.coroutineContext[Job])
     private val scope = CoroutineScope(test.backgroundScope.coroutineContext + lifetime)
@@ -282,7 +285,10 @@ class Harness(
         io = dispatcher,
         clock = { test.testScheduler.currentTime },
         config = config,
-        onStatus = { statuses += it },
+        onStatus = { status ->
+            statuses += status
+            if (status == "DONE") metaAtDone += outputs.meta.toList()
+        },
     ).also { it.launch() }
 
     /** Импортирует файл [name] и возвращает номер задачи. */

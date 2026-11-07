@@ -788,4 +788,36 @@ class PipelineRunnerTest {
         val job = h.runner.jobs.value.getValue(id)
         assertEquals(LlmBudgetPolicy.budget(60_000, job.coreMs), h.engines.llmRuns.single())
     }
+
+    @Test
+    fun doneAppearsOnlyAfterMetaFilesArePublished() = runTest {
+        val h = harness()
+        h.engines.llmBehavior = {
+            h.store.files("job1").protocol.writeText("{}")
+            LlmResult(LlmStatus.APPLIED, "protocol.json", null)
+        }
+        val id = h.import("order")
+        h.await(done(id))
+        val published = h.metaAtDone.single()
+        assertTrue("order:metadata" in published)
+        assertTrue("order:protocol" in published)
+    }
+
+    @Test
+    fun metadataPublishedBeforeDoneCarriesFinalLanguageModelStatus() = runTest {
+        val h = harness()
+        val id = h.import("final")
+        h.await(done(id))
+        val text = h.store.files(id).metadata.readText()
+        assertTrue(text, "APPLIED" in text)
+    }
+
+    @Test
+    fun failedMetaPublishDoesNotHoldBackDone() = runTest {
+        val h = harness()
+        h.outputs.failMeta = true
+        val id = h.import("sick")
+        h.await(done(id))
+        assertEquals("DONE", h.statuses.last())
+    }
 }

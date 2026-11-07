@@ -454,8 +454,6 @@ class PipelineRunner(
             val settled = settle(job.llm, stop, result, isRetry)
             val stats = metrics.llmStats(store.files(id))
             job.copy(
-                phase = JobPhase.DONE,
-                stage = Stage.LLM,
                 llm = settled.copy(
                     tookMs = job.llm.tookMs + took,
                     promptTokens = stats?.promptTokens ?: job.llm.promptTokens,
@@ -538,10 +536,14 @@ class PipelineRunner(
         }
     }
 
+    /**
+     * Завершает задачу. Статус DONE появляется последним: тот, кто его дождался, уже находит в
+     * Download/Stenokot/meta и метаданные, и протокол. Сбой записи этих файлов итог не меняет.
+     */
     private suspend fun finalize(id: String) {
-        book.mutate(id) { it.copy(phase = JobPhase.DONE, stage = Stage.LLM) }
         writeMetadata(id)
         publishProtocol(id)
+        book.mutate(id) { it.copy(phase = JobPhase.DONE, stage = Stage.LLM) }
     }
 
     private suspend fun writeMetadata(id: String) {
