@@ -7,6 +7,11 @@ import androidx.compose.ui.unit.dp
 /**
  * Цветовые токены одной темы. Это единственное место с литералами цветов:
  * экраны и компоненты берут значения только через [StenoTheme.colors].
+ *
+ * Соответствие токенам дизайна: `bg` это [background], `surface` это [surface] (карточки), `ink` это
+ * [onSurface], `muted` это [onSurfaceVariant], `line` это [outlineVariant], `accent` это [primary],
+ * `tint` это [primaryContainer], `subtle` это [surfaceContainer], `warn`, `danger` и `positive`
+ * это [warning], [error] и [success].
  */
 @Immutable
 data class StenoColors(
@@ -51,96 +56,105 @@ data class StenoColors(
     val inverseSurface: Color,
     val inverseOnSurface: Color,
     val inversePrimary: Color,
+    val recording: Color,
+    val scrim: Color,
 )
 
-/** Светлая тема «Чистовик»: тёплая бумага, тёмные чернила, глубокий бирюзовый акцент. */
+/**
+ * Светлая тема. Значения взяты из `design_tokens.json`. Вторичный текст на одну ступень темнее
+ * макета: исходный #63736A даёт на `subtle` и `tint` меньше 4,5:1.
+ */
 val LightColors = StenoColors(
     isDark = false,
-    primary = Color(0xFF0F5C73),
+    primary = Color(0xFF176B5B),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFCFE8F0),
-    onPrimaryContainer = Color(0xFF06303D),
-    secondary = Color(0xFF4A5B66),
+    primaryContainer = Color(0xFFE4EDE1),
+    onPrimaryContainer = Color(0xFF176B5B),
+    secondary = Color(0xFF5D6D64),
     onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFDCE5EA),
-    onSecondaryContainer = Color(0xFF16242C),
-    tertiary = Color(0xFF8F4A12),
+    secondaryContainer = Color(0xFFEFEEE7),
+    onSecondaryContainer = Color(0xFF21352F),
+    tertiary = Color(0xFF855A27),
     onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFFFE2CC),
-    onTertiaryContainer = Color(0xFF3A1C05),
-    error = Color(0xFFB3261E),
+    tertiaryContainer = Color(0xFFF4EADB),
+    onTertiaryContainer = Color(0xFF855A27),
+    error = Color(0xFFAE4938),
     onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFF9DEDC),
-    onErrorContainer = Color(0xFF410E0B),
-    success = Color(0xFF1E6B3A),
+    errorContainer = Color(0xFFF9E9E3),
+    onErrorContainer = Color(0xFFAE4938),
+    success = Color(0xFF27674B),
     onSuccess = Color(0xFFFFFFFF),
-    successContainer = Color(0xFFD3F0DC),
-    onSuccessContainer = Color(0xFF0B2F18),
-    warning = Color(0xFF7A4F00),
+    successContainer = Color(0xFFE4EDE1),
+    onSuccessContainer = Color(0xFF27674B),
+    warning = Color(0xFF855A27),
     onWarning = Color(0xFFFFFFFF),
-    warningContainer = Color(0xFFFFE9B8),
-    onWarningContainer = Color(0xFF3A2600),
-    background = Color(0xFFFCFBF8),
-    onBackground = Color(0xFF1B1C1A),
-    surface = Color(0xFFFCFBF8),
-    onSurface = Color(0xFF1B1C1A),
-    surfaceVariant = Color(0xFFE6E3DD),
-    onSurfaceVariant = Color(0xFF4A4C48),
-    surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF7F5F1),
-    surfaceContainer = Color(0xFFF2F0EB),
-    surfaceContainerHigh = Color(0xFFECEAE4),
-    surfaceContainerHighest = Color(0xFFE6E3DD),
-    outline = Color(0xFF75776F),
-    outlineVariant = Color(0xFFCFCDC5),
-    inverseSurface = Color(0xFF30312E),
-    inverseOnSurface = Color(0xFFF3F1EC),
-    inversePrimary = Color(0xFF8FD0E4),
+    warningContainer = Color(0xFFF4EADB),
+    onWarningContainer = Color(0xFF855A27),
+    background = Color(0xFFF7F6F1),
+    onBackground = Color(0xFF21352F),
+    surface = Color(0xFFFFFEFA),
+    onSurface = Color(0xFF21352F),
+    surfaceVariant = Color(0xFFEFEEE7),
+    onSurfaceVariant = Color(0xFF5D6D64),
+    surfaceContainerLowest = Color(0xFFFFFEFA),
+    surfaceContainerLow = Color(0xFFF7F6F1),
+    surfaceContainer = Color(0xFFEFEEE7),
+    surfaceContainerHigh = Color(0xFFEFEEE7),
+    surfaceContainerHighest = Color(0xFFEFEEE7),
+    outline = Color(0xFF75837A),
+    outlineVariant = Color(0xFFDDE3D9),
+    inverseSurface = Color(0xFF21352F),
+    inverseOnSurface = Color(0xFFF7F6F1),
+    inversePrimary = Color(0xFFA3D4B4),
+    recording = Color(0xFFBD5742),
+    scrim = Color(0x54142C25),
 )
 
-/** Тёмная тема: тёплый уголь вместо бумаги, те же роли токенов. */
+/** Тёмная тема: те же роли на глубоком зелёном. Значения взяты из `design_tokens.json`. */
 val DarkColors = StenoColors(
     isDark = true,
-    primary = Color(0xFF8FD0E4),
-    onPrimary = Color(0xFF06303D),
-    primaryContainer = Color(0xFF17495A),
-    onPrimaryContainer = Color(0xFFCFE8F0),
-    secondary = Color(0xFFB3C3CD),
-    onSecondary = Color(0xFF1D2B33),
-    secondaryContainer = Color(0xFF33414A),
-    onSecondaryContainer = Color(0xFFDCE5EA),
-    tertiary = Color(0xFFF2B885),
-    onTertiary = Color(0xFF4A2600),
-    tertiaryContainer = Color(0xFF5E3210),
-    onTertiaryContainer = Color(0xFFFFE2CC),
-    error = Color(0xFFF2B8B5),
-    onError = Color(0xFF601410),
-    errorContainer = Color(0xFF6E1C17),
-    onErrorContainer = Color(0xFFF9DEDC),
-    success = Color(0xFF8FD6A6),
-    onSuccess = Color(0xFF0B3319),
-    successContainer = Color(0xFF1F4A2D),
-    onSuccessContainer = Color(0xFFD3F0DC),
-    warning = Color(0xFFE9C46A),
-    onWarning = Color(0xFF3A2600),
-    warningContainer = Color(0xFF4F3A0C),
-    onWarningContainer = Color(0xFFFFE9B8),
-    background = Color(0xFF141513),
-    onBackground = Color(0xFFEDEBE5),
-    surface = Color(0xFF141513),
-    onSurface = Color(0xFFEDEBE5),
-    surfaceVariant = Color(0xFF2F302C),
-    onSurfaceVariant = Color(0xFFBDBBB3),
-    surfaceContainerLowest = Color(0xFF1C1D1A),
-    surfaceContainerLow = Color(0xFF191A18),
-    surfaceContainer = Color(0xFF1E1F1C),
-    surfaceContainerHigh = Color(0xFF242522),
-    surfaceContainerHighest = Color(0xFF2A2B28),
-    outline = Color(0xFF90918A),
-    outlineVariant = Color(0xFF3B3C38),
-    inverseSurface = Color(0xFFEDEBE5),
-    inverseOnSurface = Color(0xFF30312E),
-    inversePrimary = Color(0xFF0F5C73),
+    primary = Color(0xFFA3D4B4),
+    onPrimary = Color(0xFF173825),
+    primaryContainer = Color(0xFF2A4737),
+    onPrimaryContainer = Color(0xFFA3D4B4),
+    secondary = Color(0xFFB4C3B7),
+    onSecondary = Color(0xFF15251F),
+    secondaryContainer = Color(0xFF24372E),
+    onSecondaryContainer = Color(0xFFEEF3E9),
+    tertiary = Color(0xFFE8C58D),
+    onTertiary = Color(0xFF3F3523),
+    tertiaryContainer = Color(0xFF3F3523),
+    onTertiaryContainer = Color(0xFFE8C58D),
+    error = Color(0xFFF6B5A2),
+    onError = Color(0xFF442D27),
+    errorContainer = Color(0xFF442D27),
+    onErrorContainer = Color(0xFFF6B5A2),
+    success = Color(0xFFA2D3B5),
+    onSuccess = Color(0xFF173825),
+    successContainer = Color(0xFF2A4737),
+    onSuccessContainer = Color(0xFFA2D3B5),
+    warning = Color(0xFFE8C58D),
+    onWarning = Color(0xFF3F3523),
+    warningContainer = Color(0xFF3F3523),
+    onWarningContainer = Color(0xFFE8C58D),
+    background = Color(0xFF15251F),
+    onBackground = Color(0xFFEEF3E9),
+    surface = Color(0xFF1E3028),
+    onSurface = Color(0xFFEEF3E9),
+    surfaceVariant = Color(0xFF24372E),
+    onSurfaceVariant = Color(0xFFB4C3B7),
+    surfaceContainerLowest = Color(0xFF1E3028),
+    surfaceContainerLow = Color(0xFF15251F),
+    surfaceContainer = Color(0xFF24372E),
+    surfaceContainerHigh = Color(0xFF24372E),
+    surfaceContainerHighest = Color(0xFF24372E),
+    outline = Color(0xFF7F9184),
+    outlineVariant = Color(0xFF374A3F),
+    inverseSurface = Color(0xFFEEF3E9),
+    inverseOnSurface = Color(0xFF15251F),
+    inversePrimary = Color(0xFF176B5B),
+    recording = Color(0xFFBD5742),
+    scrim = Color(0x8C0A1410),
 )
 
 /** Форма значка говорящего. Пути заданы для области 24 на 24, смещение цифры указано в dp. */
@@ -155,9 +169,12 @@ enum class SpeakerShape(val path: String, val digitOffsetDp: Int) {
     PARALLELOGRAM("M7.5 3H23l-6.5 18H1z", 0),
 }
 
-/** Оформление одного говорящего: заливка, цвет цифры и форма. */
+/**
+ * Оформление одного говорящего: бледная заливка значка, цвет цифры, форма и насыщенный цвет [line]
+ * для отметок на ленте, кромки активной реплики и линий протокола.
+ */
 @Immutable
-data class SpeakerStyle(val fill: Color, val onFill: Color, val shape: SpeakerShape)
+data class SpeakerStyle(val fill: Color, val onFill: Color, val shape: SpeakerShape, val line: Color)
 
 /**
  * Палитра одной темы: восемь цветов и восемь форм. Цвет идёт по кругу, а на каждом новом круге форма
@@ -181,20 +198,32 @@ class SpeakerPalette(private val styles: List<SpeakerStyle>) {
 
 private val shapes = SpeakerShape.entries
 
-/** Говорящие на светлом фоне: белая цифра на насыщенном цвете. */
-val LightSpeakers = SpeakerPalette(
-    listOf(
-        Color(0xFF1457A8), Color(0xFFA8470A), Color(0xFF1E7135), Color(0xFF6B3FB5),
-        Color(0xFFAD1A72), Color(0xFF00706E), Color(0xFF6C6A00), Color(0xFF4D5761),
-    ).mapIndexed { i, fill -> SpeakerStyle(fill, Color(0xFFFFFFFF), shapes[i]) },
+/** Пары заливки и цифры из макета. Первые пять заданы дизайном, остальные продолжают тот же ряд. */
+private val SpeakerFills = listOf(
+    Color(0xFFE4EDE1) to Color(0xFF236849),
+    Color(0xFFF1E1D1) to Color(0xFF8D4A28),
+    Color(0xFFEBE2F0) to Color(0xFF745290),
+    Color(0xFFDFEAF5) to Color(0xFF355E84),
+    Color(0xFFF5E0EA) to Color(0xFF8D4265),
+    Color(0xFFD9EDEE) to Color(0xFF1F6A70),
+    Color(0xFFEFECCF) to Color(0xFF66601C),
+    Color(0xFFE6E9ED) to Color(0xFF56606C),
 )
 
-/** Говорящие на тёмном фоне: тёмная цифра на светлом варианте того же оттенка. */
+/** Говорящие на светлом фоне: линии тем же цветом, что и цифра. */
+val LightSpeakers = SpeakerPalette(
+    SpeakerFills.mapIndexed { i, (fill, ink) -> SpeakerStyle(fill, ink, shapes[i], ink) },
+)
+
+/** Говорящие на тёмном фоне: значок тот же, линии светлее, чтобы читаться на тёмной поверхности. */
 val DarkSpeakers = SpeakerPalette(
     listOf(
-        Color(0xFF9CC2F5), Color(0xFFF0A878), Color(0xFF8AD3A0), Color(0xFFC2ACF2),
+        Color(0xFFA2D3B5), Color(0xFFF0A878), Color(0xFFC2ACF2), Color(0xFF9CC2F5),
         Color(0xFFF2A0CE), Color(0xFF63D2CE), Color(0xFFCDCB66), Color(0xFFB4BEC8),
-    ).mapIndexed { i, fill -> SpeakerStyle(fill, Color(0xFF141513), shapes[i]) },
+    ).mapIndexed { i, line ->
+        val (fill, ink) = SpeakerFills[i]
+        SpeakerStyle(fill, ink, shapes[i], line)
+    },
 )
 
 /** Шаг сетки в dp. */
@@ -208,29 +237,58 @@ object StenoSpace {
     val xxxl = 48.dp
 }
 
-/** Радиусы. Большие элементы мягче мелких, чтобы иерархия читалась и формой. */
+/** Радиусы из макета. Семантические имена удобнее чисел: кнопка, карточка, поле, лист. */
 object StenoRadius {
     val xs = 4.dp
     val s = 8.dp
     val m = 12.dp
-    val l = 16.dp
-    val xl = 20.dp
-    val xxl = 28.dp
+    val l = 14.dp
+    val xl = 18.dp
+    val xxl = 27.dp
+
+    /** Значок в карточке записи. */
+    val tile = 12.dp
+
+    /** Поле поиска, фильтр, информационный блок. */
+    val field = 14.dp
+
+    /** Кнопка действия. */
+    val button = 17.dp
+
+    /** Карточка содержимого. */
+    val card = 18.dp
+
+    /** Карточка записи в списке. */
+    val record = 19.dp
+
+    /** Карточка текущего этапа. */
+    val stage = 20.dp
+
+    /** Диалог подтверждения. */
+    val dialog = 24.dp
+
+    /** Нижний лист. */
+    val sheet = 27.dp
 }
 
 /** Размеры, общие для компонентов. */
 object StenoSize {
     val touchTarget = 48.dp
     val actionHeight = 56.dp
+    val topBarHeight = 64.dp
     val hairline = 1.dp
-    val progressHeight = 8.dp
+    val progressHeight = 4.dp
     val iconSmall = 16.dp
     val iconMedium = 20.dp
-    val icon = 24.dp
-    val iconLarge = 40.dp
+    val icon = 22.dp
+    val iconLarge = 28.dp
+    val tile = 40.dp
     val mascot = 120.dp
+    val mascotPlate = 152.dp
+    val mascotPlateSmall = 100.dp
     val ledgerMargin = 58.dp
     val railGutter = 32.dp
+    val stepDot = 23.dp
 }
 
 /** Длительности переходов в мс. Анимация только на смену состояния. */
@@ -238,4 +296,19 @@ object StenoMotion {
     const val SHORT = 150
     const val MEDIUM = 200
     const val LONG = 250
+
+    /** Появление пустого состояния. */
+    const val ENTER = 240
+
+    /** Акцент завершения. */
+    const val SUCCESS = 260
+
+    /** Появление ошибки. */
+    const val ERROR = 160
+
+    /** Дыхание маскота на экране обработки, один вдох и выдох. */
+    const val BREATH = 2_400
+
+    /** Шаг дыхания. Сдвиг в три dp не требует шестидесяти кадров, а конвейеру нужен процессор. */
+    const val BREATH_STEP = 100L
 }

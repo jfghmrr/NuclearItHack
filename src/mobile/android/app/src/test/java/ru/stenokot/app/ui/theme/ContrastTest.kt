@@ -106,8 +106,8 @@ class ContrastTest {
         val themes = listOf(LightColors to LightSpeakers, DarkColors to DarkSpeakers)
         themes.forEach { (colors, palette) ->
             palette.all.forEachIndexed { index, style ->
-                check("форма ${index + 1}/фон", style.fill, colors.surface, 3.0)
-                check("форма ${index + 1}/активная строка", style.fill, colors.primaryContainer, 3.0)
+                check("линия ${index + 1}/фон", style.line, colors.surface, 3.0)
+                check("линия ${index + 1}/активная строка", style.line, colors.primaryContainer, 3.0)
             }
         }
     }

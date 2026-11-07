@@ -1,5 +1,7 @@
 package ru.stenokot.app.ui.theme
 
+import android.content.res.Configuration
+import android.view.ContextThemeWrapper
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
@@ -11,7 +13,12 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import ru.stenokot.app.R
 
 private val LocalStenoColors = staticCompositionLocalOf { LightColors }
 private val LocalSpeakers = staticCompositionLocalOf { LightSpeakers }
@@ -22,9 +29,9 @@ private val Type = StenoType()
 private val MaterialShapes = Shapes(
     extraSmall = RoundedCornerShape(StenoRadius.s),
     small = RoundedCornerShape(StenoRadius.m),
-    medium = RoundedCornerShape(StenoRadius.l),
-    large = RoundedCornerShape(StenoRadius.xl),
-    extraLarge = RoundedCornerShape(StenoRadius.xxl),
+    medium = RoundedCornerShape(StenoRadius.field),
+    large = RoundedCornerShape(StenoRadius.card),
+    extraLarge = RoundedCornerShape(StenoRadius.sheet),
 )
 
 private val MaterialType = Typography(
@@ -72,7 +79,7 @@ private fun StenoColors.toScheme(): ColorScheme {
         onErrorContainer = onErrorContainer,
         outline = outline,
         outlineVariant = outlineVariant,
-        scrim = onSurface,
+        scrim = scrim,
         surfaceBright = surfaceContainerHighest,
         surfaceDim = surface,
         surfaceContainer = surfaceContainer,
@@ -98,9 +105,32 @@ object StenoTheme {
         @Composable @ReadOnlyComposable get() = LocalStenoType.current
 }
 
-/** Тема приложения. Светлая или тёмная по настройке системы, переключателя нет. */
+/**
+ * Подменяет ночной режим ресурсов, когда в настройках выбрана тема не как у системы: иначе маскот
+ * и системные значения остались бы от другой темы.
+ */
 @Composable
-fun StenoTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+private fun ForcedNight(dark: Boolean, content: @Composable () -> Unit) {
+    val base = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val themed = remember(base, configuration, dark) {
+        val night = if (dark) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
+        val forced = Configuration(configuration).apply {
+            uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or night
+        }
+        ContextThemeWrapper(base, R.style.Theme_Stenokot).apply { applyOverrideConfiguration(forced) }
+    }
+    CompositionLocalProvider(
+        LocalContext provides themed,
+        LocalConfiguration provides themed.resources.configuration,
+        LocalResources provides themed.resources,
+        content = content,
+    )
+}
+
+/** Цвета, шрифты и формы дизайна для уже выбранной темы. */
+@Composable
+private fun StenoTokens(dark: Boolean, content: @Composable () -> Unit) {
     val colors = if (dark) DarkColors else LightColors
     CompositionLocalProvider(
         LocalStenoColors provides colors,
@@ -113,5 +143,16 @@ fun StenoTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () ->
             shapes = MaterialShapes,
             content = content,
         )
+    }
+}
+
+/** Тема приложения: как в системе либо светлая или тёмная по выбору в настройках. */
+@Composable
+fun StenoTheme(mode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () -> Unit) {
+    val systemDark = isSystemInDarkTheme()
+    when (mode) {
+        ThemeMode.SYSTEM -> StenoTokens(systemDark, content)
+        ThemeMode.LIGHT -> ForcedNight(dark = false) { StenoTokens(dark = false, content) }
+        ThemeMode.DARK -> ForcedNight(dark = true) { StenoTokens(dark = true, content) }
     }
 }
