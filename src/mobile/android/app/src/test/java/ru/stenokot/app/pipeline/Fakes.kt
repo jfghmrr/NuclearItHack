@@ -66,6 +66,7 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
     var onWindow: (Int) -> Unit = {}
     var validation: ValidationResult = ValidationResult.Ok
     var language: Language = Language.RU
+    var languageSettled = true
     var noSpeech = false
     var windows = 3
     var refineBehavior: ((List<SpeakerTurn>) -> List<SpeakerTurn>)? = null
@@ -155,7 +156,11 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
         override fun close() = closed(name)
     }
 
-    override fun languageDetector(): LanguageDetector = LanguageDetector { language }
+    override fun languageDetector(): LanguageDetector = object : LanguageDetector {
+        override fun detect(samples: List<AsrSegment>): Language = language
+
+        override fun settled(samples: List<AsrSegment>): Boolean = languageSettled
+    }
 
     override fun diarizer(request: DiarizationRequest): Diarizer = object : Diarizer {
         init {

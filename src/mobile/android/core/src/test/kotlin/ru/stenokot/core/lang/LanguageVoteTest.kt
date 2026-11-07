@@ -1,6 +1,8 @@
 package ru.stenokot.core.lang
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.stenokot.core.model.AsrSegment
 import ru.stenokot.core.model.Language
@@ -15,19 +17,36 @@ class LanguageVoteTest {
     private val russian = "Ну вот, мы и договорились, что это будет не в пятницу, а в понедельник."
     private val english = "So we buy the food from the new supplier and it is what they said to you."
 
+    /** Настоящий вывод русской модели на английской речи: латиница без служебных слов. */
+    private val garbled = "Ohemember You Wann It thishash Kimipenues lefty intrututu disky name David Hivas"
+
     @Test
     fun noSamplesDefaultToRussian() {
         assertEquals(Language.RU, vote.detect(emptyList()))
+        assertFalse(vote.settled(emptyList()))
     }
 
     @Test
     fun russianTextIsRussian() {
         assertEquals(Language.RU, vote.detect(chunks(russian, russian, russian)))
+        assertTrue(vote.settled(chunks(russian, russian, russian)))
     }
 
     @Test
     fun confidentEnglishIsEnglish() {
         assertEquals(Language.EN, vote.detect(chunks(english, english, english)))
+        assertTrue(vote.settled(chunks(english, english, english)))
+    }
+
+    @Test
+    fun garbledLatinWithoutServiceWordsIsEnglish() {
+        assertEquals(Language.EN, vote.detect(chunks(garbled, garbled, garbled)))
+        assertTrue(vote.settled(chunks(garbled, garbled, garbled)))
+    }
+
+    @Test
+    fun englishChunksSurviveEmptyProbes() {
+        assertEquals(Language.EN, vote.detect(chunks("", english, "")))
     }
 
     @Test
@@ -37,8 +56,9 @@ class LanguageVoteTest {
     }
 
     @Test
-    fun latinScriptWithoutServiceWordsStaysRussian() {
-        assertEquals(Language.RU, vote.detect(chunks("dashboard pipeline merge", "backend frontend", "kubernetes")))
+    fun cyrillicInsideEnglishChunksDoesNotFlipTheFile() {
+        val slip = "Персон black Hammaside vechtems kill by other black people the white"
+        assertEquals(Language.EN, vote.detect(chunks(slip, garbled, garbled)))
     }
 
     @Test
@@ -47,20 +67,33 @@ class LanguageVoteTest {
     }
 
     @Test
-    fun twoEnglishChunksOfThreeAreEnglish() {
-        assertEquals(Language.EN, vote.detect(chunks(english, english, russian)))
+    fun evenSplitAsksForMoreProbes() {
+        assertFalse(vote.settled(chunks(russian, english)))
     }
 
     @Test
-    fun emptyTextsStayRussian() {
+    fun tieStaysRussian() {
+        assertEquals(Language.RU, vote.detect(chunks("один два", "three four")))
+    }
+
+    @Test
+    fun fewWordsAskForMoreProbes() {
+        assertEquals(Language.RU, vote.detect(chunks("Да, хорошо")))
+        assertFalse(vote.settled(chunks("Да, хорошо")))
+    }
+
+    @Test
+    fun emptyTextsStayRussianAndAskForMoreProbes() {
         assertEquals(Language.RU, vote.detect(chunks("", "", "")))
+        assertFalse(vote.settled(chunks("", "", "")))
     }
 
     @Test
     fun tallyReportsVotes() {
-        val tally = vote.tally(chunks(english, russian))
+        val tally = vote.tally(chunks("один two three", "четыре"))
+        assertEquals(2, tally.cyrillic)
+        assertEquals(2, tally.latin)
         assertEquals(2, tally.chunks)
-        assertEquals(1, tally.enChunks)
         assertEquals(Language.RU, tally.language)
     }
 }

@@ -152,7 +152,7 @@ data class DiarJournalLine(
 @Serializable
 data class ModelHash(val name: String, val sha256: String, @SerialName("size_bytes") val sizeBytes: Long? = null)
 
-/** Голоса определения языка. */
+/** Голоса определения языка: слова кириллицей [ru], слова латиницей [en], число пробных срезов. */
 @Serializable
 data class LanguageVotes(val ru: Int, val en: Int, val chunks: Int)
 

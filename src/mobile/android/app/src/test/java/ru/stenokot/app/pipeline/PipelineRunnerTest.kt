@@ -1180,6 +1180,33 @@ class PipelineRunnerTest {
     }
 
     @Test
+    fun settledLanguageReadsOnlyThreeProbes() = runTest {
+        val h = harness { engines.language = Language.EN }
+        val id = h.import("english")
+        h.await(done(id))
+        assertEquals(listOf(1, 2, 3, 0, 1, 2, 3, 4), h.engines.transcribed)
+    }
+
+    @Test
+    fun unsettledLanguageReadsMoreProbes() = runTest {
+        val h = harness {
+            engines.language = Language.EN
+            engines.languageSettled = false
+        }
+        val id = h.import("english")
+        h.await(done(id))
+        assertEquals(listOf(1, 2, 3, 0, 0, 1, 2, 3, 4), h.engines.transcribed)
+    }
+
+    @Test
+    fun extraRussianProbesAreReusedInsteadOfRecognizedTwice() = runTest {
+        val h = harness { engines.languageSettled = false }
+        val id = h.import("russian")
+        h.await(done(id))
+        assertEquals(h.engines.transcribed.distinct(), h.engines.transcribed)
+    }
+
+    @Test
     fun russianProbesAreReusedInsteadOfRecognizedTwice() = runTest {
         val h = harness()
         val id = h.import("russian")

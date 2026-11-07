@@ -45,6 +45,9 @@ interface Vad : Closeable {
 fun interface LanguageDetector {
     /** Возвращает язык файла. По умолчанию русский. */
     fun detect(samples: List<AsrSegment>): Language
+
+    /** Хватает ли [samples] для уверенного решения. Если нет, конвейер читает ещё срезы. */
+    fun settled(samples: List<AsrSegment>): Boolean = true
 }
 
 /** Распознаватель речи. */

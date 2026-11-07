@@ -209,24 +209,27 @@ class JobPipeline(
      */
     private suspend fun languageId(run: Run) {
         val segments = readSegments(run.files)
-        val probes = LanguageProbes.pick(segments)
         val asr = run.asr(Language.RU)
         val journal = AsrJournal(run.files.asr)
         val known = journal.restore().associateBy { it.index }
-        val results = ArrayList<AsrSegment>(probes.size)
+        val results = ArrayList<AsrSegment>()
         var language = Language.RU
         var votes: LanguageVotes? = null
         var failed = false
         try {
-            probes.forEachIndexed { index, probe ->
-                run.boundary(Stage.LANG_ID)
-                val restored = known[probe.index]?.takeUnless { it.skipped }?.toSegment()
-                results += restored ?: asr.transcribe(run.pcm, probe).also { journal.append(AsrJournalLine.of(it)) }
-                board.progress((index + 1f) / probes.size, index + 1, probes.size)
-            }
             val detector = engines.languageDetector()
+            suspend fun probe(batch: List<SpeechSegment>) {
+                batch.forEachIndexed { index, chunk ->
+                    run.boundary(Stage.LANG_ID)
+                    val restored = known[chunk.index]?.takeUnless { it.skipped }?.toSegment()
+                    results += restored ?: asr.transcribe(run.pcm, chunk).also { journal.append(AsrJournalLine.of(it)) }
+                    board.progress((index + 1f) / batch.size, index + 1, batch.size)
+                }
+            }
+            probe(LanguageProbes.pick(segments))
+            if (!detector.settled(results)) probe(LanguageProbes.extra(segments))
             language = detector.detect(results)
-            votes = (detector as? LanguageVote)?.tally(results)?.let { LanguageVotes(it.ru, it.en, it.chunks) }
+            votes = (detector as? LanguageVote)?.tally(results)?.let { LanguageVotes(it.cyrillic, it.latin, it.chunks) }
         } catch (stop: JobStopped) {
             throw stop
         } catch (cancelled: CancellationException) {

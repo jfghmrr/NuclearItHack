@@ -4,57 +4,51 @@ import ru.stenokot.core.engine.LanguageDetector
 import ru.stenokot.core.model.AsrSegment
 import ru.stenokot.core.model.Language
 
-/** Голоса служебных слов для metadata.json. */
-data class LanguageTally(val ru: Int, val en: Int, val enChunks: Int, val chunks: Int, val language: Language)
+/** Голоса для metadata.json. [settled] значит, что пробных срезов хватило для решения. */
+data class LanguageTally(
+    val cyrillic: Int,
+    val latin: Int,
+    val chunks: Int,
+    val settled: Boolean,
+    val language: Language,
+)
 
 /**
- * Определяет язык файла по служебным словам в пробных срезах русского маршрута. Доля латиницы
- * не используется: модель пишет английские термины латиницей и в русской речи. Английский
- * выбирается только при уверенном перевесе, иначе остаётся русский. Пороги не откалиброваны.
+ * Определяет язык файла по алфавиту пробных срезов русского маршрута. Модель пишет русскую речь
+ * кириллицей, а английскую латиницей, причём словами без смысла, поэтому служебных английских слов
+ * в таком тексте почти нет. Английские термины в русской речи дают лишь малую долю латиницы. Другие
+ * языки на латинице уходят в английский маршрут: русский для них не лучше. Если слов мало или перевес
+ * мал, конвейер читает ещё срезы, а итог решает большинство. При равенстве и без слов остаётся русский.
  */
 class LanguageVote(
-    private val minChunkVotes: Int = MIN_CHUNK_VOTES,
+    private val minWords: Int = MIN_WORDS,
     private val dominance: Int = DOMINANCE,
 ) : LanguageDetector {
 
     override fun detect(samples: List<AsrSegment>): Language = tally(samples).language
 
-    /** Считает голоса и принимает решение. */
+    override fun settled(samples: List<AsrSegment>): Boolean = tally(samples).settled
+
+    /** Считает слова каждого алфавита и принимает решение. */
     fun tally(samples: List<AsrSegment>): LanguageTally {
-        var ru = 0
-        var en = 0
-        var enChunks = 0
+        var cyrillic = 0
+        var latin = 0
         for (sample in samples) {
-            val words = WORD.findAll(sample.text.lowercase()).map { it.value }.toList()
-            val chunkRu = words.count { it in RUSSIAN }
-            val chunkEn = words.count { it in ENGLISH }
-            ru += chunkRu
-            en += chunkEn
-            if (chunkEn >= minChunkVotes && chunkEn >= dominance * chunkRu) enChunks++
+            for (word in WORD.findAll(sample.text.lowercase())) {
+                if (word.value.any { it in 'а'..'я' || it == 'ё' }) cyrillic++ else latin++
+            }
         }
-        val confident = samples.isNotEmpty() && enChunks * 3 >= samples.size * 2
-        return LanguageTally(ru, en, enChunks, samples.size, if (confident) Language.EN else Language.RU)
+        val leader = maxOf(cyrillic, latin)
+        val other = minOf(cyrillic, latin)
+        val settled = leader >= minWords && leader >= dominance * other
+        val language = if (latin > cyrillic) Language.EN else Language.RU
+        return LanguageTally(cyrillic, latin, samples.size, settled, language)
     }
 
     private companion object {
-        const val MIN_CHUNK_VOTES = 3
-        const val DOMINANCE = 3
+        const val MIN_WORDS = 8
+        const val DOMINANCE = 4
 
-        val WORD = Regex("[а-яёa-z']+")
-
-        val RUSSIAN = setOf(
-            "и", "в", "во", "не", "на", "я", "что", "он", "с", "со", "как", "а", "то", "все", "всё", "она",
-            "так", "его", "но", "да", "ты", "к", "у", "же", "вы", "за", "бы", "по", "только", "ее", "её",
-            "мне", "было", "вот", "от", "меня", "еще", "ещё", "нет", "о", "из", "ему", "когда", "даже",
-            "ну", "ли", "если", "уже", "или", "быть", "был", "до", "вас", "для", "мы", "это", "там", "они",
-            "их", "чем", "тоже", "потому", "который", "которые", "надо", "очень",
-        )
-
-        val ENGLISH = setOf(
-            "the", "of", "and", "to", "a", "in", "is", "it", "you", "that", "he", "was", "for", "on", "are",
-            "with", "as", "they", "be", "at", "have", "this", "from", "or", "had", "by", "but", "what",
-            "we", "when", "your", "can", "said", "there", "use", "an", "each", "which", "she", "do", "how",
-            "their", "if", "will", "not", "so", "about", "would", "i'm", "don't", "it's", "i",
-        )
+        val WORD = Regex("[а-яёa-z]['а-яёa-z]*")
     }
 }

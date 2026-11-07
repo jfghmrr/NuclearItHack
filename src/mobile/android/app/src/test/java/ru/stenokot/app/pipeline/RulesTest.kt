@@ -140,6 +140,10 @@ class RulesTest {
         assertEquals(listOf(24, 49, 74), LanguageProbes.pick(segments).map { it.index })
         assertEquals(2, LanguageProbes.pick(segments.take(2)).size)
         assertTrue(LanguageProbes.pick(emptyList()).isEmpty())
+        assertEquals(listOf(12, 37, 61, 86), LanguageProbes.extra(segments).map { it.index })
+        assertEquals(listOf(0), LanguageProbes.extra(segments.take(5)).map { it.index })
+        assertTrue(LanguageProbes.extra(segments.take(3)).isEmpty())
+        assertTrue(LanguageProbes.extra(emptyList()).isEmpty())
     }
 
     @Test
