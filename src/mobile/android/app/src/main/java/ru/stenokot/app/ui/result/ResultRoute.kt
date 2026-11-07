@@ -4,11 +4,9 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -56,6 +54,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -72,11 +71,12 @@ import ru.stenokot.app.domain.ResultUi
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.ui.AppActions
 import ru.stenokot.app.ui.Tags
-import ru.stenokot.app.ui.components.OutlinedAction
-import ru.stenokot.app.ui.components.PrimaryAction
+import ru.stenokot.app.ui.components.ActionSheet
+import ru.stenokot.app.ui.components.ActionSheetRow
 import ru.stenokot.app.ui.components.StenoTopBar
 import ru.stenokot.app.ui.format.formatTimecode
 import ru.stenokot.app.ui.format.speakersLabel
+import ru.stenokot.app.ui.home.DeleteDialog
 import ru.stenokot.app.ui.layout.LocalWindowLayout
 import ru.stenokot.app.ui.nav.ResultTab
 import ru.stenokot.app.ui.nav.Route
@@ -91,8 +91,9 @@ private const val WARNING_LANG_FAILED = "LANG_ID_FAILED"
 private const val KEY_BANNER = "banner"
 private const val KEY_HINT = "hint"
 private const val KEY_OUTPUT = "output"
+private const val KEY_META = "meta"
 private const val TYPE_HEADER = 10
-private const val ONE_LINE_STRIP = 1.5f
+private const val PINNED_STRIP_LIMIT = 2f
 
 /** Разобранная стенограмма и исходный вид списка. Всё считается вне основного потока. */
 @Immutable
@@ -248,16 +249,25 @@ private fun ResultContent(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
+    val jobId = detail.summary.id
 
     var tab by rememberSaveable(route.tab) { mutableStateOf(route.tab) }
-    var panelOpen by rememberSaveable { mutableStateOf(false) }
+    var menuOpen by rememberSaveable { mutableStateOf(false) }
+    var exportOpen by rememberSaveable { mutableStateOf(false) }
+    var speakersOpen by rememberSaveable { mutableStateOf(false) }
+    var deleteOpen by rememberSaveable { mutableStateOf(false) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var selected by rememberSaveable(stateSaver = SpeakerSetSaver) { mutableStateOf(emptySet<Int>()) }
+    var matchCursor by rememberSaveable { mutableIntStateOf(0) }
+    var focusApplied by rememberSaveable(route.focusUtterance) { mutableStateOf(false) }
     val searchField = rememberTextFieldState()
     val transcriptList = rememberLazyListState()
     val protocolList = rememberLazyListState()
     val snackbar = remember { SnackbarHostState() }
     val player = rememberResultPlayer(result.audioPath)
+    val envelope by produceState<ByteArray?>(null, result.pcmPath) {
+        value = result.pcmPath?.let { path -> withContext(Dispatchers.IO) { loadEnvelope(File(path)) } }
+    }
 
     val matchStyle = remember(colors) { MatchStyle(colors.tertiaryContainer, colors.onTertiaryContainer) }
     val state = detail.summary.state
@@ -276,8 +286,6 @@ private fun ResultContent(
         }
     }
 
-    val copiedPath = stringResource(R.string.scr04_path_copied)
-    val noFolder = stringResource(R.string.scr04_folder_unavailable)
     val noShare = stringResource(R.string.scr04_share_unavailable)
     val shareTitle = stringResource(R.string.scr04_action_share)
     val exportDone = stringResource(R.string.scr04_export_done)
@@ -287,7 +295,7 @@ private fun ResultContent(
 
     val exportTo: (ExportKind, Uri?) -> Unit = { kind, target ->
         if (target != null) {
-            controller.export(detail.summary.id, kind, target)
+            controller.export(jobId, kind, target)
             scope.launch {
                 if (awaitWritten(context, target) && !output.exportFailed) snackbar.showSnackbar(exportDone)
             }
@@ -301,7 +309,9 @@ private fun ResultContent(
     }
     val stem = result.title.substringBeforeLast('.')
     val onExport = { exportJson.launch("$stem.json") }
-    val onExportProtocol = { exportProtocol.launch("$stem.protocol.json") }
+    val onSaveKind: (ExportKind) -> Unit = { kind ->
+        if (kind == ExportKind.PROTOCOL) exportProtocol.launch("$stem.protocol.json") else onExport()
+    }
     val closeSearch: () -> Unit = {
         searchOpen = false
         searchField.clearText()
@@ -311,66 +321,72 @@ private fun ResultContent(
         searchField.clearText()
         selected = emptySet()
     }
-    val onCopyPath: () -> Unit = {
-        copyText(context, pathLabel, result.output.path)
-        scope.launch { snackbar.showSnackbar(copiedPath) }
-    }
     val onShare: () -> Unit = {
         scope.launch { if (!shareOutput(context, result.output, shareTitle)) snackbar.showSnackbar(noShare) }
     }
-    val onOpenFolder: () -> Unit = {
-        if (!openFolder(context, result.output)) scope.launch { snackbar.showSnackbar(noFolder) }
-    }
     val onCopyDiagnostics: () -> Unit = {
-        copyText(context, pathLabel, controller.diagnosticsPackage(detail.summary.id))
+        copyText(context, pathLabel, controller.diagnosticsPackage(jobId))
         scope.launch { snackbar.showSnackbar(copiedDiagnostics) }
     }
+    val onOpenFile: () -> Unit = { actions.navigator.push(Route.ResultFile(jobId)) }
     BackHandler(enabled = searchOpen, onBack = closeSearch)
 
     val layoutKind = window.resultLayout
     val sideBySide = layoutKind == ResultLayout.SIDE_BY_SIDE
     val rail = layoutKind == ResultLayout.RAIL
+    val stacked = layoutKind == ResultLayout.STACKED
     val showProtocolTab = !sideBySide
-    val dockedActions = !window.largeText
-    val outputInList = window.short && !rail
+    val searchTitle = searchOpen && stacked && !window.short
     val hintText = languageHint(result.language, state)
     val imeOpen = WindowInsets.isImeVisible
     val meta = audioMeta(result, noSpeech)
     val failed = result.output.exportFailed
+    val bannerInList = stacked && phase != ProtocolPhase.APPLIED
+    val metaInList = stacked && window.tiny
+    val outputInList = !rail
 
     val prep = prepared
     val onImport = actions.importAudio
 
+    val headerItems = if (searchOpen) {
+        0
+    } else {
+        (if (metaInList) 1 else 0) + (if (bannerInList) 1 else 0) +
+            (if (hintText != null) 1 else 0) + (if (outputInList) 1 else 0)
+    }
     val transcriptHeader: LazyListScope.() -> Unit = {
-        if (!sideBySide && !rail) {
-            item(key = KEY_BANNER, contentType = TYPE_HEADER) {
-                ProtocolBanner(
-                    phase = phase,
-                    protocol = result.protocol,
-                    modifier = Modifier
-                        .padding(horizontal = window.gutter)
-                        .padding(top = StenoSpace.s),
-                    onClick = { tab = ResultTab.PROTOCOL },
-                )
+        if (!searchOpen) {
+            if (metaInList) {
+                item(key = KEY_META, contentType = TYPE_HEADER) {
+                    ResultMeta(meta, Modifier.padding(horizontal = window.gutter + StenoSpace.s))
+                }
             }
-        }
-        if (hintText != null) {
-            item(key = KEY_HINT, contentType = TYPE_HEADER) { LanguageHint(hintText) }
-        }
-        if (outputInList) {
-            item(key = KEY_OUTPUT, contentType = TYPE_HEADER) {
-                OutputLine(result.output, onOpen = { panelOpen = true })
+            if (bannerInList) {
+                item(key = KEY_BANNER, contentType = TYPE_HEADER) {
+                    ProtocolBanner(
+                        phase = phase,
+                        protocol = result.protocol,
+                        modifier = Modifier
+                            .padding(horizontal = window.gutter)
+                            .padding(top = StenoSpace.xs),
+                        onClick = { tab = ResultTab.PROTOCOL },
+                    )
+                }
+            }
+            if (hintText != null) {
+                item(key = KEY_HINT, contentType = TYPE_HEADER) { LanguageHint(hintText) }
+            }
+            if (outputInList) {
+                item(key = KEY_OUTPUT, contentType = TYPE_HEADER) { OutputLine(result.output, onOpen = onOpenFile) }
             }
         }
     }
-    val headerItems = (if (!sideBySide && !rail) 1 else 0) +
-        (if (hintText != null) 1 else 0) +
-        (if (outputInList) 1 else 0)
 
     val rowsOffset by rememberUpdatedState(headerItems + 1)
     var stripHeight by remember { mutableIntStateOf(0) }
-    val oneLinePx = with(LocalDensity.current) { (StenoSize.touchTarget * ONE_LINE_STRIP).roundToPx() }
-    val pinnedStrip = (!window.short && stripHeight <= oneLinePx) || searchOpen
+    var idleStripHeight by remember { mutableIntStateOf(0) }
+    val pinLimitPx = with(LocalDensity.current) { (StenoSize.touchTarget * PINNED_STRIP_LIMIT).roundToPx() }
+    val pinnedStrip = (!window.short && idleStripHeight <= pinLimitPx) || searchOpen
     val pinnedPx by rememberUpdatedState(if (pinnedStrip) stripHeight else 0)
     val view = prep?.let {
         rememberTranscriptView(
@@ -388,6 +404,29 @@ private fun ResultContent(
         derivedStateOf { if (player.engaged && prep != null) prep.model.indexAt(player.positionMs) else -1 }
     }
     val active: () -> Int = remember(activeIndex) { { activeIndex.value } }
+    val cursorState = rememberUpdatedState(matchCursor)
+    val viewState = rememberUpdatedState(currentView)
+    val matchIndex = remember {
+        derivedStateOf {
+            viewState.value?.takeIf { it.query.isNotEmpty() }?.rows?.getOrNull(cursorState.value)?.row?.index ?: -1
+        }
+    }
+    val match: () -> Int = remember(matchIndex) { { matchIndex.value } }
+    val matchQuery = currentView?.query.orEmpty()
+    LaunchedEffect(matchQuery) { matchCursor = 0 }
+    LaunchedEffect(currentView) {
+        val last = (currentView?.rows?.size ?: 0) - 1
+        if (matchCursor > last) matchCursor = last.coerceAtLeast(0)
+    }
+    val stepMatch: (Int) -> Unit = { step ->
+        val rows = currentView?.rows.orEmpty()
+        if (rows.isNotEmpty()) {
+            val next = (matchCursor + step).mod(rows.size)
+            matchCursor = next
+            transcriptList.requestScrollToItem(rowsOffset + next, -pinnedPx)
+            player.seekTo(rows[next].row.startMs, play = player.isPlaying)
+        }
+    }
     val navigator = remember(transcriptList, view) {
         TranscriptNavigator(
             scope = scope,
@@ -407,9 +446,11 @@ private fun ResultContent(
     LaunchedEffect(prep, route.focusUtterance) {
         val model = prep?.model ?: return@LaunchedEffect
         val index = route.focusUtterance?.let(model::indexOfId) ?: return@LaunchedEffect
+        if (focusApplied) return@LaunchedEffect
+        focusApplied = true
         val row = model.rows[index]
-        player.seekTo(row.startMs, play = false)
-        navigator.scrollToTime(row.startMs)
+        player.seekTo(row.startMs, play = route.play)
+        navigator.reveal(row.startMs, resetNarrowing)
     }
     LaunchedEffect(transcriptList) {
         snapshotFlow { transcriptList.isScrollInProgress }.collect { scrolling -> if (scrolling) keyboard?.hide() }
@@ -425,15 +466,19 @@ private fun ResultContent(
                 search = TranscriptSearch(
                     field = searchField,
                     open = searchOpen,
+                    showBack = !searchTitle,
+                    matchCursor = { matchCursor },
                     onOpen = { searchOpen = true },
                     onClose = closeSearch,
-                    onToggleSpeaker = { number ->
-                        selected = if (number in selected) selected - number else selected + number
-                    },
+                    onStep = stepMatch,
+                    onOpenSpeakers = { speakersOpen = true },
+                    onSpeaker = { number -> selected = setOfNotNull(number) },
                     onReset = resetNarrowing,
+                    onIdleHeight = { idleStripHeight = it },
                 ),
                 listState = transcriptList,
                 active = active,
+                match = match,
                 onRow = { row -> player.seekTo(row.startMs, play = true) },
                 header = transcriptHeader,
                 pinned = pinnedStrip,
@@ -446,13 +491,13 @@ private fun ResultContent(
         ProtocolPane(
             phase = phase,
             protocol = result.protocol,
-            showBanner = !rail,
+            showBanner = !rail && (sideBySide || phase != ProtocolPhase.APPLIED),
             listState = protocolList,
             onOpenChapter = { section ->
                 val time = prep?.model?.indexOfId(section.firstUtterance)?.let { prep.model.rows[it].startMs }
                 openAt(time ?: section.startMs)
             },
-            onOpenItem = { item -> openAt(item.startMs) },
+            onOpenItem = { index -> actions.navigator.push(Route.ProtocolItem(jobId, index)) },
             onOpenTranscript = onOpenTranscript.takeIf { showProtocolTab },
             onCopyDiagnostics = onCopyDiagnostics,
             modifier = modifier,
@@ -474,32 +519,22 @@ private fun ResultContent(
             PlayerRow(
                 player = player,
                 input = input,
+                envelope = envelope,
                 selectedSpeakers = selected,
                 searchTimesMs = currentView?.matchedTimesMs ?: EmptyTimes,
                 onSeeked = navigator::scrollToTime,
             )
         }
     }
-    val buttons: @Composable (Boolean, Boolean) -> Unit = { showImport, showProtocolExport ->
-        ActionButtons(
-            tight = rail,
-            showExport = showImport || !rail,
-            showImport = showImport,
-            showProtocolExport = showProtocolExport,
-            protocolReady = phase.hasDocument,
-            exportFailed = failed,
-            onExport = onExport,
-            onExportProtocol = onExportProtocol,
+    val footer: @Composable () -> Unit = {
+        val tapHint = stringResource(R.string.scr04_player_tap_hint)
+        PlayerFooter(
+            hint = tapHint.takeIf { player.available && tab == ResultTab.TRANSCRIPT && !noSpeech && !window.short },
             onImport = onImport,
-            modifier = Modifier.padding(horizontal = window.gutter),
         )
     }
-    val pathOrFailure: @Composable ColumnScope.() -> Unit = {
-        if (failed) {
-            ExportFailure(Modifier.padding(horizontal = window.gutter, vertical = StenoSpace.s))
-        } else if (!outputInList) {
-            OutputLine(result.output, onOpen = { panelOpen = true })
-        }
+    val failure: @Composable () -> Unit = {
+        if (failed) ExportFailure(Modifier.padding(horizontal = window.gutter, vertical = StenoSpace.s))
     }
     val snackbarHost: @Composable (Modifier) -> Unit = { modifier ->
         SnackbarHost(
@@ -507,19 +542,30 @@ private fun ResultContent(
             modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
         )
     }
+    val tabStatus = bannerText(phase, result.protocol).takeIf { phase == ProtocolPhase.APPLIED }
     val topBar: @Composable () -> Unit = {
         ResultTopBar(
             title = result.title,
-            meta = meta,
+            meta = meta.takeIf { !metaInList },
             onBack = actions.back,
-            onOpenPanel = { panelOpen = true }.takeIf { !dockedActions },
+            onExport = onExport,
+            onMenu = { menuOpen = true },
         )
     }
 
     when (layoutKind) {
         ResultLayout.STACKED -> Centered {
-            topBar()
-            if (!(searchOpen && imeOpen)) ResultTabs(tab, phase) { tab = it }
+            when {
+                searchTitle -> StenoTopBar(
+                    title = stringResource(R.string.scr04_search_title),
+                    onBack = closeSearch,
+                    backTag = Tags.SEARCH_CLOSE,
+                )
+                !searchOpen -> {
+                    topBar()
+                    ResultTabs(tab, phase, status = tabStatus) { tab = it }
+                }
+            }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 TabPanes(
                     tab = tab,
@@ -530,15 +576,9 @@ private fun ResultContent(
             }
             if (!imeOpen) {
                 Dock {
+                    failure()
                     if (!(failed && window.short)) playerRow()
-                    if (dockedActions) {
-                        Spacer(Modifier.height(StenoSpace.xs))
-                        pathOrFailure()
-                        buttons(tab == ResultTab.TRANSCRIPT, tab == ResultTab.PROTOCOL)
-                        Spacer(Modifier.height(StenoSpace.s))
-                    } else if (failed) {
-                        pathOrFailure()
-                    }
+                    if (!window.tiny) footer() else Spacer(Modifier.height(StenoSpace.s))
                 }
             }
         }
@@ -547,7 +587,8 @@ private fun ResultContent(
                 if (!(searchOpen && imeOpen)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BackButton(actions.back, Modifier.padding(start = StenoSpace.xs))
-                        ResultTabs(tab, phase, Modifier.weight(1f)) { tab = it }
+                        ResultTabs(tab, phase, Modifier.weight(1f), status = tabStatus) { tab = it }
+                        MenuButton({ menuOpen = true })
                     }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -561,7 +602,7 @@ private fun ResultContent(
             }
             SideRail {
                 RailTitle(result.title, meta)
-                if (!noSpeech) {
+                if (!noSpeech && phase != ProtocolPhase.APPLIED) {
                     ProtocolBanner(
                         phase = phase,
                         protocol = result.protocol,
@@ -569,18 +610,17 @@ private fun ResultContent(
                         onClick = { tab = ResultTab.PROTOCOL }.takeIf { tab == ResultTab.TRANSCRIPT },
                     )
                 }
+                Spacer(Modifier.height(StenoSpace.s))
                 playerRow()
-                pathOrFailure()
-                buttons(true, false)
-                if (tab == ResultTab.PROTOCOL) {
-                    Spacer(Modifier.height(StenoSpace.s))
-                    buttons(false, true)
-                }
+                failure()
+                OutputLine(result.output, onOpen = onOpenFile)
+                ActionButtons(failed, onExport, onImport, Modifier.padding(horizontal = window.gutter))
                 Spacer(Modifier.height(StenoSpace.s))
             }
         }
         ResultLayout.SIDE_BY_SIDE -> Column(Modifier.fillMaxSize()) {
             topBar()
+            Spacer(Modifier.fillMaxWidth().height(StenoSize.hairline).background(colors.outlineVariant))
             Row(Modifier.weight(1f).fillMaxWidth()) {
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     transcriptPane(Modifier.fillMaxSize())
@@ -590,49 +630,91 @@ private fun ResultContent(
                 Box(Modifier.weight(1f).fillMaxHeight()) { protocolPane(Modifier.fillMaxSize()) }
             }
             Dock {
+                failure()
                 playerRow()
-                Row(
-                    Modifier.fillMaxWidth().padding(vertical = StenoSpace.xs),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) { pathOrFailure() }
-                    Box(Modifier.weight(1.2f)) { buttons(true, true) }
-                }
+                footer()
             }
         }
     }
 
-    if (panelOpen) {
+    if (menuOpen) {
+        val closing: (() -> Unit) -> () -> Unit = { action ->
+            {
+                menuOpen = false
+                action()
+            }
+        }
+        ActionSheet(title = result.title, onDismiss = { menuOpen = false }) {
+            ActionSheetRow(
+                title = stringResource(R.string.scr04_menu_export),
+                subtitle = stringResource(R.string.scr04_menu_export_hint),
+                icon = R.drawable.ic_download,
+                onClick = closing { exportOpen = true },
+                tag = Tags.MENU_EXPORT,
+            )
+            ActionSheetRow(
+                title = stringResource(R.string.scr04_panel_title),
+                subtitle = stringResource(R.string.scr04_menu_file_hint),
+                icon = R.drawable.ic_description,
+                onClick = closing(onOpenFile),
+                tag = Tags.EXPORT_PANEL_OPEN,
+            )
+            if (window.tiny) {
+                ActionSheetRow(
+                    title = stringResource(R.string.common_btn_import),
+                    icon = R.drawable.ic_upload_file,
+                    onClick = closing(onImport),
+                    tag = Tags.IMPORT,
+                )
+            }
+            ActionSheetRow(
+                title = stringResource(R.string.scr04_menu_diagnostics),
+                subtitle = stringResource(R.string.scr04_menu_diagnostics_hint),
+                icon = R.drawable.ic_chart,
+                onClick = closing { actions.navigator.push(Route.Verification) },
+                tag = Tags.DIAGNOSTICS_ROW,
+            )
+            ActionSheetRow(
+                title = stringResource(R.string.scr04_menu_delete),
+                subtitle = stringResource(R.string.scr04_menu_delete_hint),
+                icon = R.drawable.ic_delete,
+                onClick = closing { deleteOpen = true },
+                tag = Tags.MENU_DELETE,
+            )
+        }
+    }
+    if (exportOpen) {
         ExportSheet(
-            output = result.output,
-            onDismiss = { panelOpen = false },
+            title = result.title,
+            protocolReady = phase.hasDocument,
+            exportFailed = failed,
+            onDismiss = { exportOpen = false },
+            onSave = onSaveKind,
             onShare = onShare,
-            onCopyPath = onCopyPath,
-            onOpenFolder = onOpenFolder,
-            extra = if (dockedActions) {
-                null
-            } else {
-                {
-                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
-                        PrimaryAction(
-                            text = stringResource(if (failed) R.string.scr04_export_retry else R.string.common_btn_export),
-                            onClick = onExport,
-                            tag = Tags.EXPORT,
-                        )
-                        OutlinedAction(
-                            text = stringResource(R.string.common_btn_export_protocol),
-                            onClick = onExportProtocol,
-                            enabled = phase.hasDocument,
-                            tag = Tags.EXPORT_PROTOCOL,
-                        )
-                        OutlinedAction(
-                            text = stringResource(R.string.common_btn_import),
-                            onClick = onImport,
-                            tag = Tags.IMPORT,
-                        )
-                    }
-                }
+        )
+    }
+    if (speakersOpen && prep != null) {
+        SpeakerSheet(
+            speakers = prep.model.speakers,
+            replies = prep.model.repliesBySpeaker,
+            total = prep.model.rows.size,
+            current = selected.firstOrNull(),
+            onApply = { number ->
+                selected = setOfNotNull(number)
+                speakersOpen = false
             },
+            onDismiss = { speakersOpen = false },
+        )
+    }
+    if (deleteOpen) {
+        DeleteDialog(
+            job = detail.summary,
+            onConfirm = { removeExported ->
+                deleteOpen = false
+                controller.delete(jobId, removeExported)
+                actions.back()
+            },
+            onDismiss = { deleteOpen = false },
         )
     }
 }

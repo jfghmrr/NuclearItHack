@@ -25,10 +25,18 @@ class NavigatorTest {
             Route.Failure("job-2"),
             Route.Result("job-3", ResultTab.PROTOCOL, 12),
             Route.Result("job-4"),
+            Route.Result("job-5", ResultTab.TRANSCRIPT, 7, play = true),
+            Route.ResultFile("job-6"),
+            Route.ProtocolItem("job-7", 3),
             Route.Licenses,
             Route.LicenseText("gigaam"),
         )
         routes.forEach { assertEquals(it, decodeRoute(it.encode())) }
+    }
+
+    @Test
+    fun savedResultRouteWithoutPlayFlagStillOpens() {
+        assertEquals(Route.Result("job-1", ResultTab.PROTOCOL, 5), decodeRoute("result|job-1|PROTOCOL|5"))
     }
 
     @Test

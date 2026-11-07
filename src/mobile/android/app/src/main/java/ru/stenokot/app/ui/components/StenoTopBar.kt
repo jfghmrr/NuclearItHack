@@ -35,6 +35,7 @@ fun StenoTopBar(
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
     subtitle: String? = null,
+    backTag: String = Tags.BACK,
     actions: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val colors = StenoTheme.colors
@@ -51,7 +52,7 @@ fun StenoTopBar(
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
     ) {
         if (onBack != null) {
-            IconButton(onClick = onBack, modifier = Modifier.testTag(Tags.BACK)) {
+            IconButton(onClick = onBack, modifier = Modifier.testTag(backTag)) {
                 Icon(
                     painter = painterResource(R.drawable.ic_arrow_back),
                     contentDescription = stringResource(R.string.common_back),

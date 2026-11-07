@@ -13,7 +13,10 @@ import ru.stenokot.app.ui.format.formatTimecode
 import ru.stenokot.core.model.Language
 import ru.stenokot.core.model.Utterance
 
-/** Реплика, готовая к показу. Посчитана вне композиции, строки только читают её. */
+/**
+ * Реплика, готовая к показу. Посчитана вне композиции, строки только читают её. [overlapSpeakers]
+ * называет всех, кто звучит одновременно с ней, а null означает, что собеседник по времени не найден.
+ */
 @Immutable
 class TranscriptRowUi(
     val index: Int,
@@ -25,6 +28,7 @@ class TranscriptRowUi(
     val startLabel: String,
     val text: AnnotatedString,
     val overlap: Boolean,
+    val overlapSpeakers: String? = null,
 )
 
 /** Стенограмма, разобранная один раз на запись: строки, индексы и текст для поиска. */
@@ -32,6 +36,7 @@ class TranscriptRowUi(
 class TranscriptModel(
     val rows: List<TranscriptRowUi>,
     val speakers: List<Int>,
+    val repliesBySpeaker: Map<Int, Int>,
     private val folded: List<String>,
     private val starts: LongArray,
     private val indexById: Map<Int, Int>,
@@ -119,6 +124,10 @@ private fun displayNumber(utterance: Utterance): Int = utterance.speaker + 1
  */
 fun buildTranscriptModel(utterances: List<Utterance>, language: Language): TranscriptModel {
     val locale = if (language == Language.EN) LocaleList("en") else null
+    val reach = LongArray(utterances.size)
+    utterances.forEachIndexed { index, item ->
+        reach[index] = if (index == 0) item.endMs else maxOf(reach[index - 1], item.endMs)
+    }
     val rows = utterances.mapIndexed { index, item ->
         TranscriptRowUi(
             index = index,
@@ -130,15 +139,41 @@ fun buildTranscriptModel(utterances: List<Utterance>, language: Language): Trans
             startLabel = formatTimecode(item.startMs),
             text = plainText(item.text, locale),
             overlap = item.overlap,
+            overlapSpeakers = if (item.overlap) overlapLabel(utterances, reach, index) else null,
         )
     }
     return TranscriptModel(
         rows = rows,
         speakers = rows.map { it.speaker }.distinct().sorted(),
+        repliesBySpeaker = rows.groupingBy { it.speaker }.eachCount(),
         folded = utterances.map { foldForSearch(it.text) },
         starts = LongArray(rows.size) { rows[it].startMs },
         indexById = rows.associate { it.id to it.index },
     )
+}
+
+/**
+ * Подпись наложения: «1 и 3», «1, 2 и 3». Считается по времени реплик соседей, поэтому в ней только те,
+ * кто действительно звучит в эти секунды. [reach] хранит самый поздний конец среди реплик до индекса
+ * включительно: он останавливает поиск назад, даже если перед ним стоит короткая реплика.
+ */
+private fun overlapLabel(utterances: List<Utterance>, reach: LongArray, index: Int): String? {
+    val item = utterances[index]
+    val speakers = sortedSetOf(displayNumber(item))
+    var before = index - 1
+    while (before >= 0 && reach[before] > item.startMs) {
+        val other = utterances[before]
+        if (other.endMs > item.startMs) speakers += displayNumber(other)
+        before -= 1
+    }
+    var after = index + 1
+    while (after < utterances.size && utterances[after].startMs < item.endMs) {
+        speakers += displayNumber(utterances[after])
+        after += 1
+    }
+    if (speakers.size < 2) return null
+    val numbers = speakers.map(Int::toString)
+    return numbers.dropLast(1).joinToString(", ") + " и " + numbers.last()
 }
 
 private fun plainText(text: String, locale: LocaleList?): AnnotatedString =

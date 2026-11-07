@@ -21,7 +21,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.CacheDrawScope
 import androidx.compose.ui.draw.DrawResult
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -32,6 +31,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -52,16 +52,18 @@ import ru.stenokot.app.ui.theme.SpeakerPalette
 import ru.stenokot.app.ui.theme.StenoColors
 import ru.stenokot.app.ui.theme.StenoTheme
 
-private val MarksBand = 8.dp
-private val MarkRadius = 3.dp
-private val LanesTop = 10.dp
-private val LanesHeight = 22.dp
-private val ScrubGap = 7.dp
-private val TimelineHeight = 44.dp
-private val ScrubThickness = 2.dp
+private val MarksBand = 6.dp
+private val MarkRadius = 2.5.dp
+private val WaveTop = 7.dp
+private val WaveHeight = 26.dp
+private val LanesTop = 37.dp
+private val LanesHeight = 13.dp
+private val TimelineHeight = 52.dp
+private val TrackThickness = 2.dp
 private val PlayheadThickness = 1.5.dp
-private val KnobRadius = 5.dp
-private val MaxLaneThickness = 8.dp
+private val BarWidth = 2.dp
+private val BarStride = 3.5.dp
+private val MaxLaneThickness = 3.dp
 private val LaneGapWide = 2.dp
 private val LaneGapTight = 1.dp
 private const val DIMMED_ALPHA = 0.25f
@@ -75,6 +77,23 @@ class TimelineInput(
     val moments: List<RibbonMoment>,
     val durationMs: Long,
 )
+
+/**
+ * Столбцы огибающей как пары концов для пакетной отрисовки, по одному столбцу на шаг. Самый тихий
+ * столбец остаётся точкой: пауза в разговоре видна, а не выглядит обрывом.
+ */
+private fun wavePoints(levels: FloatArray, stride: Float, centerY: Float, height: Float, minimum: Float): FloatArray {
+    val points = FloatArray(levels.size * 4)
+    levels.forEachIndexed { bar, level ->
+        val half = (level * height).coerceAtLeast(minimum) / 2f
+        val x = stride * (bar + 0.5f)
+        points[bar * 4] = x
+        points[bar * 4 + 1] = centerY - half
+        points[bar * 4 + 2] = x
+        points[bar * 4 + 3] = centerY + half
+    }
+    return points
+}
 
 /** Заготовки одной дорожки: координаты отрезков уже разложены для пакетной отрисовки. */
 private class LaneDraw(val points: FloatArray, val y: Float, val color: Color)
@@ -149,16 +168,11 @@ private fun CacheDrawScope.ribbonLayer(
         tickPoints[index * 4 + 3] = MarksBand.toPx()
     }
     val paint = Paint().apply {
-        strokeCap = StrokeCap.Butt
+        strokeCap = StrokeCap.Round
         strokeWidth = geometry.thickness
     }
     val ink = colors.onSurfaceVariant
     return onDrawBehind {
-        if (geometry.gap > 0f) {
-            draws.forEach { lane ->
-                drawLine(colors.outlineVariant, Offset(0f, lane.y), Offset(size.width, lane.y), strokeWidth = 1f)
-            }
-        }
         drawIntoCanvas { canvas ->
             draws.forEach { lane ->
                 paint.color = lane.color
@@ -186,14 +200,16 @@ private fun CacheDrawScope.ribbonLayer(
 }
 
 /**
- * Лента говорящих вместе с тонкой дорожкой перемотки. Говорящий занимает свою горизонталь, как на
- * нотном стане: положение отличает его без цвета и совпадает с порядком значков в фильтре.
- * Ленту перестраивает только смена ширины или данных. [position] читается в рисовании одного
- * верхнего слоя, поэтому воспроизведение не трогает ни ленту, ни список.
+ * Огибающая записи и говорящие под ней. Говорящий занимает свою горизонталь, как на нотном стане:
+ * положение отличает его без цвета и совпадает с порядком в списке говорящих. Без [envelope] остаётся
+ * тонкая дорожка: выдумывать форму звука нельзя. Ленту перестраивает только смена ширины или данных.
+ * [position] читается в рисовании одного верхнего слоя, поэтому воспроизведение не трогает ни ленту,
+ * ни список, а огибающая постоянного размера одинаково дешева и на трёхчасовой записи.
  */
 @Composable
 internal fun Timeline(
     input: TimelineInput,
+    envelope: ByteArray?,
     selectedSpeakers: Set<Int>,
     searchTimesMs: LongArray,
     position: () -> Long,
@@ -264,20 +280,38 @@ internal fun Timeline(
         Spacer(
             Modifier
                 .fillMaxSize()
-                .drawBehind {
-                    val fraction = if (duration > 0) (position().toFloat() / duration).coerceIn(0f, 1f) else 0f
-                    val x = size.width * fraction
-                    val scrubY = (LanesTop + LanesHeight + ScrubGap).toPx()
-                    val thickness = ScrubThickness.toPx()
-                    drawLine(colors.surfaceVariant, Offset(0f, scrubY), Offset(size.width, scrubY), thickness)
-                    drawLine(colors.primary, Offset(0f, scrubY), Offset(x, scrubY), thickness)
-                    drawLine(
-                        colors.onSurface,
-                        Offset(x, LanesTop.toPx() - 2f),
-                        Offset(x, scrubY),
-                        PlayheadThickness.toPx(),
-                    )
-                    drawCircle(colors.primary, KnobRadius.toPx(), Offset(x, scrubY))
+                .drawWithCache {
+                    val stride = BarStride.toPx()
+                    val centerY = (WaveTop + WaveHeight / 2).toPx()
+                    val width = BarWidth.toPx()
+                    val bars = (size.width / stride).toInt()
+                    val points = envelope?.let {
+                        wavePoints(envelopeBars(it, bars), stride, centerY, WaveHeight.toPx(), width)
+                    }
+                    val paint = Paint().apply {
+                        strokeCap = StrokeCap.Round
+                        strokeWidth = width
+                    }
+                    val track = TrackThickness.toPx()
+                    val bottom = (LanesTop + LanesHeight).toPx()
+                    onDrawBehind {
+                        val fraction = if (duration > 0) (position().toFloat() / duration).coerceIn(0f, 1f) else 0f
+                        val x = size.width * fraction
+                        if (points != null && points.isNotEmpty()) {
+                            clipRect(left = x) {
+                                paint.color = colors.outlineVariant
+                                drawIntoCanvas { it.drawRawPoints(PointMode.Lines, points, paint) }
+                            }
+                            clipRect(right = x) {
+                                paint.color = colors.primary
+                                drawIntoCanvas { it.drawRawPoints(PointMode.Lines, points, paint) }
+                            }
+                        } else {
+                            drawLine(colors.outlineVariant, Offset(0f, centerY), Offset(size.width, centerY), track)
+                            drawLine(colors.primary, Offset(0f, centerY), Offset(x, centerY), track)
+                        }
+                        drawLine(colors.onSurface, Offset(x, WaveTop.toPx()), Offset(x, bottom), PlayheadThickness.toPx())
+                    }
                 },
         )
     }

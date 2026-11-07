@@ -25,12 +25,22 @@ sealed interface Route {
     /** SCR-03. */
     data class Processing(val jobId: String) : Route
 
-    /** SCR-04 и SCR-05. [focusUtterance] это реплика, к которой надо перейти при открытии. */
+    /**
+     * SCR-04 и SCR-05. [focusUtterance] это реплика, к которой надо перейти при открытии, [play]
+     * сразу запускает её звук.
+     */
     data class Result(
         val jobId: String,
         val tab: ResultTab = ResultTab.TRANSCRIPT,
         val focusUtterance: Int? = null,
+        val play: Boolean = false,
     ) : Route
+
+    /** Сведения о файле результата: размер, путь, контрольная сумма. */
+    data class ResultFile(val jobId: String) : Route
+
+    /** Пункт протокола с цитатой. [index] считается по всем пунктам в порядке времени. */
+    data class ProtocolItem(val jobId: String, val index: Int) : Route
 
     /** SCR-07. */
     data class Failure(val jobId: String) : Route
@@ -100,7 +110,9 @@ internal fun Route.encode(): String = when (this) {
     is Route.LicenseText -> "license|$entryId"
     is Route.Processing -> "processing|$jobId"
     is Route.Failure -> "failure|$jobId"
-    is Route.Result -> "result|$jobId|${tab.name}|${focusUtterance ?: ""}"
+    is Route.Result -> "result|$jobId|${tab.name}|${focusUtterance ?: ""}|$play"
+    is Route.ResultFile -> "file|$jobId"
+    is Route.ProtocolItem -> "item|$jobId|$index"
 }
 
 /** Обратно к маршруту. Неизвестная запись ведёт на Главную. */
@@ -120,7 +132,9 @@ internal fun decodeRoute(value: String): Route {
         "license" -> Route.LicenseText(parts[1])
         "processing" -> Route.Processing(parts[1])
         "failure" -> Route.Failure(parts[1])
-        "result" -> Route.Result(parts[1], ResultTab.valueOf(parts[2]), parts[3].toIntOrNull())
+        "result" -> Route.Result(parts[1], ResultTab.valueOf(parts[2]), parts[3].toIntOrNull(), parts.getOrNull(4).toBoolean())
+        "file" -> Route.ResultFile(parts[1])
+        "item" -> Route.ProtocolItem(parts[1], parts[2].toInt())
         else -> Route.Home
     }
 }

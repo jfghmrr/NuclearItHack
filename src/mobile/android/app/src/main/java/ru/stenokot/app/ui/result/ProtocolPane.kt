@@ -2,23 +2,28 @@ package ru.stenokot.app.ui.result
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -29,9 +34,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -49,17 +52,21 @@ import androidx.compose.ui.unit.dp
 import ru.stenokot.app.R
 import ru.stenokot.app.domain.ProtocolUi
 import ru.stenokot.app.ui.Tags
-import ru.stenokot.app.ui.components.LedgerRow
+import ru.stenokot.app.ui.components.BannerTone
 import ru.stenokot.app.ui.components.PrimaryAction
 import ru.stenokot.app.ui.components.QuietAction
 import ru.stenokot.app.ui.components.SectionHeader
-import ru.stenokot.app.ui.components.SpeakerBadge
+import ru.stenokot.app.ui.components.StatusBanner
+import ru.stenokot.app.ui.components.StatusChip
 import ru.stenokot.app.ui.components.StenoIcon
 import ru.stenokot.app.ui.components.ledgerMarginWidth
+import ru.stenokot.app.ui.components.spokenAs
 import ru.stenokot.app.ui.format.formatTimeRange
 import ru.stenokot.app.ui.format.formatTimecode
 import ru.stenokot.app.ui.format.spokenTimecode
+import ru.stenokot.app.ui.format.topicsLabel
 import ru.stenokot.app.ui.layout.LocalWindowLayout
+import ru.stenokot.app.ui.theme.StenoRadius
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
@@ -67,18 +74,21 @@ import ru.stenokot.core.protocol.ProtocolDocument
 import ru.stenokot.core.protocol.ProtocolItem
 import ru.stenokot.core.protocol.ProtocolSection
 
-private val RuleThickness = 3.dp
-private val QuoteBadge = 20.dp
 private val MessageWidth = 420.dp
 
 /** Вид пункта протокола: подпись и значок. */
-private enum class ItemKind(val title: Int, @param:DrawableRes val icon: Int, val mark: RibbonMarkKind) {
-    DECISION(R.string.scr05_kind_decision, R.drawable.ic_gavel, RibbonMarkKind.DECISION),
-    ACTION(R.string.scr05_kind_action, R.drawable.ic_assignment_ind, RibbonMarkKind.ACTION),
-    QUESTION(R.string.scr05_kind_question, R.drawable.ic_help, RibbonMarkKind.QUESTION),
+internal enum class ItemKind(
+    val title: Int,
+    val group: Int,
+    @param:DrawableRes val icon: Int,
+    val mark: RibbonMarkKind,
+) {
+    DECISION(R.string.scr05_kind_decision, R.string.scr05_group_decisions, R.drawable.ic_gavel, RibbonMarkKind.DECISION),
+    ACTION(R.string.scr05_kind_action, R.string.scr05_group_actions, R.drawable.ic_assignment_ind, RibbonMarkKind.ACTION),
+    QUESTION(R.string.scr05_kind_question, R.string.scr05_group_questions, R.drawable.ic_help, RibbonMarkKind.QUESTION),
 }
 
-private fun itemKind(value: String): ItemKind = when (value) {
+internal fun itemKind(value: String): ItemKind = when (value) {
     "action" -> ItemKind.ACTION
     "question" -> ItemKind.QUESTION
     else -> ItemKind.DECISION
@@ -231,114 +241,128 @@ private fun ProtocolEmpty(
     }
 }
 
-/** Подпись слоя: это черновик поверх стенограммы, а не её правка. */
+/** Предупреждение слоя: это черновик поверх стенограммы, а не её правка. */
 @Composable
 private fun DraftNote(covered: String?) {
-    val colors = StenoTheme.colors
-    val type = StenoTheme.type
     Column(verticalArrangement = Arrangement.spacedBy(StenoSpace.xs)) {
-        Row(
-            modifier = Modifier.semantics(mergeDescendants = true) { }.testTag(Tags.LLM_DRAFT),
-            horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
-        ) {
-            StenoIcon(R.drawable.ic_info, colors.onSurfaceVariant, Modifier.padding(top = 1.dp), StenoSize.iconSmall)
-            Text(stringResource(R.string.scr05_draft), style = type.bodySmall, color = colors.onSurfaceVariant)
-        }
+        StatusBanner(
+            tone = BannerTone.WARNING,
+            icon = R.drawable.ic_info,
+            body = stringResource(R.string.scr05_draft),
+            tag = Tags.LLM_DRAFT,
+        )
         covered?.let {
             Text(
                 text = stringResource(R.string.scr05_covered, it),
-                modifier = Modifier.padding(start = StenoSize.iconSmall + StenoSpace.s).testTag(Tags.LLM_COVERED),
-                style = type.bodySmall,
-                color = colors.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = StenoSpace.m).testTag(Tags.LLM_COVERED),
+                style = StenoTheme.type.bodySmall,
+                color = StenoTheme.colors.onSurfaceVariant,
             )
         }
     }
 }
 
-/** Пункт протокола: дословная цитата и ссылка на реплику. Текст скопирован кодом из стенограммы. */
+/**
+ * Тема разговора: время на поле и заголовок. Переход ведёт в стенограмму к началу темы. На крупном
+ * шрифте поле исчезает, и время уходит под заголовок.
+ */
 @Composable
-private fun ProtocolRow(index: Int, item: ProtocolItem, onOpen: (ProtocolItem) -> Unit) {
+private fun ChapterRow(
+    index: Int,
+    title: String,
+    section: ProtocolSection,
+    clickLabel: String,
+    spoken: String,
+    onOpen: () -> Unit,
+) {
     val colors = StenoTheme.colors
     val type = StenoTheme.type
     val window = LocalWindowLayout.current
-    val gutter = window.gutter
-    val ledger = !window.largeText
-    val marginWidth = ledgerMarginWidth()
-    val kind = itemKind(item.kind)
-    val number = speakerNumber(item.speakerId)
-    val kindLabel = stringResource(kind.title)
-    val speaker = stringResource(R.string.common_speaker, number)
-    val time = formatTimecode(item.startMs)
-    val spoken = stringResource(R.string.scr05_item_spoken, kindLabel, speaker, spokenTimecode(item.startMs), item.text)
-    val clickLabel = stringResource(R.string.scr05_item_click)
-    val ruleColor = StenoTheme.speakers.style(number).line
+    val range = formatTimeRange(section.startMs, section.endMs)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .drawBehind {
-                if (ledger) {
-                    val x = (gutter + marginWidth + StenoSpace.s).toPx()
-                    val gap = StenoSpace.s.toPx()
-                    val width = RuleThickness.toPx()
-                    drawRect(ruleColor, Offset(x - width / 2f, gap), Size(width, size.height - gap * 2))
-                }
-            }
+            .heightIn(min = StenoSize.actionHeight)
+            .testTag(Tags.rowChapter(index))
+            .clickable(onClickLabel = clickLabel, role = Role.Button, onClick = onOpen)
+            .spokenAs(spoken, title)
+            .padding(horizontal = window.gutter, vertical = StenoSpace.m),
+        horizontalArrangement = Arrangement.spacedBy(StenoSpace.m),
+    ) {
+        if (!window.largeText) {
+            Text(
+                text = formatTimecode(section.startMs),
+                modifier = Modifier.width(ledgerMarginWidth()).padding(top = StenoSpace.xs / 2),
+                style = type.monoSmall,
+                color = colors.primary,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(StenoSpace.xs / 2)) {
+            Text(title, style = type.cardTitle, color = colors.onSurface)
+            Text(range, style = type.bodySmall, color = colors.onSurfaceVariant)
+        }
+    }
+}
+
+/** Карточка пункта: метка проверки, дословный текст и ссылка на источник. Открывает пункт целиком. */
+@Composable
+private fun ItemCard(index: Int, item: ProtocolItem, onOpen: (Int) -> Unit) {
+    val colors = StenoTheme.colors
+    val type = StenoTheme.type
+    val gutter = LocalWindowLayout.current.gutter
+    val shape = RoundedCornerShape(StenoRadius.card)
+    val kind = itemKind(item.kind)
+    val speaker = stringResource(R.string.common_speaker, speakerNumber(item.speakerId))
+    val spoken = stringResource(
+        R.string.scr05_item_spoken,
+        stringResource(kind.title),
+        speaker,
+        spokenTimecode(item.startMs),
+        item.text,
+    )
+    val clickLabel = stringResource(R.string.scr05_item_click)
+    Column(
+        modifier = Modifier
+            .padding(horizontal = gutter, vertical = StenoSpace.xs)
+            .fillMaxWidth()
+            .background(colors.surface, shape)
+            .border(StenoSize.hairline, colors.outlineVariant, shape)
+            .clip(shape)
             .testTag(Tags.rowProtocol(index))
-            .clickable(onClickLabel = clickLabel) { onOpen(item) }
+            .clickable(onClickLabel = clickLabel) { onOpen(index) }
             .clearAndSetSemantics {
                 contentDescription = spoken
                 text = AnnotatedString(item.text)
                 role = Role.Button
                 onClick(clickLabel) {
-                    onOpen(item)
+                    onOpen(index)
                     true
                 }
             }
-            .padding(horizontal = gutter, vertical = StenoSpace.m),
+            .padding(StenoSpace.l),
+        verticalArrangement = Arrangement.spacedBy(StenoSpace.s),
     ) {
-        if (ledger) {
-            Column(
-                modifier = Modifier.width(marginWidth),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(StenoSpace.xs),
-            ) {
-                Text(time, Modifier.padding(top = StenoSpace.xs / 2), style = type.monoMedium, color = colors.onSurfaceVariant)
-                SpeakerBadge(number, size = QuoteBadge)
-            }
-            Spacer(Modifier.width(StenoSpace.s + StenoSpace.m + StenoSpace.xs / 2))
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(StenoSpace.xs)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(StenoSpace.xs),
-            ) {
-                StenoIcon(kind.icon, colors.primary, size = StenoSize.iconSmall)
-                Text(
-                    text = kindLabel,
-                    modifier = Modifier.weight(1f),
-                    style = type.labelMedium,
-                    color = colors.primary,
-                )
-                StenoIcon(R.drawable.ic_chevron_right, colors.onSurfaceVariant, size = StenoSize.iconSmall)
-            }
-            Text(item.text, style = type.bodyLarge, color = colors.onSurface)
-            if (ledger) {
-                Text(speaker, style = type.bodySmall, color = colors.onSurfaceVariant)
-            } else {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
-                ) {
-                    SpeakerBadge(number, size = QuoteBadge)
-                    Text(speaker, Modifier.weight(1f), style = type.bodySmall, color = colors.onSurfaceVariant)
-                    Text(time, style = type.monoMedium, color = colors.onSurfaceVariant)
-                }
-            }
+        StatusChip(stringResource(R.string.scr05_item_check), kind.icon, BannerTone.WARNING)
+        Text(item.text, style = type.cardTitle, color = colors.onSurface)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
+        ) {
+            StenoIcon(R.drawable.ic_link, colors.primary, size = StenoSize.iconSmall)
+            Text(
+                text = stringResource(R.string.scr05_item_source, formatTimecode(item.startMs)),
+                modifier = Modifier.weight(1f),
+                style = type.bodySmall,
+                color = colors.primary,
+            )
+            StenoIcon(R.drawable.ic_chevron_right, colors.onSurfaceVariant, size = StenoSize.iconSmall)
         }
     }
 }
 
-/** Оглавление и пункты протокола в одном ленивом списке. */
+/** Темы и пункты протокола в одном ленивом списке. Пункты разбиты по видам, номер сквозной. */
 @Composable
 private fun ProtocolList(
     phase: ProtocolPhase,
@@ -347,11 +371,15 @@ private fun ProtocolList(
     showBanner: Boolean,
     listState: LazyListState,
     onOpenChapter: (ProtocolSection) -> Unit,
-    onOpenItem: (ProtocolItem) -> Unit,
+    onOpenItem: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val gutter = LocalWindowLayout.current.gutter
-    val items = remember(document) { protocolItems(document) }
+    val groups = remember(document) {
+        val numbered = protocolItems(document).withIndex().toList()
+        ItemKind.entries.map { kind -> kind to numbered.filter { itemKind(it.value.kind) == kind } }
+            .filter { (_, items) -> items.isNotEmpty() }
+    }
     val covered = remember(document, phase) {
         if (phase != ProtocolPhase.PARTIAL) {
             null
@@ -370,7 +398,7 @@ private fun ProtocolList(
     ) {
         item(key = "head", contentType = "head") {
             Column(
-                modifier = Modifier.padding(horizontal = gutter).padding(top = StenoSpace.s),
+                modifier = Modifier.padding(horizontal = gutter).padding(top = StenoSpace.m),
                 verticalArrangement = Arrangement.spacedBy(StenoSpace.s),
             ) {
                 if (showBanner) ProtocolBanner(phase, protocol)
@@ -380,9 +408,9 @@ private fun ProtocolList(
         item(key = "toc", contentType = "section") {
             SectionHeader(
                 title = stringResource(R.string.scr05_section_toc),
-                modifier = Modifier.padding(horizontal = gutter).padding(top = StenoSpace.s),
-                count = document.sections.size,
+                modifier = Modifier.padding(horizontal = gutter).padding(top = StenoSpace.l),
                 tag = Tags.LIST_CHAPTERS,
+                trailing = topicsLabel(document.sections.size),
             )
         }
         itemsIndexed(
@@ -391,43 +419,45 @@ private fun ProtocolList(
             contentType = { _, _ -> "chapter" },
         ) { index, section ->
             val title = chapterTitle(section) { fallbackTemplate.format(it) }
-            LedgerRow(
-                margin = formatTimecode(section.startMs),
+            ChapterRow(
+                index = index,
                 title = title,
-                subtitle = formatTimeRange(section.startMs, section.endMs),
-                titleMaxLines = Int.MAX_VALUE,
-                onClick = { onOpenChapter(section) },
-                onClickLabel = clickLabel,
-                description = spokenChapter.format(
-                    title,
-                    spokenTimecode(section.startMs),
-                    spokenTimecode(section.endMs),
-                ),
-                tag = Tags.rowChapter(index),
+                section = section,
+                clickLabel = clickLabel,
+                spoken = spokenChapter.format(title, spokenTimecode(section.startMs), spokenTimecode(section.endMs)),
+                onOpen = { onOpenChapter(section) },
             )
+            if (index < document.sections.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = gutter),
+                    thickness = StenoSize.hairline,
+                    color = StenoTheme.colors.outlineVariant,
+                )
+            }
         }
-        item(key = "protocol", contentType = "section") {
-            SectionHeader(
-                title = stringResource(R.string.scr05_section_protocol),
-                modifier = Modifier.padding(horizontal = gutter).padding(top = StenoSpace.s),
-                count = items.size.takeIf { it > 0 },
-            )
-        }
-        if (items.isEmpty()) {
+        if (groups.isEmpty()) {
             item(key = "noItems", contentType = "note") {
                 Text(
                     text = stringResource(R.string.scr05_no_items),
-                    modifier = Modifier.padding(horizontal = gutter, vertical = StenoSpace.m),
+                    modifier = Modifier.padding(horizontal = gutter, vertical = StenoSpace.l),
                     style = StenoTheme.type.bodyMedium,
                     color = StenoTheme.colors.onSurfaceVariant,
                 )
             }
         }
-        itemsIndexed(
-            items = items,
-            key = { index, _ -> "item$index" },
-            contentType = { _, _ -> "item" },
-        ) { index, item -> ProtocolRow(index, item, onOpenItem) }
+        groups.forEach { (kind, numbered) ->
+            item(key = "group${kind.name}", contentType = "section") {
+                SectionHeader(
+                    title = stringResource(kind.group, numbered.size),
+                    modifier = Modifier.padding(horizontal = gutter).padding(top = StenoSpace.l),
+                )
+            }
+            items(
+                items = numbered,
+                key = { "item${it.index}" },
+                contentType = { "item" },
+            ) { ItemCard(it.index, it.value, onOpenItem) }
+        }
     }
 }
 
@@ -439,7 +469,7 @@ internal fun ProtocolPane(
     showBanner: Boolean,
     listState: LazyListState,
     onOpenChapter: (ProtocolSection) -> Unit,
-    onOpenItem: (ProtocolItem) -> Unit,
+    onOpenItem: (Int) -> Unit,
     onOpenTranscript: (() -> Unit)?,
     onCopyDiagnostics: () -> Unit,
     modifier: Modifier = Modifier,

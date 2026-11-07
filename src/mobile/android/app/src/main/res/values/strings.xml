@@ -10,6 +10,7 @@
     <string name="common_btn_export_protocol">Экспорт протокола</string>
     <string name="common_btn_resume">Продолжить</string>
     <string name="common_back">Назад</string>
+    <string name="common_close">Закрыть</string>
     <string name="common_play">Воспроизвести</string>
     <string name="common_pause">Пауза</string>
     <string name="common_speaker">Говорящий %1$d</string>

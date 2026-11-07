@@ -48,6 +48,8 @@ import ru.stenokot.app.ui.nav.Navigator
 import ru.stenokot.app.ui.processing.ProcessingRoute
 import ru.stenokot.app.ui.record.MicPermissionRoute
 import ru.stenokot.app.ui.record.RecordRoute
+import ru.stenokot.app.ui.result.ProtocolItemRoute
+import ru.stenokot.app.ui.result.ResultFileRoute
 import ru.stenokot.app.ui.result.ResultRoute
 import ru.stenokot.app.ui.settings.SettingsRoute
 import ru.stenokot.app.ui.theme.LocalAppearance
@@ -70,6 +72,8 @@ private val Route.jobId: String?
     get() = when (this) {
         is Route.Processing -> jobId
         is Route.Result -> jobId
+        is Route.ResultFile -> jobId
+        is Route.ProtocolItem -> jobId
         is Route.Failure -> jobId
         Route.Home, Route.Record, Route.MicPermission, Route.Settings,
         Route.Models, is Route.ModelCard, Route.Privacy, Route.Permissions,
@@ -171,6 +175,8 @@ private fun StenoShell(
                     Route.Settings -> SettingsRoute(controller, actions)
                     is Route.Processing -> ProcessingRoute(route.jobId, controller, actions)
                     is Route.Result -> ResultRoute(route, controller, actions)
+                    is Route.ResultFile -> ResultFileRoute(route, controller, actions)
+                    is Route.ProtocolItem -> ProtocolItemRoute(route, controller, actions)
                     is Route.Failure -> FailureRoute(route.jobId, controller, actions)
                     Route.Models -> ModelsRoute(controller, actions)
                     is Route.ModelCard -> ModelCardRoute(route.name, controller, actions)

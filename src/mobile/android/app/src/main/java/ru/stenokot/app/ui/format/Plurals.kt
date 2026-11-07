@@ -32,6 +32,18 @@ fun speakersLabel(n: Int): String =
 fun utterancesLabel(n: Int): String =
     "${formatThousands(n.toLong())}$NBSP${pluralRu(n.toLong(), "реплика", "реплики", "реплик")}"
 
+/** «9 реплик» после предлога «из»: 21 реплики, 45 реплик. */
+fun utterancesOfLabel(n: Int): String =
+    "${formatThousands(n.toLong())}$NBSP${genitiveAfterOf(n.toLong(), "реплики", "реплик")}"
+
+/** «2 фрагментов» после предлога «из»: 21 фрагмента, 45 фрагментов. */
+fun fragmentsOfLabel(n: Int): String =
+    "${formatThousands(n.toLong())}$NBSP${genitiveAfterOf(n.toLong(), "фрагмента", "фрагментов")}"
+
+/** «3 темы». */
+fun topicsLabel(n: Int): String =
+    "${formatThousands(n.toLong())}$NBSP${pluralRu(n.toLong(), "тема", "темы", "тем")}"
+
 /** «3 окна». */
 fun windowsLabel(n: Int): String =
     "${formatThousands(n.toLong())}$NBSP${pluralRu(n.toLong(), "окно", "окна", "окон")}"

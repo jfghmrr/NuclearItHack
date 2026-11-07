@@ -11,47 +11,55 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import ru.stenokot.app.R
+import ru.stenokot.app.domain.ExportKind
 import ru.stenokot.app.domain.OutputFileUi
 import ru.stenokot.app.ui.Tags
 import ru.stenokot.app.ui.components.BannerTone
 import ru.stenokot.app.ui.components.OutlinedAction
+import ru.stenokot.app.ui.components.PrimaryAction
+import ru.stenokot.app.ui.components.SheetHeader
 import ru.stenokot.app.ui.components.StatusBanner
 import ru.stenokot.app.ui.components.StenoIcon
-import ru.stenokot.app.ui.components.TonalAction
-import ru.stenokot.app.ui.components.resourceTags
-import ru.stenokot.app.ui.format.formatFileSize
-import ru.stenokot.app.ui.format.formatHistoryDate
+import ru.stenokot.app.ui.components.StenoSheet
 import ru.stenokot.app.ui.layout.LocalWindowLayout
+import ru.stenokot.app.ui.theme.StenoRadius
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
@@ -62,7 +70,8 @@ private const val APP_FOLDER_MARK = "Android/data/"
 private const val MIME_JSON = "application/json"
 private const val WRITE_POLLS = 30
 private const val WRITE_POLL_MS = 100L
-private const val META_SEPARATOR = " · "
+private const val DISABLED_ALPHA = 0.5f
+private val SelectedBorder = 1.5.dp
 
 /** Файл лежит в папке приложения: запись в Download не удалась. */
 internal val OutputFileUi.inAppFolder: Boolean get() = APP_FOLDER_MARK in path
@@ -147,18 +156,17 @@ internal suspend fun awaitWritten(context: Context, target: Uri): Boolean = with
     false
 }
 
-/** Сводка файла под кнопками: где лежит, сколько весит, когда создан и прошёл ли проверку. */
+/**
+ * Строка в начале списка: куда автоматически сохранён файл. Одна строка и только до первой прокрутки,
+ * сведения о нём открываются нажатием.
+ */
 @Composable
 internal fun OutputLine(output: OutputFileUi, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val colors = StenoTheme.colors
-    val type = StenoTheme.type
     val path = stringResource(
         if (output.inAppFolder) R.string.scr04_saved_fallback else R.string.common_saved,
         output.path,
     )
-    val validity = stringResource(if (output.validated) R.string.scr04_json_valid else R.string.scr04_json_unchecked)
-    val meta = listOf(formatFileSize(output.sizeBytes), formatHistoryDate(output.createdAtMs), validity)
-        .joinToString(META_SEPARATOR)
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -168,32 +176,24 @@ internal fun OutputLine(output: OutputFileUi, onOpen: () -> Unit, modifier: Modi
                 role = Role.Button,
                 onClick = onOpen,
             )
-            .padding(horizontal = LocalWindowLayout.current.gutter, vertical = StenoSpace.xs),
+            .padding(horizontal = LocalWindowLayout.current.gutter + StenoSpace.s, vertical = StenoSpace.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
     ) {
         StenoIcon(
-            icon = if (output.validated) R.drawable.ic_check_circle_fill else R.drawable.ic_warning,
+            icon = if (output.validated) R.drawable.ic_check_circle else R.drawable.ic_warning,
             tint = if (output.validated) colors.success else colors.warning,
             size = StenoSize.iconSmall,
         )
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = path,
-                modifier = Modifier.testTag(Tags.OUTPUT_PATH),
-                style = type.bodySmall,
-                color = colors.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.MiddleEllipsis,
-            )
-            Text(
-                text = meta,
-                modifier = Modifier.testTag(Tags.OUTPUT_META),
-                style = type.bodySmall,
-                color = colors.onSurfaceVariant,
-            )
-        }
-        StenoIcon(R.drawable.ic_chevron_right, colors.onSurfaceVariant)
+        Text(
+            text = path,
+            modifier = Modifier.weight(1f).testTag(Tags.OUTPUT_PATH),
+            style = StenoTheme.type.bodySmall,
+            color = colors.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.MiddleEllipsis,
+        )
+        StenoIcon(R.drawable.ic_chevron_right, colors.onSurfaceVariant, size = StenoSize.iconSmall)
     }
 }
 
@@ -211,89 +211,153 @@ internal fun ExportFailure(modifier: Modifier = Modifier) {
     )
 }
 
+/** Вариант экспорта: карточка с заголовком, пояснением и переключателем. */
 @Composable
-private fun FactRow(label: String, value: String, mono: Boolean = false) {
-    val type = StenoTheme.type
+private fun ExportOption(
+    title: String,
+    subtitle: String,
+    @DrawableRes icon: Int,
+    selected: Boolean,
+    enabled: Boolean,
+    tag: String,
+    badge: String? = null,
+    onSelect: () -> Unit,
+) {
     val colors = StenoTheme.colors
-    Row(horizontalArrangement = Arrangement.spacedBy(StenoSpace.m)) {
-        Text(label, Modifier.width(88.dp), style = type.bodyMedium, color = colors.onSurfaceVariant)
-        Text(
-            text = value,
-            modifier = Modifier.weight(1f),
-            style = if (mono) type.monoSmall else type.bodyMedium,
-            color = colors.onSurface,
+    val shape = RoundedCornerShape(StenoRadius.card)
+    val contentAlpha = if (enabled) 1f else DISABLED_ALPHA
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = StenoSize.actionHeight)
+            .background(if (selected) colors.primaryContainer else colors.surface, shape)
+            .border(
+                width = if (selected) SelectedBorder else StenoSize.hairline,
+                color = if (selected) colors.primary else colors.outlineVariant,
+                shape = shape,
+            )
+            .clip(shape)
+            .testTag(tag)
+            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
+            .padding(horizontal = StenoSpace.l, vertical = StenoSpace.m),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(StenoSpace.m),
+    ) {
+        StenoIcon(icon, colors.primary.copy(alpha = contentAlpha), size = StenoSize.iconLarge)
+        Column(Modifier.weight(1f)) {
+            Text(title, style = StenoTheme.type.cardTitle, color = colors.onSurface.copy(alpha = contentAlpha))
+            Text(subtitle, style = StenoTheme.type.bodySmall, color = colors.onSurfaceVariant)
+        }
+        if (badge != null && !LocalWindowLayout.current.largeText) {
+            Text(
+                text = badge,
+                modifier = Modifier
+                    .background(colors.surface, RoundedCornerShape(StenoRadius.s))
+                    .padding(horizontal = StenoSpace.s, vertical = StenoSpace.xs),
+                style = StenoTheme.type.labelSmall,
+                color = colors.primary,
+            )
+        }
+        RadioButton(
+            selected = selected,
+            onClick = null,
+            enabled = enabled,
+            colors = RadioButtonDefaults.colors(selectedColor = colors.primary, unselectedColor = colors.outline),
         )
     }
 }
 
 /**
- * Панель файла: путь, размер, время, проверка и действия. На крупном шрифте сюда же уходят кнопки
- * нижней панели через [extra]. Содержимое прокручивается: панель обязана помещаться в любом окне.
- * Панель живёт в своём окне и закрывает собой сообщения экрана, поэтому действие сначала её
- * закрывает, иначе подтверждение или отказ остались бы невидимыми.
+ * Экспорт: выбор между JSON и протоколом, сохранение и отправка как разные действия. Лист живёт в
+ * своём окне и закрывает собой сообщения экрана, поэтому действие сначала его закрывает. Отправить
+ * можно только контрактный файл: у протокола нет опубликованного адреса.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ExportSheet(
-    output: OutputFileUi,
+    title: String,
+    protocolReady: Boolean,
+    exportFailed: Boolean,
     onDismiss: () -> Unit,
+    onSave: (ExportKind) -> Unit,
     onShare: () -> Unit,
-    onCopyPath: () -> Unit,
-    onOpenFolder: () -> Unit,
-    extra: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     val colors = StenoTheme.colors
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = colors.surfaceContainerLow,
-        contentColor = colors.onSurface,
-    ) {
+    val type = StenoTheme.type
+    var kind by rememberSaveable { mutableStateOf(ExportKind.TRANSCRIPT) }
+    val transcript = kind == ExportKind.TRANSCRIPT
+    StenoSheet(onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .resourceTags()
-                .testTag(Tags.EXPORT_PANEL)
+                .testTag(Tags.EXPORT_SHEET)
                 .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
                 .padding(horizontal = LocalWindowLayout.current.gutter)
-                .padding(bottom = StenoSpace.l)
-                .navigationBarsPadding(),
+                .padding(bottom = StenoSpace.l),
             verticalArrangement = Arrangement.spacedBy(StenoSpace.m),
         ) {
-            Text(
-                text = stringResource(R.string.scr04_panel_title),
-                modifier = Modifier.semantics { heading() },
-                style = StenoTheme.type.titleLarge,
-                color = colors.onSurface,
+            SheetHeader(stringResource(R.string.scr04_export_title), onDismiss)
+            Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(StenoSpace.m)) {
+                Column(verticalArrangement = Arrangement.spacedBy(StenoSpace.xs)) {
+                    Text(title, style = type.bodyLarge, color = colors.onSurface)
+                    Text(
+                        text = stringResource(R.string.scr04_export_private),
+                        style = type.bodySmall,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
+                ExportOption(
+                    title = stringResource(R.string.scr04_export_transcript),
+                    subtitle = stringResource(R.string.scr04_export_transcript_hint),
+                    icon = R.drawable.ic_description,
+                    selected = transcript,
+                    enabled = true,
+                    tag = Tags.EXPORT_TRANSCRIPT,
+                    badge = stringResource(R.string.scr04_export_json),
+                    onSelect = { kind = ExportKind.TRANSCRIPT },
+                )
+                ExportOption(
+                    title = stringResource(R.string.scr04_export_protocol),
+                    subtitle = stringResource(
+                        if (protocolReady) R.string.scr04_export_protocol_hint else R.string.scr04_export_protocol_absent,
+                    ),
+                    icon = R.drawable.ic_assignment_ind,
+                    selected = !transcript,
+                    enabled = protocolReady,
+                    tag = Tags.EXPORT_PROTOCOL,
+                    onSelect = { kind = ExportKind.PROTOCOL },
+                )
+            }
+            PrimaryAction(
+                text = stringResource(
+                    if (exportFailed && transcript) R.string.scr04_export_retry else R.string.scr04_export_save,
+                ),
+                onClick = {
+                    onDismiss()
+                    onSave(kind)
+                },
+                icon = R.drawable.ic_download,
+                tag = Tags.EXPORT_SAVE,
             )
-            FactRow(stringResource(R.string.scr04_panel_path), output.path)
-            FactRow(stringResource(R.string.scr04_panel_size), formatFileSize(output.sizeBytes))
-            FactRow(stringResource(R.string.scr04_panel_created), formatHistoryDate(output.createdAtMs))
-            FactRow(
-                stringResource(R.string.scr04_panel_validity),
-                stringResource(if (output.validated) R.string.scr04_json_valid_long else R.string.scr04_json_unchecked),
-            )
-            output.sha256?.let { FactRow(stringResource(R.string.scr04_panel_sha), it, mono = true) }
-            TonalAction(
+            OutlinedAction(
                 text = stringResource(R.string.scr04_action_share),
-                onClick = { onDismiss(); onShare() },
+                onClick = {
+                    onDismiss()
+                    onShare()
+                },
                 icon = R.drawable.ic_share,
+                enabled = transcript,
                 tag = Tags.SHARE,
             )
-            OutlinedAction(
-                text = stringResource(R.string.scr04_action_copy_path),
-                onClick = { onDismiss(); onCopyPath() },
-                icon = R.drawable.ic_content_copy,
-                tag = Tags.COPY_PATH,
-            )
-            OutlinedAction(
-                text = stringResource(R.string.scr04_action_open_folder),
-                onClick = { onDismiss(); onOpenFolder() },
-                icon = R.drawable.ic_folder_open,
-                enabled = !output.inAppFolder,
-                tag = Tags.OPEN_FOLDER,
-            )
-            extra?.invoke(this)
+            if (transcript) {
+                Text(
+                    text = stringResource(R.string.scr04_export_note),
+                    modifier = Modifier.fillMaxWidth(),
+                    style = type.bodySmall,
+                    color = colors.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }

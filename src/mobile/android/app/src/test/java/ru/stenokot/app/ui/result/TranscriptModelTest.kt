@@ -23,6 +23,56 @@ class TranscriptModelTest {
 
     private val model = buildTranscriptModel(utterances, Language.RU)
 
+    private fun overlapping(id: Int, speaker: Int, start: Long, end: Long, overlap: Boolean = true) =
+        Utterance(id, speaker, start, end, emptyList(), "Реплика $id", overlap)
+
+    @Test
+    fun `наложение называет обоих говорящих`() {
+        val rows = buildTranscriptModel(
+            listOf(overlapping(1, 0, 0, 2_000), overlapping(2, 2, 1_000, 3_000)),
+            Language.RU,
+        ).rows
+        assertEquals("1 и 3", rows[0].overlapSpeakers)
+        assertEquals("1 и 3", rows[1].overlapSpeakers)
+    }
+
+    @Test
+    fun `трое одновременно перечисляются через запятую`() {
+        val rows = buildTranscriptModel(
+            listOf(overlapping(1, 0, 0, 3_000), overlapping(2, 1, 500, 2_500), overlapping(3, 2, 1_000, 2_000)),
+            Language.RU,
+        ).rows
+        assertEquals("1, 2 и 3", rows[1].overlapSpeakers)
+    }
+
+    @Test
+    fun `короткая реплика не прячет длинную перед ней`() {
+        val rows = buildTranscriptModel(
+            listOf(
+                overlapping(1, 0, 0, 10_000),
+                overlapping(2, 0, 1_000, 1_500, overlap = false),
+                overlapping(3, 1, 5_000, 6_000),
+            ),
+            Language.RU,
+        ).rows
+        assertEquals("1 и 2", rows[2].overlapSpeakers)
+    }
+
+    @Test
+    fun `без собеседника по времени номера не выдумываются`() {
+        val rows = buildTranscriptModel(
+            listOf(overlapping(1, 0, 0, 1_000), overlapping(2, 1, 2_000, 3_000, overlap = false)),
+            Language.RU,
+        ).rows
+        assertEquals(null, rows[0].overlapSpeakers)
+        assertEquals(null, rows[1].overlapSpeakers)
+    }
+
+    @Test
+    fun `реплики считаются по говорящим`() {
+        assertEquals(mapOf(1 to 3, 2 to 1), model.repliesBySpeaker)
+    }
+
     @Test
     fun `текст реплики не меняется`() {
         assertEquals(utterances.map { it.text }, model.rows.map { it.text.text })

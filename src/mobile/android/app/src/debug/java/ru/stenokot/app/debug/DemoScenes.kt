@@ -170,6 +170,7 @@ private fun result(
     audioPath = DemoAudio.path,
     output = output(title.substringBeforeLast('.'), exportFailed),
     protocol = proto,
+    pcmPath = DemoAudio.path,
 )
 
 private fun ds1Result(proto: ProtocolUi, exportFailed: Boolean = false) =
@@ -580,6 +581,8 @@ private fun resultScene(id: String): DemoScene? {
         "S05-I" -> protocolStateScene(resultScene("S04-I")!!)
         "S05-G2" -> protocolStateScene(resultScene("S04-H2")!!)
         "S05-D2" -> protocolStateScene(resultScene("S04-E2")!!)
+        "S06-A" -> resultScene("S04-C")!!.copy(route = Route.ResultFile("ds1"))
+        "S06-B" -> resultScene("S04-C")!!.copy(route = Route.ProtocolItem("ds1", 0))
         else -> null
     }
 }

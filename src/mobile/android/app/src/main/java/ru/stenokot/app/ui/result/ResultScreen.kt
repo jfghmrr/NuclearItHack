@@ -12,35 +12,45 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.stenokot.app.R
@@ -59,14 +69,16 @@ import ru.stenokot.app.ui.layout.WindowLayout
 import ru.stenokot.app.ui.nav.ResultTab
 import ru.stenokot.app.ui.theme.StenoMotion
 import ru.stenokot.app.ui.theme.EnterMotion
+import ru.stenokot.app.ui.theme.StenoRadius
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 
 private val RailWidth = 320.dp
 private val TabMinFont = 10.sp
-private const val IMPORT_WEIGHT = 1f
-private const val EXPORT_WEIGHT = 1.25f
+private val TabIndicatorHeight = 3.dp
+private val ReadyDot = 6.dp
+private const val NARROW_TITLE_DP = 380
 
 /** Раскладка экрана результата. */
 internal enum class ResultLayout { STACKED, RAIL, SIDE_BY_SIDE }
@@ -82,83 +94,100 @@ internal val WindowLayout.resultLayout: ResultLayout
         else -> ResultLayout.STACKED
     }
 
-/** Верхняя панель: файл и его сводка. Имя усекается в середине, текст узла остаётся полным. */
+/** Заметная кнопка экспорта. Сразу открывает системное сохранение JSON, без промежуточных шагов. */
+@Composable
+internal fun ExportButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = StenoTheme.colors
+    Button(
+        onClick = onClick,
+        modifier = modifier.testTag(Tags.EXPORT),
+        shape = RoundedCornerShape(StenoRadius.m),
+        contentPadding = PaddingValues(horizontal = StenoSpace.m, vertical = StenoSpace.xs),
+        elevation = null,
+        colors = ButtonDefaults.buttonColors(containerColor = colors.primaryContainer, contentColor = colors.primary),
+    ) {
+        Text(stringResource(R.string.scr04_btn_export), style = StenoTheme.type.labelLarge, maxLines = 1, softWrap = false)
+    }
+}
+
+/** Кнопка меню записи. */
+@Composable
+internal fun MenuButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    IconButton(onClick = onClick, modifier = modifier.testTag(Tags.RESULT_MENU)) {
+        Icon(
+            painterResource(R.drawable.ic_more),
+            stringResource(R.string.scr04_menu_open),
+            tint = StenoTheme.colors.onSurface,
+        )
+    }
+}
+
+/** Имя файла. Усекается в середине, текст узла остаётся полным. */
+@Composable
+private fun ResultTitle(title: String) {
+    val window = LocalWindowLayout.current
+    Text(
+        text = title,
+        modifier = Modifier.testTag(Tags.FILE_NAME).semantics { heading() },
+        style = if (window.widthDp < NARROW_TITLE_DP) StenoTheme.type.cardTitle else StenoTheme.type.titleLarge,
+        color = StenoTheme.colors.onSurface,
+        maxLines = 1,
+        overflow = TextOverflow.MiddleEllipsis,
+    )
+}
+
+/** Сводка записи: длительность, число говорящих и язык. */
+@Composable
+internal fun ResultMeta(meta: String, modifier: Modifier = Modifier) {
+    Text(
+        text = meta,
+        modifier = modifier.testTag(Tags.AUDIO_META),
+        style = StenoTheme.type.bodySmall,
+        color = StenoTheme.colors.onSurfaceVariant,
+    )
+}
+
+/**
+ * Верхняя панель: файл и его сводка, заметный экспорт и меню записи. На крошечном окне сводка уходит
+ * в начало списка: [meta] тогда равно null.
+ */
 @Composable
 internal fun ResultTopBar(
     title: String,
-    meta: String,
+    meta: String?,
     onBack: () -> Unit,
-    onOpenPanel: (() -> Unit)?,
+    onExport: () -> Unit,
+    onMenu: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = StenoTheme.colors
-    val gutter = LocalWindowLayout.current.gutter
     Row(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .padding(start = StenoSpace.xs, end = if (onOpenPanel != null) StenoSpace.xs else gutter),
+            .padding(horizontal = StenoSpace.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.xs),
     ) {
-        IconButton(onClick = onBack, modifier = Modifier.testTag(Tags.BACK)) {
-            Icon(
-                painterResource(R.drawable.ic_arrow_back),
-                stringResource(R.string.common_back),
-                tint = colors.onSurface,
-            )
-        }
+        BackButton(onBack)
         Column(Modifier.weight(1f).padding(vertical = StenoSpace.xs)) {
-            Text(
-                text = title,
-                modifier = Modifier.testTag(Tags.FILE_NAME).semantics { heading() },
-                style = StenoTheme.type.labelLarge,
-                color = colors.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.MiddleEllipsis,
-            )
-            Text(
-                text = meta,
-                modifier = Modifier.testTag(Tags.AUDIO_META),
-                style = StenoTheme.type.bodySmall,
-                color = colors.onSurfaceVariant,
-            )
+            ResultTitle(title)
+            meta?.let { ResultMeta(it) }
         }
-        if (onOpenPanel != null) {
-            IconButton(onClick = onOpenPanel, modifier = Modifier.testTag(Tags.EXPORT_PANEL_OPEN)) {
-                Icon(
-                    painterResource(R.drawable.ic_description),
-                    stringResource(R.string.scr04_panel_title),
-                    tint = colors.onSurface,
-                )
-            }
-        }
+        ExportButton(onExport)
+        MenuButton(onMenu)
     }
 }
 
 /** Заголовок боковой колонки: файл и сводка без кнопки назад, она осталась у вкладок. */
 @Composable
 internal fun RailTitle(title: String, meta: String, modifier: Modifier = Modifier) {
-    val colors = StenoTheme.colors
     Column(modifier.fillMaxWidth().padding(horizontal = LocalWindowLayout.current.gutter, vertical = StenoSpace.s)) {
-        Text(
-            text = title,
-            modifier = Modifier.testTag(Tags.FILE_NAME).semantics { heading() },
-            style = StenoTheme.type.labelLarge,
-            color = colors.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.MiddleEllipsis,
-        )
-        Text(
-            text = meta,
-            modifier = Modifier.testTag(Tags.AUDIO_META),
-            style = StenoTheme.type.bodySmall,
-            color = colors.onSurfaceVariant,
-        )
+        ResultTitle(title)
+        ResultMeta(meta)
     }
 }
 
-/** Кнопка назад для низкого окна, где верхней панели нет. */
+/** Кнопка назад. */
 @Composable
 internal fun BackButton(onBack: () -> Unit, modifier: Modifier = Modifier) {
     IconButton(onClick = onBack, modifier = modifier.testTag(Tags.BACK)) {
@@ -177,7 +206,7 @@ internal fun BackButton(onBack: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 private fun TabLabel(text: String, modifier: Modifier = Modifier) {
     val color = LocalContentColor.current
-    val style = StenoTheme.type.labelMedium
+    val style = StenoTheme.type.labelLarge
     BasicText(
         text = text,
         modifier = modifier,
@@ -188,100 +217,122 @@ private fun TabLabel(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** Вкладки результата. Значок на вкладке протокола держит статус, когда баннер уже уехал. */
+/** Положение протокола на вкладке: готовый отмечен точкой, остальные значком состояния. */
+@Composable
+private fun ProtocolMark(phase: ProtocolPhase) {
+    when (phase) {
+        ProtocolPhase.NO_SPEECH -> Unit
+        ProtocolPhase.APPLIED -> Spacer(Modifier.size(ReadyDot).background(StenoTheme.colors.primary, CircleShape))
+        else -> Icon(painterResource(phase.icon), null, Modifier.size(StenoSize.iconSmall))
+    }
+}
+
+/**
+ * Вкладки результата. Значок на вкладке протокола держит статус, когда баннера в списке нет. Если
+ * передан [status], он остаётся в дереве доступности под прежней меткой: так автоматика и TalkBack
+ * узнают, что протокол готов.
+ */
 @Composable
 internal fun ResultTabs(
     tab: ResultTab,
     phase: ProtocolPhase,
     modifier: Modifier = Modifier,
+    status: String? = null,
     onTab: (ResultTab) -> Unit,
 ) {
     val colors = StenoTheme.colors
-    PrimaryTabRow(
-        selectedTabIndex = tab.ordinal,
-        modifier = modifier,
-        containerColor = colors.surface,
-        contentColor = colors.primary,
-        divider = { HorizontalDivider(thickness = StenoSize.hairline, color = colors.outlineVariant) },
-    ) {
-        Tab(
-            selected = tab == ResultTab.TRANSCRIPT,
-            onClick = { onTab(ResultTab.TRANSCRIPT) },
-            modifier = Modifier.testTag(Tags.TAB_TRANSCRIPT),
-            selectedContentColor = colors.primary,
-            unselectedContentColor = colors.onSurfaceVariant,
-            text = { TabLabel(stringResource(R.string.common_tab_transcript)) },
-        )
-        Tab(
-            selected = tab == ResultTab.PROTOCOL,
-            onClick = { onTab(ResultTab.PROTOCOL) },
-            modifier = Modifier.testTag(Tags.TAB_PROTOCOL),
-            selectedContentColor = colors.primary,
-            unselectedContentColor = colors.onSurfaceVariant,
-            text = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(StenoSpace.xs),
-                ) {
-                    TabLabel(stringResource(R.string.common_tab_protocol), Modifier.weight(1f, fill = false))
-                    if (phase != ProtocolPhase.NO_SPEECH) {
-                        Icon(painterResource(phase.icon), null, Modifier.size(StenoSize.iconSmall))
-                    }
-                }
+    Box(modifier.fillMaxWidth().background(colors.background)) {
+        PrimaryTabRow(
+            selectedTabIndex = tab.ordinal,
+            modifier = Modifier.padding(horizontal = LocalWindowLayout.current.gutter),
+            containerColor = colors.background,
+            contentColor = colors.primary,
+            indicator = {
+                TabRowDefaults.PrimaryIndicator(
+                    modifier = Modifier.tabIndicatorOffset(tab.ordinal, matchContentSize = false),
+                    width = Dp.Unspecified,
+                    height = TabIndicatorHeight,
+                    color = colors.primary,
+                    shape = RoundedCornerShape(topStart = TabIndicatorHeight, topEnd = TabIndicatorHeight),
+                )
             },
+            divider = { },
+        ) {
+            Tab(
+                selected = tab == ResultTab.TRANSCRIPT,
+                onClick = { onTab(ResultTab.TRANSCRIPT) },
+                modifier = Modifier.testTag(Tags.TAB_TRANSCRIPT),
+                selectedContentColor = colors.primary,
+                unselectedContentColor = colors.onSurfaceVariant,
+                text = { TabLabel(stringResource(R.string.common_tab_transcript)) },
+            )
+            Tab(
+                selected = tab == ResultTab.PROTOCOL,
+                onClick = { onTab(ResultTab.PROTOCOL) },
+                modifier = Modifier.testTag(Tags.TAB_PROTOCOL),
+                selectedContentColor = colors.primary,
+                unselectedContentColor = colors.onSurfaceVariant,
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
+                    ) {
+                        TabLabel(stringResource(R.string.common_tab_protocol), Modifier.weight(1f, fill = false))
+                        ProtocolMark(phase)
+                    }
+                },
+            )
+        }
+        Spacer(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .height(StenoSize.hairline)
+                .background(colors.outlineVariant),
         )
+        if (status != null) {
+            Spacer(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .height(StenoSize.hairline)
+                    .testTag(Tags.BANNER_LLM)
+                    .clearAndSetSemantics {
+                        text = AnnotatedString(status)
+                        liveRegion = LiveRegionMode.Polite
+                    },
+            )
+        }
     }
 }
 
-/** Кнопки файла. Экспорт работает с момента сохранения JSON и не зависит от протокола. */
+/** Кнопки файла в боковой колонке: там есть место и для экспорта, и для импорта рядом. */
 @Composable
 internal fun ActionButtons(
-    showImport: Boolean,
-    showProtocolExport: Boolean,
-    protocolReady: Boolean,
     exportFailed: Boolean,
     onExport: () -> Unit,
-    onExportProtocol: () -> Unit,
     onImport: () -> Unit,
     modifier: Modifier = Modifier,
-    tight: Boolean = false,
-    showExport: Boolean = true,
 ) {
-    val exportIcon = R.drawable.ic_download.takeIf { !tight && !showProtocolExport && !exportFailed }
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (showExport) {
-            PrimaryAction(
-                text = stringResource(if (exportFailed) R.string.scr04_export_retry else R.string.common_btn_export),
-                onClick = onExport,
-                modifier = Modifier.weight(if (exportIcon != null) EXPORT_WEIGHT else IMPORT_WEIGHT),
-                icon = exportIcon,
-                tag = Tags.EXPORT,
-                dense = true,
-            )
-        }
-        if (showProtocolExport) {
-            OutlinedAction(
-                text = stringResource(R.string.common_btn_export_protocol),
-                onClick = onExportProtocol,
-                modifier = Modifier.weight(IMPORT_WEIGHT),
-                enabled = protocolReady,
-                tag = Tags.EXPORT_PROTOCOL,
-                dense = true,
-            )
-        }
-        if (showImport) {
-            OutlinedAction(
-                text = stringResource(R.string.common_btn_import),
-                onClick = onImport,
-                modifier = Modifier.weight(IMPORT_WEIGHT),
-                tag = Tags.IMPORT,
-                dense = true,
-            )
-        }
+        PrimaryAction(
+            text = stringResource(if (exportFailed) R.string.scr04_export_retry else R.string.scr04_btn_export),
+            onClick = onExport,
+            modifier = Modifier.weight(1f),
+            tag = Tags.EXPORT,
+            dense = true,
+        )
+        OutlinedAction(
+            text = stringResource(R.string.common_btn_import),
+            onClick = onImport,
+            modifier = Modifier.weight(1f),
+            tag = Tags.IMPORT,
+            dense = true,
+        )
     }
 }
 
@@ -322,17 +373,14 @@ internal fun NoSpeech(onPickOther: () -> Unit, onLibrary: () -> Unit, modifier: 
     }
 }
 
-/** Док под тонкой линией: так же отделяются нижние панели остальных экранов. */
+/** Нижняя часть экрана: карточка плеера сама отделяет себя от текста. */
 @Composable
 internal fun Dock(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    val colors = StenoTheme.colors
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(colors.surface)
-            .drawBehind {
-                drawLine(colors.outlineVariant, Offset.Zero, Offset(size.width, 0f), StenoSize.hairline.toPx())
-            },
+            .background(StenoTheme.colors.background)
+            .padding(top = StenoSpace.xs),
         content = content,
     )
 }

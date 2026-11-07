@@ -29,13 +29,14 @@ fun GroupLabel(text: String, modifier: Modifier = Modifier, tag: String? = null)
     )
 }
 
-/** Заголовок секции. Необязательный [count] показывает, сколько строк внутри. */
+/** Заголовок секции. Необязательный [count] показывает, сколько строк внутри, [trailing] то же словами. */
 @Composable
 fun SectionHeader(
     title: String,
     modifier: Modifier = Modifier,
     count: Int? = null,
     tag: String? = null,
+    trailing: String? = null,
 ) {
     val type = StenoTheme.type
     val colors = StenoTheme.colors
@@ -49,7 +50,8 @@ fun SectionHeader(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
     ) {
-        Text(title, Modifier.weight(1f, fill = false), style = type.labelMedium, color = colors.onSurfaceVariant)
+        Text(title, Modifier.weight(1f), style = type.labelMedium, color = colors.onSurfaceVariant)
         count?.let { Text(it.toString(), style = type.monoMedium, color = colors.onSurfaceVariant) }
+        trailing?.let { Text(it, style = type.bodySmall, color = colors.onSurfaceVariant) }
     }
 }

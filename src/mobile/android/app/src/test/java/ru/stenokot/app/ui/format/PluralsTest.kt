@@ -22,6 +22,16 @@ class PluralsTest {
     }
 
     @Test
+    fun countsAfterFromUseGenitive() {
+        assertEquals("2${NBSP}фрагментов", fragmentsOfLabel(2))
+        assertEquals("21${NBSP}фрагмента", fragmentsOfLabel(21))
+        assertEquals("3${NBSP}реплик", utterancesOfLabel(3))
+        assertEquals("21${NBSP}реплики", utterancesOfLabel(21))
+        assertEquals("1${NBSP}тема", topicsLabel(1))
+        assertEquals("3${NBSP}темы", topicsLabel(3))
+    }
+
+    @Test
     fun labels() {
         assertEquals("1${NBSP}говорящий", speakersLabel(1))
         assertEquals("3${NBSP}говорящих", speakersLabel(3))

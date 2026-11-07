@@ -15,15 +15,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import ru.stenokot.app.R
+import ru.stenokot.app.ui.Tags
 import ru.stenokot.app.ui.layout.LocalWindowLayout
 import ru.stenokot.app.ui.theme.StenoRadius
 import ru.stenokot.app.ui.theme.StenoSize
@@ -32,10 +37,35 @@ import ru.stenokot.app.ui.theme.StenoTheme
 
 private const val DISABLED_ALPHA = 0.5f
 
-/** Нижний лист с заголовком и строками действий, как на макете. */
+/** Заголовок нижнего листа с крестиком: закрыть можно и без жеста. */
+@Composable
+fun SheetHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = StenoTheme.colors
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f).semantics { heading() },
+            style = StenoTheme.type.headline,
+            color = colors.onBackground,
+        )
+        IconButton(onClick = onClose, modifier = Modifier.testTag(Tags.SHEET_CLOSE)) {
+            StenoIcon(
+                icon = R.drawable.ic_close,
+                tint = colors.onSurface,
+                size = StenoSize.icon,
+                description = stringResource(R.string.common_close),
+            )
+        }
+    }
+}
+
+/**
+ * Нижний лист без заданного содержимого: форма и цвета макета. Тянуть его можно только вниз, поэтому
+ * лист высотой с экран всё равно закрывается жестом.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ActionSheet(title: String, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun StenoSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     val colors = StenoTheme.colors
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -46,7 +76,15 @@ fun ActionSheet(title: String, onDismiss: () -> Unit, content: @Composable Colum
         scrimColor = colors.scrim,
         shape = RoundedCornerShape(topStart = StenoRadius.sheet, topEnd = StenoRadius.sheet),
         dragHandle = { BottomSheetDefaults.DragHandle(color = colors.outlineVariant) },
-    ) {
+        content = content,
+    )
+}
+
+/** Нижний лист с заголовком и строками действий, как на макете. */
+@Composable
+fun ActionSheet(title: String, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    val colors = StenoTheme.colors
+    StenoSheet(onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
