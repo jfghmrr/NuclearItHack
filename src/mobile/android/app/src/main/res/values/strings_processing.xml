@@ -35,6 +35,7 @@
     <string name="scr03_done_title">Результат готов</string>
     <string name="scr03_done_headline">Всё по полочкам.</string>
     <string name="scr03_done_body">Разговор расшифрован. Можно читать текст и проверять протокол по исходной записи.</string>
+    <string name="scr03_done_body_no_protocol">Разговор расшифрован. Можно читать текст и слушать запись. Протокола для этой записи нет.</string>
     <string name="scr03_done_body_forming">Разговор расшифрован и сохранён. Стенограмму можно читать сейчас, протокол ещё формируется.</string>
     <string name="scr03_done_open">Открыть стенограмму</string>
     <string name="scr03_done_exported">Файл сохранён: %1$s</string>

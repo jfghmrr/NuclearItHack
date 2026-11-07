@@ -51,6 +51,7 @@ import ru.stenokot.app.domain.StageUi
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.ui.AppActions
 import ru.stenokot.app.ui.Tags
+import ru.stenokot.app.ui.components.ActionPair
 import ru.stenokot.app.ui.components.ActionSheet
 import ru.stenokot.app.ui.components.ActionSheetRow
 import ru.stenokot.app.ui.components.BannerTone
@@ -92,6 +93,7 @@ import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 import ru.stenokot.core.model.JobState
+import ru.stenokot.core.model.LlmStatus
 import ru.stenokot.core.model.PauseReason
 import ru.stenokot.core.model.Stage
 
@@ -103,6 +105,10 @@ private val DoneTextWidth = 310.dp
 
 /** Обработка закончена, остался только показ: стенограмма сохранена, протокол идёт сам. */
 private fun JobState.hasResult(): Boolean = routeForJob("", this) is Route.Result
+
+/** Есть что проверять в протоколе. Итог не обещает протокол, которого нет. */
+internal fun JobState.hasProtocol(): Boolean =
+    this is JobState.Done && (llm == LlmStatus.APPLIED || llm == LlmStatus.PARTIAL)
 
 /** В записи нет речи: у такого итога свой экран в результате, а не «Всё по полочкам». */
 private fun JobState.isSilent(): Boolean = this is JobState.Done && warnings.contains("AUDIO_EMPTY")
@@ -240,7 +246,7 @@ private fun ProcessingScreen(
             },
         )
     }
-    val hero: @Composable () -> Unit = { ProcessingHero(detail, processing, cancelled) }
+    val hero: @Composable () -> Unit = { ProcessingHero(detail, processing, working = !cancelled && !paused) }
     val work: @Composable () -> Unit = {
         if (cancelled) {
             CancelledSummary()
@@ -305,9 +311,12 @@ private fun ProcessingScreen(
     }
 }
 
-/** Кот, заголовок и сведения о файле. На коротком экране кот уступает место прогрессу. */
+/**
+ * Кот, заголовок и сведения о файле. На коротком экране кот уступает место прогрессу. Пока работа
+ * стоит, кот не дышит и заголовок не говорит, что запись слушают.
+ */
 @Composable
-private fun ProcessingHero(detail: JobDetailUi, processing: ProcessingUi, cancelled: Boolean) {
+private fun ProcessingHero(detail: JobDetailUi, processing: ProcessingUi, working: Boolean) {
     val layout = LocalWindowLayout.current
     val colors = StenoTheme.colors
     val type = StenoTheme.type
@@ -320,15 +329,17 @@ private fun ProcessingHero(detail: JobDetailUi, processing: ProcessingUi, cancel
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (!layout.short && !layout.largeText) {
-            MascotPlate(MascotKind.WAITING, plate = StenoSize.mascotPlate * 0.8f, breathing = !cancelled)
+            MascotPlate(MascotKind.WAITING, plate = StenoSize.mascotPlate * 0.8f, breathing = working)
         }
-        Text(
-            text = stringResource(R.string.scr03_headline),
-            modifier = Modifier.padding(top = StenoSpace.s).semantics { heading() },
-            style = type.headline.copy(fontSize = type.display.fontSize * 0.7f),
-            color = colors.onBackground,
-            textAlign = TextAlign.Center,
-        )
+        if (working) {
+            Text(
+                text = stringResource(R.string.scr03_headline),
+                modifier = Modifier.padding(top = StenoSpace.s).semantics { heading() },
+                style = type.headline.copy(fontSize = type.display.fontSize * 0.7f),
+                color = colors.onBackground,
+                textAlign = TextAlign.Center,
+            )
+        }
         Text(
             text = line,
             modifier = Modifier.padding(top = StenoSpace.s).testTag(Tags.FILE_NAME),
@@ -545,17 +556,17 @@ private fun ProcessingDock(cancelled: Boolean, onBack: () -> Unit, onStart: () -
                 tag = Tags.IMPORT,
             )
         } else {
-            OutlinedAction(
-                text = stringResource(R.string.scr03_to_library),
-                onClick = onBack,
-                icon = R.drawable.ic_arrow_back,
-                tag = Tags.TO_LIBRARY,
-            )
-            QuietAction(
-                text = start,
-                onClick = onStart,
-                modifier = Modifier.fillMaxWidth(),
-                tag = Tags.START,
+            ActionPair(
+                first = {
+                    OutlinedAction(
+                        text = stringResource(R.string.scr03_to_library),
+                        onClick = onBack,
+                        modifier = it,
+                        icon = R.drawable.ic_arrow_back,
+                        tag = Tags.TO_LIBRARY,
+                    )
+                },
+                second = { QuietAction(text = start, onClick = onStart, modifier = it.fillMaxWidth(), tag = Tags.START) },
             )
         }
     }
@@ -601,7 +612,13 @@ private fun DoneScreen(detail: JobDetailUi, controller: StenoController, actions
                 textAlign = TextAlign.Center,
             )
             Text(
-                text = stringResource(if (forming) R.string.scr03_done_body_forming else R.string.scr03_done_body),
+                text = stringResource(
+                    when {
+                        forming -> R.string.scr03_done_body_forming
+                        detail.summary.state.hasProtocol() -> R.string.scr03_done_body
+                        else -> R.string.scr03_done_body_no_protocol
+                    },
+                ),
                 modifier = Modifier.padding(top = StenoSpace.m).widthIn(max = DoneTextWidth),
                 style = type.bodyMedium,
                 color = colors.onSurfaceVariant,
@@ -638,7 +655,7 @@ private fun DoneScreen(detail: JobDetailUi, controller: StenoController, actions
             )
             val exportText = stringResource(if (exportFailed) R.string.scr04_export_retry else R.string.common_btn_export)
             val onExport = { export.launch("$stem.json") }
-            if (layout.largeText) {
+            if (layout.largeText && !layout.compactHeight) {
                 OutlinedAction(
                     text = exportText,
                     onClick = onExport,
