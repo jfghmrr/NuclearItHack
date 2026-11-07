@@ -229,7 +229,6 @@ class JobPipeline(
             probe(LanguageProbes.pick(segments))
             if (!detector.settled(results)) probe(LanguageProbes.extra(segments))
             language = detector.detect(results)
-            language = detector.detect(results)
             votes = (detector as? LanguageVote)?.tally(results)?.let { LanguageVotes(it.cyrillic, it.latin, it.chunks) }
             if (language == Language.RU && detector.needsSecondOpinion(results)) {
                 val english = run.asr(Language.EN)
