@@ -2,6 +2,7 @@ package ru.stenokot.app.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -19,11 +20,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import ru.stenokot.app.ui.layout.LocalWindowLayout
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
@@ -70,53 +71,65 @@ fun LedgerRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = StenoSize.touchTarget + StenoSpace.l)
-            .then(
-                if (onClick != null) {
-                    Modifier.clickable(onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)
-                } else {
-                    Modifier
-                },
-            )
-            .then(if (showMargin) Modifier.marginRule(colors.outlineVariant, ruleX) else Modifier)
-            .semantics(mergeDescendants = true) {
-                description?.let { contentDescription = it }
-            }
-            .tagged(tag)
-            .padding(start = gutter, end = if (trailing != null) StenoSpace.xs else gutter),
+            .then(if (showMargin) Modifier.marginRule(colors.outlineVariant, ruleX) else Modifier),
         verticalAlignment = Alignment.Top,
     ) {
-        if (showMargin) {
-            Text(
-                text = margin.orEmpty(),
-                modifier = Modifier
-                    .width(marginWidth)
-                    .padding(top = StenoSpace.m + StenoSpace.xs / 2),
-                style = type.monoMedium,
-                color = colors.onSurfaceVariant,
-                maxLines = 1,
-                softWrap = false,
-                textAlign = TextAlign.End,
-            )
-            Spacer(Modifier.width(StenoSpace.s + StenoSpace.m))
-        }
-        Column(
+        Row(
             modifier = Modifier
                 .weight(1f)
-                .padding(vertical = StenoSpace.m),
-            verticalArrangement = Arrangement.spacedBy(StenoSpace.xs / 2),
+                .heightIn(min = StenoSize.touchTarget + StenoSpace.l)
+                .tagged(tag)
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable(onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)
+                    } else {
+                        Modifier
+                    },
+                )
+                .then(
+                    if (description != null) {
+                        Modifier.spokenAs(description, title)
+                    } else {
+                        Modifier.semantics(mergeDescendants = true) { }
+                    },
+                )
+                .padding(start = gutter, end = if (trailing != null) 0.dp else gutter),
+            verticalAlignment = Alignment.Top,
         ) {
-            Text(
-                text = title,
-                style = type.labelMedium,
-                color = colors.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.MiddleEllipsis,
-            )
-            val secondLine = if (showMargin) subtitle else marginFallback
-            secondLine?.let { Text(it, style = type.bodySmall, color = colors.onSurfaceVariant) }
-            footer?.invoke(this)
+            if (showMargin) {
+                Text(
+                    text = margin.orEmpty(),
+                    modifier = Modifier
+                        .width(marginWidth)
+                        .padding(top = StenoSpace.m + StenoSpace.xs / 2),
+                    style = type.monoMedium,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                    textAlign = TextAlign.End,
+                )
+                Spacer(Modifier.width(StenoSpace.s + StenoSpace.m))
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = StenoSpace.m),
+                verticalArrangement = Arrangement.spacedBy(StenoSpace.xs / 2),
+            ) {
+                Text(
+                    text = title,
+                    style = type.labelMedium,
+                    color = colors.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.MiddleEllipsis,
+                )
+                val secondLine = if (showMargin) subtitle else marginFallback
+                secondLine?.let { Text(it, style = type.bodySmall, color = colors.onSurfaceVariant) }
+                footer?.invoke(this)
+            }
         }
-        trailing?.invoke()
+        if (trailing != null) {
+            Box(Modifier.padding(end = StenoSpace.xs)) { trailing() }
+        }
     }
 }

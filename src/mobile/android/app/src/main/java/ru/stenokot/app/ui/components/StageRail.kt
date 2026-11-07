@@ -149,14 +149,8 @@ private fun RailRow(
             .bringIntoViewRequester(visibility)
             .animateContentSize(tween(StenoMotion.MEDIUM))
             .railLine(lineAbove, lineBelow)
-            .then(
-                if (active) {
-                    Modifier
-                } else {
-                    Modifier.semantics(mergeDescendants = true) { contentDescription = spoken }
-                },
-            )
-            .testTag(Tags.rowStage(stage.stage.name)),
+            .testTag(Tags.rowStage(stage.stage.name))
+            .then(if (active) Modifier else Modifier.spokenAs(spoken, label)),
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.m),
     ) {
         RailNode(stage.status, paused)

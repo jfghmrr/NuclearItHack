@@ -49,7 +49,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -80,6 +79,7 @@ import ru.stenokot.app.ui.components.SectionHeader
 import ru.stenokot.app.ui.components.StatusBanner
 import ru.stenokot.app.ui.components.StenoIcon
 import ru.stenokot.app.ui.components.StenoProgressBar
+import ru.stenokot.app.ui.components.spokenAs
 import ru.stenokot.app.ui.components.toneColors
 import ru.stenokot.app.ui.format.filesLabel
 import ru.stenokot.app.ui.format.formatFreeSpace
@@ -303,12 +303,10 @@ private fun ModelsRow(models: ModelsUi, onClick: () -> Unit) {
             .fillMaxWidth()
             .heightIn(min = StenoSize.actionHeight)
             .then(if (warning) Modifier.background(palette.container, shape) else Modifier)
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics(mergeDescendants = true) {
-                contentDescription = "$spoken. Открыть модели и замеры"
-                liveRegion = LiveRegionMode.Polite
-            }
             .testTag(Tags.MODELS)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .spokenAs(stringResource(R.string.scr01_models_spoken, spoken), title)
             .padding(horizontal = if (warning) StenoSpace.m else 0.dp, vertical = StenoSpace.s),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.m),
@@ -545,9 +543,9 @@ private fun JobCard(job: JobSummaryUi, queued: Int, onOpen: (JobSummaryUi) -> Un
             .fillMaxWidth()
             .heightIn(min = 72.dp)
             .background(colors.primaryContainer, shape)
-            .clickable(role = Role.Button) { onOpen(job) }
-            .semantics(mergeDescendants = true) { contentDescription = spoken }
             .testTag(Tags.CARD_JOB)
+            .clickable(role = Role.Button) { onOpen(job) }
+            .spokenAs(spoken, job.title)
             .padding(StenoSpace.l),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
@@ -591,7 +589,8 @@ private fun SelectedFile(job: JobSummaryUi, preflight: PreflightInfo?) {
         name = preflight?.fileName ?: job.title,
         meta = meta,
         preflight = preflight?.let(::formatPreflight),
-        description = stringResource(R.string.scr01_spoken_file, job.title, duration.orEmpty()),
+        description = stringResource(R.string.scr01_spoken_file, job.title, duration.orEmpty()) +
+            preflight?.let { ". " + formatPreflight(it) }.orEmpty(),
         modifier = Modifier.padding(horizontal = gutter).padding(top = StenoSpace.m),
     )
 }

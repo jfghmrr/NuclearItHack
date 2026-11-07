@@ -15,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,10 +47,14 @@ fun FileCard(
             .heightIn(min = 72.dp)
             .background(colors.surfaceContainerLowest, CardShape)
             .border(BorderStroke(StenoSize.hairline, colors.outlineVariant), CardShape)
-            .semantics(mergeDescendants = true) {
-                description?.let { contentDescription = it }
-            }
             .testTag(Tags.CARD_FILE)
+            .then(
+                if (description != null) {
+                    Modifier.spokenAs(description, name)
+                } else {
+                    Modifier.semantics(mergeDescendants = true) { }
+                },
+            )
             .padding(StenoSpace.l),
         verticalArrangement = Arrangement.spacedBy(StenoSpace.s),
     ) {

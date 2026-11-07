@@ -20,6 +20,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ru.stenokot.app.ui.layout.LocalWindowLayout
@@ -141,3 +145,12 @@ fun QuietAction(
 
 /** Добавляет testTag, если он задан. */
 internal fun Modifier.tagged(tag: String?): Modifier = if (tag != null) testTag(tag) else this
+
+/**
+ * Заменяет содержимое узла одной фразой для TalkBack, а видимый текст оставляет для автоматики.
+ * Ставится после `clickable` и `testTag`: всё, что стоит правее, сбрасывается.
+ */
+internal fun Modifier.spokenAs(description: String, visibleText: String): Modifier = clearAndSetSemantics {
+    contentDescription = description
+    text = AnnotatedString(visibleText)
+}
