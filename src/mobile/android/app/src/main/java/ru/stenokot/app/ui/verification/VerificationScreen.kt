@@ -203,7 +203,7 @@ private fun OfflineProof(state: VerificationScreenState) {
         modifier = Modifier
             .fillMaxWidth()
             .background(palette.container, RoundedCornerShape(StenoRadius.xl))
-            .padding(StenoSpace.l),
+            .padding(start = StenoSpace.l, end = StenoSpace.l, top = StenoSpace.l, bottom = StenoSpace.xs),
         verticalArrangement = Arrangement.spacedBy(StenoSpace.s),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(StenoSpace.m)) {
@@ -232,7 +232,10 @@ private fun OfflineProof(state: VerificationScreenState) {
                 onClick = { open = !open },
             )
             Reveal(open) {
-                Column(verticalArrangement = Arrangement.spacedBy(StenoSpace.xs)) {
+                Column(
+                    modifier = Modifier.padding(bottom = StenoSpace.m),
+                    verticalArrangement = Arrangement.spacedBy(StenoSpace.xs),
+                ) {
                     it.permissions.forEach { name ->
                         Text(shortPermission(name), style = type.monoSmall, color = palette.content)
                     }

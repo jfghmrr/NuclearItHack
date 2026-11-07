@@ -11,6 +11,28 @@ class FormattersTest {
     private fun nbsp(text: String) = text.replace(' ', NBSP)
 
     @Test
+    fun spaceToFreeIsNeverUnderstated() {
+        assertEquals(nbsp("883 МБ"), formatSpaceNeeded(882_900_000))
+        assertEquals(nbsp("1 МБ"), formatSpaceNeeded(1))
+        assertEquals(nbsp("1,3 ГБ"), formatSpaceNeeded(1_210_000_000))
+        assertEquals(nbsp("2 ГБ"), formatSpaceNeeded(2_000_000_000))
+        assertEquals(nbsp("0 МБ"), formatSpaceNeeded(-5))
+    }
+
+    @Test
+    fun ratioKeepsTwoDigits() {
+        assertEquals("0,42", formatRatio(0.42))
+        assertEquals("1,05", formatRatio(1.05))
+        assertEquals("0,50", formatRatio(0.5))
+    }
+
+    @Test
+    fun memoryInGibibytes() {
+        assertEquals(nbsp("1,2 ГиБ"), formatGib(1_229))
+        assertEquals(nbsp("3 ГиБ"), formatGib(3_072))
+    }
+
+    @Test
     fun timecodes() {
         assertEquals("00:04", formatTimecode(4_120))
         assertEquals("12:48", formatTimecode(768_000))

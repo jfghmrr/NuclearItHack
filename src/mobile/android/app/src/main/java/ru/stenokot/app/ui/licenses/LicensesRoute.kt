@@ -120,7 +120,11 @@ fun LicenseTextRoute(entryId: String, actions: AppActions) {
                     }
                 }
                 itemsIndexed(text.orEmpty(), key = { index, _ -> index }, contentType = { _, _ -> "paragraph" }) { _, paragraph ->
-                    Text(paragraph, style = type.bodyMedium, color = colors.onSurface)
+                    Text(
+                        text = paragraph,
+                        style = if (isLicenseHeading(paragraph)) type.labelMedium else type.bodyMedium,
+                        color = colors.onSurface,
+                    )
                 }
             }
         }

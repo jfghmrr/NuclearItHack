@@ -74,12 +74,23 @@ object LicenseCatalog {
     fun entry(id: String): LicenseEntry? = groups.firstNotNullOfOrNull { group -> group.entries.firstOrNull { it.id == id } }
 }
 
+private val RuleLine = Regex("^[-=_*]{5,}$")
+
+private fun isCapitalized(line: String): Boolean = line.any(Char::isLetter) && line == line.uppercase()
+
+/** Заголовок раздела в тексте лицензии: короткая строка заглавными буквами. */
+fun isLicenseHeading(paragraph: String): Boolean = paragraph.length < 60 && isCapitalized(paragraph)
+
 /**
- * Делит текст лицензии на абзацы: в файлах строки разорваны под ширину 70 знаков, а на экране
- * ширина другая, поэтому строки абзаца склеиваются обратно.
+ * Делит текст лицензии на абзацы. В файлах строки разорваны под ширину 70 знаков, а на экране
+ * ширина другая, поэтому строки абзаца склеиваются обратно. Линии из тире отбрасываются,
+ * а заголовок, стоящий прямо над абзацем, остаётся отдельной строкой.
  */
 fun licenseParagraphs(text: String): List<String> =
     text.replace("\r\n", "\n")
         .split(Regex("\n[ \t]*\n"))
-        .map { block -> block.lines().joinToString(" ") { it.trim() }.trim() }
-        .filter { it.isNotEmpty() }
+        .flatMap { block ->
+            val lines = block.lines().map { it.trim() }.filter { it.isNotEmpty() && !RuleLine.matches(it) }
+            val head = lines.firstOrNull()?.takeIf { lines.size > 1 && isLicenseHeading(it) }
+            listOfNotNull(head, lines.drop(if (head != null) 1 else 0).joinToString(" ").ifEmpty { null })
+        }
