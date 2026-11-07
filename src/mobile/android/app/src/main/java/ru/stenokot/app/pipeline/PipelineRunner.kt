@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -98,6 +99,7 @@ class PipelineRunner(
             workerLoop()
         }
         scope.launch(io) { tickLoop() }
+        scope.launch(io) { modelCopyGateLoop() }
     }
 
     /** Ждёт окончания загрузки задач. */
@@ -248,6 +250,17 @@ class PipelineRunner(
         }
     }
 
+    /**
+     * Копия модели уступает всему, что идёт до контрактного файла, начиная с приёма файла: сотни
+     * мегабайт записи на диск задерживают на секунды каждый fsync копии импорта и журналов.
+     */
+    private suspend fun modelCopyGateLoop() {
+        book.flow.map { all -> all.values.any { !it.transcriptSaved && (it.awaitsWorker || JobQueue.isActive(it)) } }
+            .distinctUntilChanged()
+            .dropWhile { !it }
+            .collect(modelGate::setBusy)
+    }
+
     private suspend fun sendToIntake(id: String) {
         if (intakePending.add(id)) intake.send(id)
     }
@@ -377,7 +390,6 @@ class PipelineRunner(
 
     private suspend fun runJob(id: String) {
         val control = control(id)
-        modelGate.setBusy(true)
         val finished = try {
             pipeline.run(id, control)
             true
@@ -395,7 +407,6 @@ class PipelineRunner(
             fail(id, stage, code, failure.message ?: failure.toString())
             false
         } finally {
-            modelGate.setBusy(false)
             controls.remove(id)
         }
         board.clear(id)
