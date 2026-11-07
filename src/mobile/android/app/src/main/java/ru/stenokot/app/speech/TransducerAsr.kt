@@ -7,6 +7,8 @@ import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OfflineTransducerModelConfig
 import kotlin.math.min
 import kotlin.math.roundToLong
+import ru.stenokot.core.asr.GapFill
+import ru.stenokot.core.asr.GapFillConfig
 import ru.stenokot.core.engine.Asr
 import ru.stenokot.core.engine.PcmReader
 import ru.stenokot.core.model.AsrSegment
@@ -16,6 +18,8 @@ import ru.stenokot.core.model.SpeechSegment
 /**
  * Распознавание русской речи: GigaAM v3 e2e RNNT. Конфигурация своя, потому что этой версии нет в
  * getOfflineModelConfig. Без modelType nemo_transducer загрузка падает на метаданных vocab_size.
+ * Паузы внутри среза, где слышна речь, распознаются заново: так находится тихая реплика второго
+ * человека, которую модель пропускает рядом с громким голосом.
  */
 class GigaAsr(models: ModelSource, threads: Int = EngineThreads.asr()) : Asr by TransducerEngine(
     models = models,
@@ -25,6 +29,7 @@ class GigaAsr(models: ModelSource, threads: Int = EngineThreads.asr()) : Asr by 
     tokens = ModelFiles.ASR_RU_TOKENS,
     featureDim = 64,
     threads = threads,
+    gaps = GapFillConfig(),
 )
 
 /**
@@ -44,7 +49,11 @@ class ParakeetAsr(models: ModelSource, threads: Int = EngineThreads.asr()) : Asr
 
 private const val SMALL_ENCODER_BYTES = 200L * 1024 * 1024
 
-/** Общая часть обеих моделей: срез записи, поток, декодирование, абсолютное время токенов. */
+/**
+ * Общая часть обеих моделей: срез записи, поток, декодирование, абсолютное время токенов. Если задан
+ * [gaps], рядом загружается свой определитель речи для пауз внутри среза. Дополненный срез
+ * возвращается целиком, поэтому журнал и склейка видят новые слова как обычные.
+ */
 internal class TransducerEngine(
     models: ModelSource,
     encoder: String,
@@ -53,8 +62,10 @@ internal class TransducerEngine(
     tokens: String,
     featureDim: Int,
     threads: Int,
+    private val gaps: GapFillConfig? = null,
 ) : Asr {
     private val recognizer: OfflineRecognizer
+    private val speech: SileroVadEngine?
 
     init {
         models.require(encoder, decoder, joiner, tokens)
@@ -78,9 +89,29 @@ internal class TransducerEngine(
                 ),
             )
         }
+        speech = try {
+            gaps?.let { SileroVadEngine(models) }
+        } catch (failure: Throwable) {
+            recognizer.release()
+            throw failure
+        }
     }
 
     override fun transcribe(pcm: PcmReader, chunk: SpeechSegment): AsrSegment {
+        val segment = decode(pcm, chunk)
+        val config = gaps ?: return segment
+        val vad = speech ?: return segment
+        return GapFill.fill(
+            segment = segment,
+            config = config,
+            probabilities = { startMs, endMs ->
+                vad.probabilities(pcm.read(startMs * SAMPLES_PER_MS, ((endMs - startMs) * SAMPLES_PER_MS).toInt()))
+            },
+            decode = { decode(pcm, it) },
+        )
+    }
+
+    private fun decode(pcm: PcmReader, chunk: SpeechSegment): AsrSegment {
         val length = chunk.endSample - chunk.startSample
         if (length <= 0) return AsrSegment(chunk, "", emptyList())
         val samples = pcm.read(chunk.startSample, length.toInt())
@@ -105,11 +136,13 @@ internal class TransducerEngine(
     }
 
     override fun close() {
+        speech?.close()
         recognizer.release()
     }
 
     private companion object {
         const val SAMPLE_RATE = 16000
+        const val SAMPLES_PER_MS = 16L
         const val MIN_SAMPLES = SAMPLE_RATE / 10
     }
 }

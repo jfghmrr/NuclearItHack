@@ -76,6 +76,25 @@ class SileroVadEngine(models: ModelSource) : Vad {
         return track
     }
 
+    /**
+     * Вероятность речи окнами по 512 отсчётов для короткого отрезка [samples]. Состояние сети
+     * сбрасывается перед отрезком, неполное последнее окно дополняется нулями, как в дорожке записи.
+     */
+    fun probabilities(samples: FloatArray): FloatArray {
+        val window = FloatArray(VadTuning.WINDOW)
+        val count = ceil(samples.size.toDouble() / VadTuning.WINDOW).toInt()
+        val out = FloatArray(count)
+        vad.reset()
+        for (index in 0 until count) {
+            val from = index * VadTuning.WINDOW
+            val available = min(VadTuning.WINDOW, samples.size - from)
+            System.arraycopy(samples, from, window, 0, available)
+            if (available < VadTuning.WINDOW) window.fill(0f, available, VadTuning.WINDOW)
+            out[index] = vad.compute(window)
+        }
+        return out
+    }
+
     override fun close() {
         vad.release()
     }
