@@ -2,9 +2,11 @@ package ru.stenokot.core.diar
 
 import kotlin.math.roundToLong
 import kotlin.math.sqrt
+import kotlinx.serialization.Serializable
 import ru.stenokot.core.model.SpeakerTurn
 import ru.stenokot.core.storage.DiarClusterRecord
 import ru.stenokot.core.storage.DiarJournalLine
+import ru.stenokot.core.storage.ServiceJson
 
 /** Параметры сшивки. Значения стартовые и калибруются на собственных данных. */
 data class SpeakerBookConfig(
@@ -17,10 +19,18 @@ data class SpeakerBookConfig(
     val conflictOverlapMs: Long = 500,
 )
 
+/** Сохранённое состояние книги: центроиды говорящих и последний говорящий. */
+@Serializable
+private data class BookState(val entries: List<BookEntry>, val last: Int?)
+
+/** Говорящий книги. Центроида нет, если у говорящего ни разу не было отпечатка голоса. */
+@Serializable
+private data class BookEntry(val centroid: List<Float>?, val weightMs: Long)
+
 /**
- * Сводит кластеры отдельных окон диаризации к общим говорящим записи. Окна добавляются строго
- * по порядку; те же строки журнала восстанавливают книгу после перезапуска, поэтому результат не
- * зависит от того, прерывалась ли обработка. Нахлёст окон режется посередине.
+ * Сводит кластеры отдельных окон диаризации к общим говорящим записи. Окна добавляются строго по
+ * порядку. Состояние сохраняется после каждого окна как непрозрачная строка, поэтому результат не
+ * зависит от того, прерывалась ли обработка. Сами интервалы книга не хранит: их держит чекпойнт.
  */
 class SpeakerBook(
     private val narrowband: Boolean = false,
@@ -29,40 +39,49 @@ class SpeakerBook(
     private class Entry(var centroid: FloatArray?, var weightMs: Long)
 
     private val entries = ArrayList<Entry>()
-    private val turns = ArrayList<SpeakerTurn>()
-    private var previousEndMs: Long? = null
+    private var lastSpeaker: Int? = null
 
     /** Число говорящих до поглощения мелких. */
     val speakerCount: Int
         get() = entries.size
 
-    /** Добавляет окно и возвращает соответствие внутреннего кластера окна общему говорящему. */
-    fun addWindow(line: DiarJournalLine): Map<Int, Int> {
-        val mapping = mapClusters(line)
-        val boundaryMs = (previousEndMs ?: line.startMs).let { previous ->
-            if (previous > line.startMs) (previous + line.startMs) / 2 else line.startMs
-        }
-        cropTail(boundaryMs)
+    /** Добавляет окно и возвращает его интервалы с номерами говорящих записи. */
+    fun addWindow(line: DiarJournalLine): List<SpeakerTurn> {
+        val mapping = link(line)
+        val out = ArrayList<SpeakerTurn>(line.turns.size)
         for (turn in line.turns) {
             val speaker = mapping[turn.cluster] ?: continue
-            val startMs = maxOf(turn.startMs, boundaryMs)
-            if (startMs < turn.endMs) turns += SpeakerTurn(startMs, turn.endMs, speaker)
+            val startMs = maxOf(turn.startMs, line.startMs)
+            val endMs = minOf(turn.endMs, line.endMs)
+            if (startMs < endMs) out += SpeakerTurn(startMs, endMs, speaker, turn.confidence)
         }
-        previousEndMs = line.endMs
-        return mapping
+        out.lastOrNull()?.let { lastSpeaker = it.speaker }
+        return out
     }
 
-    /** Поглощает мелких говорящих, ограничивает их число и возвращает интервалы всей записи. */
-    fun finish(): List<SpeakerTurn> {
+    /** Сопоставляет кластеры окна говорящим записи и уточняет центроиды. */
+    fun link(line: DiarJournalLine): Map<Int, Int> = mapClusters(line)
+
+    /** Строка состояния для чекпойнта. */
+    fun state(): String {
+        val saved = entries.map { BookEntry(it.centroid?.toList(), it.weightMs) }
+        return ServiceJson.encodeToString(BookState.serializer(), BookState(saved, lastSpeaker))
+    }
+
+    /**
+     * Сводит окна в итоговый список: поглощает мелких говорящих, ограничивает их число и нумерует
+     * по первому появлению.
+     */
+    fun finish(windows: List<List<SpeakerTurn>>): List<SpeakerTurn> {
+        val turns = windows.flatten().sortedWith(compareBy({ it.startMs }, { it.endMs }, { it.speaker }))
+        while (entries.size <= (turns.maxOfOrNull { it.speaker } ?: -1)) newEntry()
         val owner = IntArray(entries.size) { it }
-        absorb(owner)
+        absorb(owner, turns)
         val numbers = HashMap<Int, Int>()
-        val mapped = turns
-            .sortedWith(compareBy({ it.startMs }, { it.endMs }, { it.speaker }))
-            .map { turn ->
-                val root = rootOf(owner, turn.speaker)
-                turn.copy(speaker = numbers.getOrPut(root) { numbers.size })
-            }
+        val mapped = turns.map { turn ->
+            val root = rootOf(owner, turn.speaker)
+            turn.copy(speaker = numbers.getOrPut(root) { numbers.size })
+        }
         return mergeAdjacent(mapped)
     }
 
@@ -155,26 +174,13 @@ class SpeakerBook(
                 }
             }
         }
-        return best ?: turns.lastOrNull()?.speaker ?: newEntry()
+        return best ?: lastSpeaker ?: newEntry()
     }
 
-    private fun cropTail(boundaryMs: Long) {
-        var i = turns.size - 1
-        while (i >= 0) {
-            val turn = turns[i]
-            when {
-                turn.endMs <= boundaryMs -> Unit
-                turn.startMs >= boundaryMs -> turns.removeAt(i)
-                else -> turns[i] = turn.copy(endMs = boundaryMs)
-            }
-            i--
-        }
-    }
-
-    private fun absorb(owner: IntArray) {
+    private fun absorb(owner: IntArray, turns: List<SpeakerTurn>) {
         val speech = LongArray(entries.size)
         for (turn in turns) speech[turn.speaker] += turn.endMs - turn.startMs
-        val minMs = (unionMs() * config.minSpeakerShare).roundToLong()
+        val minMs = (unionMs(turns) * config.minSpeakerShare).roundToLong()
             .coerceIn(config.minSpeakerMinMs, config.minSpeakerMaxMs)
         val limit = if (narrowband) config.maxSpeakersNarrowband else config.maxSpeakers
         while (true) {
@@ -182,7 +188,7 @@ class SpeakerBook(
             if (alive.size < 2) return
             val smallest = alive.minWith(compareBy({ speech[it] }, { it }))
             if (speech[smallest] >= minMs && alive.size <= limit) return
-            val target = nearestSpeaker(smallest, alive)
+            val target = nearestSpeaker(smallest, alive, turns)
             owner[smallest] = target
             speech[target] += speech[smallest]
             speech[smallest] = 0
@@ -190,7 +196,7 @@ class SpeakerBook(
         }
     }
 
-    private fun nearestSpeaker(speaker: Int, alive: List<Int>): Int {
+    private fun nearestSpeaker(speaker: Int, alive: List<Int>, turns: List<SpeakerTurn>): Int {
         val centroid = entries[speaker].centroid
         val others = alive.filter { it != speaker }
         if (centroid != null) {
@@ -198,10 +204,10 @@ class SpeakerBook(
                 .maxByOrNull { cosine(centroid, entries[it].centroid!!) }
             if (best != null) return best
         }
-        return nearestByTime(speaker, others)
+        return nearestByTime(speaker, others, turns)
     }
 
-    private fun nearestByTime(speaker: Int, others: List<Int>): Int {
+    private fun nearestByTime(speaker: Int, others: List<Int>, turns: List<SpeakerTurn>): Int {
         val own = turns.filter { it.speaker == speaker }
         var best = others.first()
         var bestGap = Long.MAX_VALUE
@@ -229,10 +235,10 @@ class SpeakerBook(
         return current
     }
 
-    private fun unionMs(): Long {
+    private fun unionMs(sorted: List<SpeakerTurn>): Long {
         var total = 0L
         var coveredTo = Long.MIN_VALUE
-        for (turn in turns.sortedBy { it.startMs }) {
+        for (turn in sorted) {
             val from = maxOf(turn.startMs, coveredTo)
             if (turn.endMs > from) {
                 total += turn.endMs - from
@@ -270,5 +276,20 @@ class SpeakerBook(
         var sum = 0f
         for (i in 0 until minOf(a.size, b.size)) sum += a[i] * b[i]
         return sum
+    }
+
+    companion object {
+        /** Восстанавливает книгу из строки чекпойнта. */
+        fun restore(
+            state: String,
+            narrowband: Boolean = false,
+            config: SpeakerBookConfig = SpeakerBookConfig(),
+        ): SpeakerBook {
+            val saved = ServiceJson.decodeFromString(BookState.serializer(), state)
+            val book = SpeakerBook(narrowband, config)
+            saved.entries.mapTo(book.entries) { Entry(it.centroid?.toFloatArray(), it.weightMs) }
+            book.lastSpeaker = saved.last
+            return book
+        }
     }
 }

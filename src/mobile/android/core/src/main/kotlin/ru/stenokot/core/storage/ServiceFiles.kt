@@ -123,6 +123,7 @@ data class DiarTurnRecord(
     val cluster: Int,
     @SerialName("start_ms") val startMs: Long,
     @SerialName("end_ms") val endMs: Long,
+    val confidence: Float? = null,
 )
 
 /** Кластер окна диаризации. Отпечатка голоса нет, если у кластера слишком мало чистой речи. */
@@ -133,7 +134,11 @@ data class DiarClusterRecord(
     val embedding: List<Float>? = null,
 )
 
-/** Строка diar.jsonl: одно завершённое окно. Этих данных достаточно, чтобы собрать книгу заново. */
+/**
+ * Строка diar.jsonl: одно завершённое окно. Этих данных достаточно, чтобы собрать книгу заново.
+ * [startMs] и [endMs] задают участок записи, за который отвечает окно, без нахлёста с соседями:
+ * интервалы за его пределами отбрасываются.
+ */
 @Serializable
 data class DiarJournalLine(
     val index: Int,

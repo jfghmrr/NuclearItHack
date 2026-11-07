@@ -11,8 +11,9 @@ data class AudioInfo(
 
 /**
  * Итог предварительной проверки файла. Показывается пользователю и не требует подтверждения.
- * Оценка времени отсутствует, если её не на чем построить; [estimateRough] означает, что
- * замеров на этом устройстве ещё нет и диапазон приблизительный.
+ *
+ * [estimateMeasured] означает, что оценка опирается на замер этого устройства. Иначе диапазон
+ * примерный и должен быть подписан как примерный.
  */
 data class PreflightInfo(
     val fileName: String,
@@ -23,7 +24,7 @@ data class PreflightInfo(
     val requiredBytes: Long,
     val estimateMinMs: Long?,
     val estimateMaxMs: Long?,
-    val estimateRough: Boolean = false,
+    val estimateMeasured: Boolean = false,
 )
 
 /** Непрерывный срез записи в отсчётах 16 кГц. */
@@ -100,7 +101,7 @@ data class LlmBudget(val nCtx: Int, val maxChunkTokens: Int, val deadlineMs: Lon
 /** Результат стадии языковой модели. */
 data class LlmResult(val status: LlmStatus, val protocolPath: String?, val detail: String?)
 
-/** Состояние задачи. Переходы описаны в docs/LOGIC.md. */
+/** Состояние задачи. Переходы описаны в docs/ARCHITECTURE.md. */
 sealed interface JobState {
     /** Задача ждёт своей очереди. */
     data object Queued : JobState
