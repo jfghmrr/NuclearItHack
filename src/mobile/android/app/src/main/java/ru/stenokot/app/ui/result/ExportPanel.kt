@@ -34,7 +34,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -43,9 +42,9 @@ import kotlinx.coroutines.withContext
 import ru.stenokot.app.R
 import ru.stenokot.app.domain.OutputFileUi
 import ru.stenokot.app.ui.Tags
+import ru.stenokot.app.ui.components.BannerTone
 import ru.stenokot.app.ui.components.OutlinedAction
 import ru.stenokot.app.ui.components.StatusBanner
-import ru.stenokot.app.ui.components.BannerTone
 import ru.stenokot.app.ui.components.StenoIcon
 import ru.stenokot.app.ui.components.TonalAction
 import ru.stenokot.app.ui.components.resourceTags
@@ -212,7 +211,7 @@ private fun FactRow(label: String, value: String, mono: Boolean = false) {
         Text(
             text = value,
             modifier = Modifier.weight(1f),
-            style = if (mono) type.monoSmall.copy(fontFamily = FontFamily.Monospace) else type.bodyMedium,
+            style = if (mono) type.monoSmall else type.bodyMedium,
             color = colors.onSurface,
         )
     }
@@ -221,6 +220,8 @@ private fun FactRow(label: String, value: String, mono: Boolean = false) {
 /**
  * Панель файла: путь, размер, время, проверка и действия. На крупном шрифте сюда же уходят кнопки
  * нижней панели через [extra]. Содержимое прокручивается: панель обязана помещаться в любом окне.
+ * Панель живёт в своём окне и закрывает собой сообщения экрана, поэтому действие сначала её
+ * закрывает, иначе подтверждение или отказ остались бы невидимыми.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -266,19 +267,19 @@ internal fun ExportSheet(
             output.sha256?.let { FactRow(stringResource(R.string.scr04_panel_sha), it, mono = true) }
             TonalAction(
                 text = stringResource(R.string.scr04_action_share),
-                onClick = onShare,
+                onClick = { onDismiss(); onShare() },
                 icon = R.drawable.ic_share,
                 tag = Tags.SHARE,
             )
             OutlinedAction(
                 text = stringResource(R.string.scr04_action_copy_path),
-                onClick = onCopyPath,
+                onClick = { onDismiss(); onCopyPath() },
                 icon = R.drawable.ic_content_copy,
                 tag = Tags.COPY_PATH,
             )
             OutlinedAction(
                 text = stringResource(R.string.scr04_action_open_folder),
-                onClick = onOpenFolder,
+                onClick = { onDismiss(); onOpenFolder() },
                 icon = R.drawable.ic_folder_open,
                 enabled = !output.inAppFolder,
                 tag = Tags.OPEN_FOLDER,

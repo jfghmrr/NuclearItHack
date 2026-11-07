@@ -427,6 +427,8 @@ private fun ResultContent(
     }
     val buttons: @Composable (Boolean, Boolean) -> Unit = { showImport, showProtocolExport ->
         ActionButtons(
+            tight = rail,
+            showExport = showImport || !rail,
             showImport = showImport,
             showProtocolExport = showProtocolExport,
             protocolReady = phase.hasDocument,
@@ -485,8 +487,10 @@ private fun ResultContent(
         }
         ResultLayout.RAIL -> Row(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f).fillMaxHeight()) {
-                topBar()
-                if (!(searchOpen && imeOpen)) ResultTabs(tab, phase) { tab = it }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BackButton(actions.back, Modifier.padding(start = StenoSpace.xs))
+                    ResultTabs(tab, phase, Modifier.weight(1f)) { tab = it }
+                }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     TabPanes(
                         tab = tab,
@@ -497,7 +501,7 @@ private fun ResultContent(
                 }
             }
             SideRail {
-                Spacer(Modifier.height(StenoSpace.s))
+                RailTitle(result.title, meta)
                 if (!noSpeech) {
                     ProtocolBanner(
                         phase = phase,

@@ -19,10 +19,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -40,6 +43,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ru.stenokot.app.R
 import ru.stenokot.app.ui.Tags
 import ru.stenokot.app.ui.components.OutlinedAction
@@ -55,6 +59,7 @@ import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 
 private val RailWidth = 320.dp
+private val TabMinFont = 10.sp
 private const val IMPORT_WEIGHT = 1f
 private const val EXPORT_WEIGHT = 1.25f
 
@@ -126,12 +131,70 @@ internal fun ResultTopBar(
     }
 }
 
+/** Заголовок боковой колонки: файл и сводка без кнопки назад, она осталась у вкладок. */
+@Composable
+internal fun RailTitle(title: String, meta: String, modifier: Modifier = Modifier) {
+    val colors = StenoTheme.colors
+    Column(modifier.fillMaxWidth().padding(horizontal = LocalWindowLayout.current.gutter, vertical = StenoSpace.s)) {
+        Text(
+            text = title,
+            modifier = Modifier.testTag(Tags.FILE_NAME).semantics { heading() },
+            style = StenoTheme.type.labelLarge,
+            color = colors.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.MiddleEllipsis,
+        )
+        Text(
+            text = meta,
+            modifier = Modifier.testTag(Tags.AUDIO_META),
+            style = StenoTheme.type.bodySmall,
+            color = colors.onSurfaceVariant,
+        )
+    }
+}
+
+/** Кнопка назад для низкого окна, где верхней панели нет. */
+@Composable
+internal fun BackButton(onBack: () -> Unit, modifier: Modifier = Modifier) {
+    IconButton(onClick = onBack, modifier = modifier.testTag(Tags.BACK)) {
+        Icon(
+            painterResource(R.drawable.ic_arrow_back),
+            stringResource(R.string.common_back),
+            tint = StenoTheme.colors.onSurface,
+        )
+    }
+}
+
+/**
+ * Подпись вкладки. Ширина вкладки фиксирована, и на крупном шрифте слово разорвалось бы посередине,
+ * поэтому размер сам уменьшается ровно настолько, чтобы слово осталось целым.
+ */
+@Composable
+private fun TabLabel(text: String, modifier: Modifier = Modifier) {
+    val color = LocalContentColor.current
+    val style = StenoTheme.type.labelMedium
+    BasicText(
+        text = text,
+        modifier = modifier,
+        style = style,
+        maxLines = 1,
+        color = { color },
+        autoSize = TextAutoSize.StepBased(minFontSize = TabMinFont, maxFontSize = style.fontSize),
+    )
+}
+
 /** Вкладки результата. Значок на вкладке протокола держит статус, когда баннер уже уехал. */
 @Composable
-internal fun ResultTabs(tab: ResultTab, phase: ProtocolPhase, onTab: (ResultTab) -> Unit) {
+internal fun ResultTabs(
+    tab: ResultTab,
+    phase: ProtocolPhase,
+    modifier: Modifier = Modifier,
+    onTab: (ResultTab) -> Unit,
+) {
     val colors = StenoTheme.colors
     PrimaryTabRow(
         selectedTabIndex = tab.ordinal,
+        modifier = modifier,
         containerColor = colors.surface,
         contentColor = colors.primary,
         divider = { HorizontalDivider(thickness = StenoSize.hairline, color = colors.outlineVariant) },
@@ -142,7 +205,7 @@ internal fun ResultTabs(tab: ResultTab, phase: ProtocolPhase, onTab: (ResultTab)
             modifier = Modifier.testTag(Tags.TAB_TRANSCRIPT),
             selectedContentColor = colors.primary,
             unselectedContentColor = colors.onSurfaceVariant,
-            text = { Text(stringResource(R.string.common_tab_transcript), style = StenoTheme.type.labelMedium) },
+            text = { TabLabel(stringResource(R.string.common_tab_transcript)) },
         )
         Tab(
             selected = tab == ResultTab.PROTOCOL,
@@ -155,7 +218,7 @@ internal fun ResultTabs(tab: ResultTab, phase: ProtocolPhase, onTab: (ResultTab)
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(StenoSpace.xs),
                 ) {
-                    Text(stringResource(R.string.common_tab_protocol), style = StenoTheme.type.labelMedium)
+                    TabLabel(stringResource(R.string.common_tab_protocol), Modifier.weight(1f, fill = false))
                     if (phase != ProtocolPhase.NO_SPEECH) {
                         Icon(painterResource(phase.icon), null, Modifier.size(StenoSize.iconSmall))
                     }
@@ -176,25 +239,30 @@ internal fun ActionButtons(
     onExportProtocol: () -> Unit,
     onImport: () -> Unit,
     modifier: Modifier = Modifier,
+    tight: Boolean = false,
+    showExport: Boolean = true,
 ) {
+    val exportIcon = R.drawable.ic_download.takeIf { !tight && !showProtocolExport && !exportFailed }
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PrimaryAction(
-            text = stringResource(if (exportFailed) R.string.scr04_export_retry else R.string.common_btn_export),
-            onClick = onExport,
-            modifier = Modifier.weight(EXPORT_WEIGHT),
-            icon = R.drawable.ic_download.takeIf { !showProtocolExport || !showImport },
-            tag = Tags.EXPORT,
-            dense = true,
-        )
+        if (showExport) {
+            PrimaryAction(
+                text = stringResource(if (exportFailed) R.string.scr04_export_retry else R.string.common_btn_export),
+                onClick = onExport,
+                modifier = Modifier.weight(if (exportIcon != null) EXPORT_WEIGHT else IMPORT_WEIGHT),
+                icon = exportIcon,
+                tag = Tags.EXPORT,
+                dense = true,
+            )
+        }
         if (showProtocolExport) {
             OutlinedAction(
                 text = stringResource(R.string.common_btn_export_protocol),
                 onClick = onExportProtocol,
-                modifier = Modifier.weight(EXPORT_WEIGHT),
+                modifier = Modifier.weight(IMPORT_WEIGHT),
                 enabled = protocolReady,
                 tag = Tags.EXPORT_PROTOCOL,
                 dense = true,

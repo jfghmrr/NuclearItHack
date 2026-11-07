@@ -1,7 +1,9 @@
 package ru.stenokot.app.debug
 
+import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.provider.MediaStore
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -185,6 +187,21 @@ internal class FakeController(private val context: Context? = null) : StenoContr
     override fun delete(id: String, removeExported: Boolean) {
         jobs.update { it - id }
         homeState.update { state -> state.copy(jobs = state.jobs.filter { it.id != id }) }
+    }
+
+    /**
+     * Создаёт настоящую запись файла в Download. Нужна для проверки «Поделиться»: файл принадлежит
+     * приложению, как и опубликованный конвейером результат.
+     */
+    fun publishDemoFile(name: String) {
+        val resolver = context?.contentResolver ?: return
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/Stenokot/")
+        }
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return
+        resolver.openOutputStream(uri, "wt")?.use { it.write(DEMO_JSON.toByteArray()) }
     }
 
     override fun export(id: String, kind: ExportKind, target: Uri) {

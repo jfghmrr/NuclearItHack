@@ -167,6 +167,7 @@ private fun HeaderContent(item: VisibleRow, layout: RowLayout, strings: RowStrin
     val row = item.row
     val type = StenoTheme.type
     val colors = StenoTheme.colors
+    val timeBelow = item.startsGroup && LocalWindowLayout.current.largeText
     Column(Modifier.fillMaxWidth().padding(start = layout.gutter, end = layout.gutter)) {
         Row(
             modifier = Modifier.fillMaxWidth().heightIn(min = HeaderBadge),
@@ -184,8 +185,9 @@ private fun HeaderContent(item: VisibleRow, layout: RowLayout, strings: RowStrin
             } else {
                 Spacer(Modifier.weight(1f))
             }
-            Text(row.time, style = type.monoMedium, color = colors.onSurfaceVariant)
+            if (!timeBelow) Text(row.time, style = type.monoMedium, color = colors.onSurfaceVariant)
         }
+        if (timeBelow) Text(row.time, style = type.monoMedium, color = colors.onSurfaceVariant)
         Spacer(Modifier.height(StenoSpace.xs))
         Text(item.text, style = type.bodyLarge, color = colors.onSurface)
         if (row.overlap) OverlapMark(strings.overlap)
