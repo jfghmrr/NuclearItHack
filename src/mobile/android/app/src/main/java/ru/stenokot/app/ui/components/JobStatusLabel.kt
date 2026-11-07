@@ -2,6 +2,8 @@ package ru.stenokot.app.ui.components
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,18 +38,32 @@ private fun badgeColor(badge: JobBadge): Color {
     }
 }
 
-/** Статус задачи: значок и слово. Цвет только дополняет их. */
+/**
+ * Статус задачи: значок и слово, цвет только дополняет их. Необязательный [extra] стоит рядом,
+ * а если не помещается, целиком переходит на новую строку. На тональной подложке цвет задаёт [tint].
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun JobStatusLabel(badge: JobBadge, modifier: Modifier = Modifier, extra: String? = null) {
-    val color = badgeColor(badge)
+fun JobStatusLabel(
+    badge: JobBadge,
+    modifier: Modifier = Modifier,
+    extra: String? = null,
+    tint: Color? = null,
+) {
+    val color = tint ?: badgeColor(badge)
     val type = StenoTheme.type
-    Row(
+    FlowRow(
         modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(StenoSpace.xs),
+        horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
+        itemVerticalAlignment = Alignment.CenterVertically,
     ) {
-        StenoIcon(badgeIcon(badge), color, size = StenoSize.iconSmall)
-        Text(badge.label, style = type.labelSmall, color = color)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(StenoSpace.xs),
+        ) {
+            StenoIcon(badgeIcon(badge), color, size = StenoSize.iconSmall)
+            Text(badge.label, style = type.labelSmall, color = color)
+        }
         extra?.let {
             Text(it, style = type.bodySmall, color = StenoTheme.colors.onSurfaceVariant)
         }

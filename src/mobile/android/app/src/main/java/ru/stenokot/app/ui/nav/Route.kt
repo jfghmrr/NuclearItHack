@@ -47,6 +47,13 @@ fun routeForJob(jobId: String, state: JobState): Route = when (state) {
     -> Route.Failure(jobId)
 }
 
+/** Ключ сохраняемого состояния экрана: один на задачу, вкладка и переход к реплике в него не входят. */
+internal val Route.stateKey: String
+    get() = when (this) {
+        is Route.Result -> "result|$jobId"
+        else -> encode()
+    }
+
 /** Запись маршрута в строку для сохранения между пересозданиями активности. */
 internal fun Route.encode(): String = when (this) {
     Route.Home -> "home"

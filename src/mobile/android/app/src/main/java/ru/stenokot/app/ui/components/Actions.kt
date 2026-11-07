@@ -17,11 +17,14 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
@@ -142,6 +145,13 @@ fun QuietAction(
         Text(text, style = StenoTheme.type.labelMedium, textAlign = TextAlign.End)
     }
 }
+
+/**
+ * Делает testTag видимыми как resource-id. В корне приложения это уже включено, но диалог
+ * живёт в своём окне, поэтому его содержимому нужен свой вызов.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+fun Modifier.resourceTags(): Modifier = semantics { testTagsAsResourceId = true }
 
 /** Добавляет testTag, если он задан. */
 internal fun Modifier.tagged(tag: String?): Modifier = if (tag != null) testTag(tag) else this

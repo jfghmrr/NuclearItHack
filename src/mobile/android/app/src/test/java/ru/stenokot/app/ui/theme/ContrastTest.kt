@@ -42,6 +42,7 @@ class ContrastTest {
         "primary/surface" to (c.primary to c.surface),
         "primary/lowest" to (c.primary to c.surfaceContainerLowest),
         "onPrimaryContainer" to (c.onPrimaryContainer to c.primaryContainer),
+        "variant/primaryContainer" to (c.onSurfaceVariant to c.primaryContainer),
         "onSecondary" to (c.onSecondary to c.secondary),
         "onSecondaryContainer" to (c.onSecondaryContainer to c.secondaryContainer),
         "tertiary/surface" to (c.tertiary to c.surface),

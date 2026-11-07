@@ -42,7 +42,6 @@ import kotlinx.coroutines.delay
 import ru.stenokot.app.R
 import ru.stenokot.app.domain.JobDetailUi
 import ru.stenokot.app.domain.ProcessingUi
-import ru.stenokot.app.domain.StageStatus
 import ru.stenokot.app.domain.StageUi
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.ui.AppActions

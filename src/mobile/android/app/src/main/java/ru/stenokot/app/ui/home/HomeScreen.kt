@@ -24,7 +24,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.TextAutoSize
@@ -79,6 +81,7 @@ import ru.stenokot.app.ui.components.SectionHeader
 import ru.stenokot.app.ui.components.StatusBanner
 import ru.stenokot.app.ui.components.StenoIcon
 import ru.stenokot.app.ui.components.StenoProgressBar
+import ru.stenokot.app.ui.components.resourceTags
 import ru.stenokot.app.ui.components.spokenAs
 import ru.stenokot.app.ui.components.toneColors
 import ru.stenokot.app.ui.format.filesLabel
@@ -151,7 +154,8 @@ fun HomeRoute(controller: StenoController, actions: AppActions) {
         val detail by remember(id) { controller.job(id) }.collectAsStateWithLifecycle()
         detail?.processing?.preflight
     }
-    var deleting by remember { mutableStateOf<JobSummaryUi?>(null) }
+    var deletingId by rememberSaveable { mutableStateOf<String?>(null) }
+    val listState = rememberLazyListState()
 
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) controller.refreshAudio()
@@ -165,30 +169,30 @@ fun HomeRoute(controller: StenoController, actions: AppActions) {
             onJob = { job -> actions.navigator.push(routeForJob(job.id, job.state)) },
             onStart = controller::start,
             onResume = controller::resume,
-            onDelete = { job -> deleting = job },
+            onDelete = { job -> deletingId = job.id },
             onPermission = { permission.launch(audioPermission()) },
         )
     }
     val state = HomeState(home, sections, preflight)
     if (LocalWindowLayout.current.twoPane) {
-        HomeTwoPanes(state, callbacks)
+        HomeTwoPanes(state, callbacks, listState)
     } else {
-        HomeSinglePane(state, callbacks)
+        HomeSinglePane(state, callbacks, listState)
     }
-    deleting?.let { job ->
+    home.jobs.firstOrNull { it.id == deletingId }?.let { job ->
         DeleteDialog(
             job = job,
             onConfirm = { removeExported ->
                 controller.delete(job.id, removeExported)
-                deleting = null
+                deletingId = null
             },
-            onDismiss = { deleting = null },
+            onDismiss = { deletingId = null },
         )
     }
 }
 
 @Composable
-private fun HomeSinglePane(state: HomeState, callbacks: HomeCallbacks) {
+private fun HomeSinglePane(state: HomeState, callbacks: HomeCallbacks, listState: LazyListState) {
     Column(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val side = ((maxWidth - ContentMaxWidth) / 2).coerceAtLeast(0.dp)
@@ -196,6 +200,7 @@ private fun HomeSinglePane(state: HomeState, callbacks: HomeCallbacks) {
             val hintsAtEnd = LocalWindowLayout.current.hintsInContent
             LazyColumn(
                 modifier = Modifier.fillMaxSize().testTag(Tags.LIST_AUDIO),
+                state = listState,
                 contentPadding = PaddingValues(start = side, end = side, bottom = StenoSpace.l),
             ) {
                 item(key = "header", contentType = "header") {
@@ -212,7 +217,7 @@ private fun HomeSinglePane(state: HomeState, callbacks: HomeCallbacks) {
 }
 
 @Composable
-private fun HomeTwoPanes(state: HomeState, callbacks: HomeCallbacks) {
+private fun HomeTwoPanes(state: HomeState, callbacks: HomeCallbacks, listState: LazyListState) {
     val colors = StenoTheme.colors
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.weight(0.42f).fillMaxHeight()) {
@@ -227,6 +232,7 @@ private fun HomeTwoPanes(state: HomeState, callbacks: HomeCallbacks) {
             val viewport = maxHeight
             LazyColumn(
                 modifier = Modifier.fillMaxSize().testTag(Tags.LIST_AUDIO),
+                state = listState,
                 contentPadding = PaddingValues(top = StenoSpace.m, bottom = StenoSpace.l),
             ) {
                 homeContent(state, callbacks, viewport)
@@ -567,13 +573,11 @@ private fun JobCard(job: JobSummaryUi, queued: Int, onOpen: (JobSummaryUi) -> Un
                     track = colors.surface,
                 )
             }
-            if (queued > 0) {
-                Text(
-                    text = stringResource(R.string.scr01_queue, filesLabel(queued)),
-                    style = type.bodySmall,
-                    color = colors.onPrimaryContainer,
-                )
-            }
+            JobStatusLabel(
+                badge = jobBadge(job.state),
+                tint = colors.onPrimaryContainer,
+                extra = if (queued > 0) stringResource(R.string.scr01_queue, filesLabel(queued)) else null,
+            )
         }
         StenoIcon(R.drawable.ic_chevron_right, colors.onPrimaryContainer)
     }
@@ -612,6 +616,7 @@ private fun InterruptedCard(job: JobSummaryUi, callbacks: HomeCallbacks) {
             QuietAction(
                 text = stringResource(R.string.common_btn_resume),
                 onClick = { callbacks.onResume(job.id) },
+                modifier = Modifier.offset(x = -StenoSpace.s),
                 tag = Tags.RESUME,
             )
         },
@@ -690,6 +695,7 @@ private fun DeleteDialog(
     var removeExported by rememberSaveable(job.id) { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.resourceTags(),
         containerColor = colors.surfaceContainerLowest,
         title = { Text(stringResource(R.string.scr01_delete_title), style = type.titleLarge) },
         text = {

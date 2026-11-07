@@ -17,16 +17,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.ui.components.StatusLine
+import ru.stenokot.app.ui.components.resourceTags
 import ru.stenokot.app.ui.failure.FailureRoute
 import ru.stenokot.app.ui.format.STATUS_IDLE
 import ru.stenokot.app.ui.format.statusCode
@@ -36,6 +35,7 @@ import ru.stenokot.app.ui.layout.screenInsets
 import ru.stenokot.app.ui.nav.Route
 import ru.stenokot.app.ui.nav.rememberNavigator
 import ru.stenokot.app.ui.nav.routeForJob
+import ru.stenokot.app.ui.nav.stateKey
 import ru.stenokot.app.ui.processing.ProcessingRoute
 import ru.stenokot.app.ui.result.ResultRoute
 import ru.stenokot.app.ui.theme.StenoMotion
@@ -57,7 +57,6 @@ private val Route.jobId: String?
  * Корень интерфейса: тема, раскладка окна, стек экранов и постоянная строка `txt_status`.
  * Внешние переходы (открытие файла из другого приложения) приходят через [externalRoute].
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun StenoApp(
     activity: Activity,
@@ -68,6 +67,7 @@ fun StenoApp(
     StenoTheme {
         ProvideWindowLayout(activity) {
             val navigator = rememberNavigator()
+            val screens = rememberSaveableStateHolder()
             var awaitedJob by rememberSaveable { mutableStateOf<String?>(null) }
 
             val importFiles: (List<Uri>) -> Unit = remember(controller) {
@@ -99,7 +99,7 @@ fun StenoApp(
                 Modifier
                     .fillMaxSize()
                     .background(StenoTheme.colors.background)
-                    .semantics { testTagsAsResourceId = true },
+                    .resourceTags(),
             ) {
                 AnimatedContent(
                     targetState = navigator.current,
@@ -110,12 +110,14 @@ fun StenoApp(
                     contentKey = { it::class },
                     label = "screen",
                 ) { route ->
-                    when (route) {
-                        Route.Home -> HomeRoute(controller, actions)
-                        is Route.Processing -> ProcessingRoute(route.jobId, controller, actions)
-                        is Route.Result -> ResultRoute(route, controller, actions)
-                        is Route.Failure -> FailureRoute(route.jobId, controller, actions)
-                        Route.Verification -> VerificationRoute(controller, actions)
+                    screens.SaveableStateProvider(route.stateKey) {
+                        when (route) {
+                            Route.Home -> HomeRoute(controller, actions)
+                            is Route.Processing -> ProcessingRoute(route.jobId, controller, actions)
+                            is Route.Result -> ResultRoute(route, controller, actions)
+                            is Route.Failure -> FailureRoute(route.jobId, controller, actions)
+                            Route.Verification -> VerificationRoute(controller, actions)
+                        }
                     }
                 }
                 StatusLine(rememberStatusCode(controller, navigator.current))
