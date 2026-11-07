@@ -11,3 +11,4 @@ honor_ballast_en_5m,2026-11-07,74bea98,,,300,Honor NTN-LX1,балласт 1.9 Г
 honor_long_57m,2026-11-07,74bea98,long_90m.mp3,,3437,Honor NTN-LX1,MP3 через VIEW,1.075,1.33,900,,,true,время до JSON 3695 с; 11 говорящих; 520 реплик
 avd_long_57m,2026-11-07,c5cf2e6,long_90m.mp3,,3437,emulator-5554 arm64 4 ГБ,отладочная сборка,,,1150,,,true,время до JSON 291 с
 avd_der_heldout49,2026-11-07,c5cf2e6,49 размеченных файлов,,15540,emulator-5554 arm64 4 ГБ,WAV; collar 0.25,,,,,10.07,true,collar 0: 16.46; точное число говорящих 32 из 49
+stock_avd_first_3m,2026-11-08,,clip_3m.mp3,,180,emulator arm64 4 ГБ android-36 google_apis чистый образ,первый файл после установки; холодный процесс,0.19,,640,,,true,время до JSON 36 с; установка APK 120 с
