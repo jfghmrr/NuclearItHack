@@ -37,6 +37,10 @@ class DiarizationJournal(
  * Кластеры окон связываются в [SpeakerBook] по эмбеддингам. Обе модели живут только внутри [diarize],
  * поэтому после возврата нативная память уже освобождена. Шаг окна сегментатора и порог кластеризации
  * задаются при создании модели, поэтому выбираются один раз на запись, см. [profileFor].
+ *
+ * Отпечатки считаются второй раз, отдельным извлекателем: нативный Process держит свои внутри и наружу
+ * не отдаёт, а книге они нужны и внутри одного окна, она сверяет кластеры между собой. Обойтись без них
+ * можно только там, где сравнивать не с чем, см. [describeWindow].
  */
 class WindowedDiarizer(
     private val models: ModelSource,
@@ -70,7 +74,7 @@ class WindowedDiarizer(
 
     private inline fun withModels(
         totalSamples: Long,
-        block: (OfflineSpeakerDiarization, SpeakerEmbeddingExtractor) -> Unit,
+        block: (OfflineSpeakerDiarization, Lazy<SpeakerEmbeddingExtractor>) -> Unit,
     ) {
         val profile = profileFor(totalSamples)
         val embedding = SpeakerEmbeddingExtractorConfig(
@@ -99,13 +103,15 @@ class WindowedDiarizer(
             )
         }
         try {
-            val extractor = loadModel(ModelFiles.DIAR_EMBEDDING) {
-                SpeakerEmbeddingExtractor(assetManager = models.assets, config = embedding)
+            val extractor = lazy(LazyThreadSafetyMode.NONE) {
+                loadModel(ModelFiles.DIAR_EMBEDDING) {
+                    SpeakerEmbeddingExtractor(assetManager = models.assets, config = embedding)
+                }
             }
             try {
                 block(diarizer, extractor)
             } finally {
-                extractor.release()
+                if (extractor.isInitialized()) extractor.value.release()
             }
         } finally {
             diarizer.release()
@@ -116,7 +122,7 @@ class WindowedDiarizer(
         pcm: PcmReader,
         windows: List<DiarWindow>,
         diarizer: OfflineSpeakerDiarization,
-        extractor: SpeakerEmbeddingExtractor,
+        extractor: Lazy<SpeakerEmbeddingExtractor>,
         book: SpeakerBook,
         linked: MutableList<List<SpeakerTurn>>,
         progress: Progress,
@@ -126,19 +132,25 @@ class WindowedDiarizer(
             val window = windows[index]
             val samples = pcm.read(window.startSample, (window.endSample - window.startSample).toInt())
             val segments = diarizer.processWithCallback(samples, WindowProgress(progress, index, windows.size))
-            val line = describeWindow(index, window, samples, segments, extractor)
+            val line = describeWindow(index, window, samples, segments, extractor, single = windows.size == 1)
             journal.onWindow(line)
             linked += book.addWindow(line)
             progress.report((index + 1f) / windows.size, "${index + 1}/${windows.size}")
         }
     }
 
+    /**
+     * Строка журнала окна. Единственному кластеру единственного окна отпечаток не считается: книге не с
+     * чем его сравнить, а без отпечатка она даёт тот же номер говорящего. Монолог обходится без второй
+     * модели.
+     */
     private fun describeWindow(
         index: Int,
         window: DiarWindow,
         samples: FloatArray,
         segments: Array<OfflineSpeakerDiarizationSegment>,
-        extractor: SpeakerEmbeddingExtractor,
+        extractor: Lazy<SpeakerEmbeddingExtractor>,
+        single: Boolean,
     ): DiarJournalLine {
         val originMs = samplesToMs(window.startSample)
         val turns = segments.map {
@@ -149,12 +161,14 @@ class WindowedDiarizer(
                 confidence = it.confidence.takeIf { value -> value >= MIN_CONFIDENCE },
             )
         }
-        val clusters = segments.groupBy { it.speaker }.toSortedMap().map { (cluster, own) ->
+        val groups = segments.groupBy { it.speaker }.toSortedMap()
+        val needsPrints = !single || groups.size > 1
+        val clusters = groups.map { (cluster, own) ->
             val others = segments.filter { it.speaker != cluster }
             DiarClusterRecord(
                 cluster = cluster,
                 speechMs = own.sumOf { secondsToMs(it.end) - secondsToMs(it.start) },
-                embedding = embed(own, others, samples, extractor)?.toList(),
+                embedding = if (needsPrints) embed(own, others, samples, extractor.value)?.toList() else null,
             )
         }
         return DiarJournalLine(index, samplesToMs(window.keepFrom), samplesToMs(window.keepTo), turns, clusters)

@@ -213,6 +213,15 @@ class SpeakerBookTest {
     }
 
     @Test
+    fun soleClusterWithoutPrintMatchesItsPrint() {
+        val turns = listOf(turn(3, 0, 4_000), turn(3, 6_000, 9_000))
+        fun outcome(embedding: List<Float>?) = SpeakerBook(SpeakerBookConfig.EXPORT).run(
+            line(0, 0, 10_000, turns, listOf(cluster(3, 7_000, embedding))),
+        )
+        assertEquals(outcome(axis(0)), outcome(null))
+    }
+
+    @Test
     fun finishToleratesUnknownSpeakers() {
         val out = SpeakerBook().finish(listOf(listOf(SpeakerTurn(0, 10_000, 3), SpeakerTurn(10_000, 20_000, 5))))
         assertEquals(listOf(0, 1), out.map { it.speaker })
