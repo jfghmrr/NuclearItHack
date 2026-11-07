@@ -75,6 +75,14 @@ class LlmBudgetPolicyTest {
     }
 
     @Test
+    fun deadlineCoversFirstWindowEvenWithShortBudget() {
+        val shortBudget = LlmBudgetPolicy.budgetMs(180_000, 174_000)
+        assertEquals(15_000, shortBudget)
+        assertEquals(105_000, LlmBudgetPolicy.generationDeadlineMs(shortBudget))
+        assertEquals(150_000, LlmBudgetPolicy.generationDeadlineMs(90_000))
+    }
+
+    @Test
     fun outcomeFollowsWindows() {
         assertEquals(LlmStatus.SKIPPED_BY_BUDGET, LlmBudgetPolicy.outcome(0, 8))
         assertEquals(LlmStatus.PARTIAL, LlmBudgetPolicy.outcome(3, 8))

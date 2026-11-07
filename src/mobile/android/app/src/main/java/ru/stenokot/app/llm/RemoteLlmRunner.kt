@@ -20,6 +20,7 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import ru.stenokot.core.engine.LlmRunner
 import ru.stenokot.core.engine.Progress
+import ru.stenokot.core.llm.LlmBudgetPolicy
 import ru.stenokot.core.model.ErrorCode
 import ru.stenokot.core.model.LlmBudget
 import ru.stenokot.core.model.LlmResult
@@ -73,7 +74,8 @@ class RemoteLlmRunner(context: Context) : LlmRunner {
         private var cancelling = false
         private var retried = false
         private var pid = 0
-        private val startedAtMs = SystemClock.elapsedRealtime()
+        private var loadedAtMs: Long? = null
+        private val watchdog = Runnable(::onWatchdog)
 
         fun start() {
             if (finished) return
@@ -85,7 +87,8 @@ class RemoteLlmRunner(context: Context) : LlmRunner {
                     handler.post { finish(LlmResult(LlmStatus.FAILED, null, "система отказала в связи со службой")) }
                 }
             }
-            handler.postDelayed(::onWatchdog, this, request.budgetMs + WATCHDOG_MARGIN_MS)
+            loadedAtMs = null
+            armWatchdog(LlmBudgetPolicy.LOAD_LIMIT_MS)
         }
 
         fun requestCancel() {
@@ -127,13 +130,24 @@ class RemoteLlmRunner(context: Context) : LlmRunner {
             if (finished) return true
             when (message.what) {
                 LlmMessage.STARTED -> pid = message.arg1
-                LlmMessage.PROGRESS -> progress.report(
-                    LlmProgressBundle.fraction(message.data),
-                    LlmProgressBundle.note(message.data),
-                )
+                LlmMessage.PROGRESS -> {
+                    if (loadedAtMs == null) onModelLoaded()
+                    progress.report(LlmProgressBundle.fraction(message.data), LlmProgressBundle.note(message.data))
+                }
                 LlmMessage.FINISHED -> finish(LlmOutcomeBundle.result(message.data))
             }
             return true
+        }
+
+        /** Первый прогресс приходит после загрузки модели: бюджет считается от этого момента. */
+        private fun onModelLoaded() {
+            loadedAtMs = SystemClock.elapsedRealtime()
+            if (!cancelling) armWatchdog(LlmBudgetPolicy.generationDeadlineMs(request.budgetMs))
+        }
+
+        private fun armWatchdog(delayMs: Long) {
+            handler.removeCallbacks(watchdog)
+            handler.postDelayed(watchdog, this, delayMs)
         }
 
         /** Смерть процесса не трогает контрактный файл. Одна попытка дописать протокол с чекпойнта. */
@@ -159,7 +173,8 @@ class RemoteLlmRunner(context: Context) : LlmRunner {
 
         private fun onDeathInspected(death: LlmDeath) {
             if (finished) return
-            val remainingMs = request.budgetMs - (SystemClock.elapsedRealtime() - startedAtMs)
+            val spentMs = loadedAtMs?.let { SystemClock.elapsedRealtime() - it } ?: 0L
+            val remainingMs = request.budgetMs - spentMs
             if (!retried && !cancelling && remainingMs > 0) {
                 retried = true
                 pid = 0
@@ -173,7 +188,8 @@ class RemoteLlmRunner(context: Context) : LlmRunner {
 
         private fun onWatchdog() {
             killProcess()
-            finish(LlmResult(if (hasProtocol()) LlmStatus.PARTIAL else LlmStatus.FAILED, protocolPath(), ErrorCode.LLM_TIMEOUT.name))
+            val status = if (hasProtocol()) LlmStatus.PARTIAL else LlmStatus.SKIPPED_BY_BUDGET
+            finish(LlmResult(status, protocolPath(), ErrorCode.LLM_TIMEOUT.name))
         }
 
         private fun forceCancel() {
@@ -217,6 +233,5 @@ class RemoteLlmRunner(context: Context) : LlmRunner {
     private companion object {
         const val CANCEL_GRACE_MS = 500L
         const val EXIT_RECORD_DELAY_MS = 300L
-        const val WATCHDOG_MARGIN_MS = 60_000L
     }
 }

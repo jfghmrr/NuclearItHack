@@ -32,6 +32,10 @@ object LlmBudgetPolicy {
     /** Предел генерации для первого окна. Копия модели и её загрузка сюда не входят. */
     const val FIRST_WINDOW_LIMIT_MS = 45_000L
 
+    /** Предел загрузки модели. На занятом устройстве чтение файла модели занимает минуты. */
+    const val LOAD_LIMIT_MS = 300_000L
+
+    private const val WATCHDOG_MARGIN_MS = 60_000L
     private const val AUDIO_SHARE = 0.10
     private const val TARGET_RTF = 0.95
     private const val LOAD_MS = 8_000L
@@ -54,6 +58,12 @@ object LlmBudgetPolicy {
     /** Сколько можно генерировать текущее окно. Первое окно получает попытку при любом остатке бюджета. */
     fun windowLimitMs(windowsDone: Int, elapsedMs: Long, budgetMs: Long): Long =
         if (windowsDone == 0) FIRST_WINDOW_LIMIT_MS else max(0L, budgetMs - elapsedMs)
+
+    /**
+     * Сколько основной процесс ждёт генерацию от конца загрузки модели. Первое окно получает
+     * попытку при любом бюджете, поэтому короткий бюджет не должен обрывать его раньше времени.
+     */
+    fun generationDeadlineMs(budgetMs: Long): Long = max(budgetMs, FIRST_WINDOW_LIMIT_MS) + WATCHDOG_MARGIN_MS
 
     /** Успеет ли следующее окно, если оно займёт примерно [expectedWindowMs]. */
     fun mayStartWindow(windowsDone: Int, elapsedMs: Long, budgetMs: Long, expectedWindowMs: Long): Boolean =

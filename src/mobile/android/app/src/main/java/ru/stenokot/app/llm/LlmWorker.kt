@@ -102,6 +102,7 @@ internal class LlmWorker(
 
         val failure = loadModel()
         if (failure != null) return failure
+        onProgress(results.size.toFloat() / windowsTotal, "${results.size}/$windowsTotal")
         return generate(job, LlmWindows.coverageOrder(pending))
     }
 
