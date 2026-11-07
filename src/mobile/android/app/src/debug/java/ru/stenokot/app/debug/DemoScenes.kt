@@ -93,7 +93,7 @@ private fun processing(
     cancelling: Boolean = false,
     powerSave: Boolean = false,
     resumed: Boolean = false,
-    preflight: PreflightInfo = DemoData.preflightDs1,
+    preflight: PreflightInfo? = DemoData.preflightDs1,
 ) = ProcessingUi(
     preflight = preflight,
     stages = railStages(snapshot),
@@ -227,11 +227,11 @@ private fun failureScene(
         id = "ds1",
         title = title,
         createdAtMs = DemoData.at(11, 6, 14, 20),
-        durationMs = null,
+        durationMs = if (title == DemoData.FILE_DS1) DemoData.DURATION_DS1 else null,
         speakers = null,
         state = state,
     )
-    val work = preflight?.let { processing(StageSnapshot(null, null, null, null, emptyMap(), null), 0, preflight = it) }
+    val work = processing(StageSnapshot(null, null, null, null, emptyMap(), null), 0, preflight = preflight)
     return DemoScene(
         home = home(jobs = listOf(summary, DemoData.historyDs8), status = statusCode(state)),
         jobs = listOf(JobDetailUi(summary, work, null, diagnostics = "код: ${statusCode(state)}")),
@@ -556,14 +556,24 @@ private fun otherScene(id: String): DemoScene? = when (id) {
     )
     "S07-C" -> failureScene(JobState.Failed(Stage.DECODE, ErrorCode.DECODE_CORRUPT, null), "obryv_zapisi.mp3")
     "S07-D" -> failureScene(JobState.Failed(Stage.IMPORT, ErrorCode.IMPORT_READ_FAILED, null), "zapis_s_fleshki.m4a")
-    "S07-E" -> failureScene(JobState.Failed(Stage.IMPORT, ErrorCode.STORAGE_LOW, null))
+    "S07-D2" -> failureScene(JobState.Failed(Stage.IMPORT, ErrorCode.IMPORT_NO_PERMISSION, null), "zapis_s_fleshki.m4a")
+    "S07-E" -> failureScene(
+        JobState.Failed(Stage.IMPORT, ErrorCode.STORAGE_LOW, null),
+        preflight = DemoData.preflightDs1NoSpace,
+    )
+    "S07-E2" -> failureScene(JobState.Failed(Stage.IMPORT, ErrorCode.STORAGE_LOW, null))
     "S07-F" -> failureScene(JobState.Interrupted(Stage.ASR, ErrorCode.LOW_MEMORY))
     "S07-G" -> failureScene(JobState.Failed(Stage.VALIDATE, ErrorCode.CONTRACT_INVALID, null))
+    "S07-G2" -> failureScene(JobState.Failed(Stage.DIARIZE, ErrorCode.LANG_ID_FAILED, "demo: пустой ответ стадии"))
     "S07-H" -> failureScene(JobState.Interrupted(Stage.DIARIZE, ErrorCode.FGS_TIMEOUT))
     "S08-A" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty)
     "S08-B" -> verificationScene(DemoData.modelsCopying, DemoData.verificationCopying)
     "S08-C" -> verificationScene(DemoData.modelsReady, DemoData.verificationMetrics, "DONE")
     "S08-D" -> verificationScene(DemoData.modelsNoLlm, DemoData.verificationCopying)
+    "S08-D2" -> verificationScene(DemoData.modelsNoSpace, DemoData.verificationCopying)
+    "S08-E" -> verificationScene(DemoData.modelsReady, DemoData.verificationPartial, "DONE")
+    "S08-L" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.Licenses)
+    "S08-T" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.LicenseText("mono"))
     else -> null
 }
 

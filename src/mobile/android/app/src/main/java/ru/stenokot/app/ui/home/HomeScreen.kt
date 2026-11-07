@@ -31,8 +31,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,7 +52,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -81,7 +78,6 @@ import ru.stenokot.app.ui.components.SectionHeader
 import ru.stenokot.app.ui.components.StatusBanner
 import ru.stenokot.app.ui.components.StenoIcon
 import ru.stenokot.app.ui.components.StenoProgressBar
-import ru.stenokot.app.ui.components.resourceTags
 import ru.stenokot.app.ui.components.spokenAs
 import ru.stenokot.app.ui.components.toneColors
 import ru.stenokot.app.ui.format.filesLabel
@@ -679,63 +675,6 @@ private fun HistoryRow(index: Int, job: JobSummaryUi, callbacks: HomeCallbacks) 
                     description = stringResource(R.string.scr01_delete),
                 )
             }
-        },
-    )
-}
-
-/** Подтверждение удаления. Экспортированный файл уходит только по отдельной отметке. */
-@Composable
-private fun DeleteDialog(
-    job: JobSummaryUi,
-    onConfirm: (removeExported: Boolean) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val colors = StenoTheme.colors
-    val type = StenoTheme.type
-    var removeExported by rememberSaveable(job.id) { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier.resourceTags(),
-        containerColor = colors.surfaceContainerLowest,
-        title = { Text(stringResource(R.string.scr01_delete_title), style = type.titleLarge) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
-                Text(job.title, style = type.labelMedium, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
-                Text(stringResource(R.string.scr01_delete_body), style = type.bodyMedium)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = StenoSize.touchTarget)
-                        .clickable(role = Role.Checkbox) { removeExported = !removeExported }
-                        .testTag(Tags.DELETE_EXPORTED),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(checked = removeExported, onCheckedChange = null)
-                    Spacer(Modifier.width(StenoSpace.m))
-                    Text(stringResource(R.string.scr01_delete_exported), style = type.labelMedium)
-                }
-                if (removeExported) {
-                    Text(
-                        text = stringResource(R.string.scr01_delete_exported_warning),
-                        style = type.bodyMedium.copy(fontWeight = FontWeight.W500),
-                        color = colors.error,
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            QuietAction(
-                text = stringResource(R.string.scr01_delete_confirm),
-                onClick = { onConfirm(removeExported) },
-                tag = Tags.DELETE_CONFIRM,
-            )
-        },
-        dismissButton = {
-            QuietAction(
-                text = stringResource(R.string.scr01_delete_dismiss),
-                onClick = onDismiss,
-                tag = Tags.DELETE_DISMISS,
-            )
         },
     )
 }

@@ -56,7 +56,7 @@ fun FileCard(
                 },
             )
             .padding(StenoSpace.l),
-        verticalArrangement = Arrangement.spacedBy(StenoSpace.s),
+        verticalArrangement = Arrangement.spacedBy(StenoSpace.s, Alignment.CenterVertically),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

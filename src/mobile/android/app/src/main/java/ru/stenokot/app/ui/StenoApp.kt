@@ -32,6 +32,8 @@ import ru.stenokot.app.ui.format.statusCode
 import ru.stenokot.app.ui.home.HomeRoute
 import ru.stenokot.app.ui.layout.ProvideWindowLayout
 import ru.stenokot.app.ui.layout.screenInsets
+import ru.stenokot.app.ui.licenses.LicenseTextRoute
+import ru.stenokot.app.ui.licenses.LicensesRoute
 import ru.stenokot.app.ui.nav.Route
 import ru.stenokot.app.ui.nav.rememberNavigator
 import ru.stenokot.app.ui.nav.routeForJob
@@ -50,7 +52,7 @@ private val Route.jobId: String?
         is Route.Processing -> jobId
         is Route.Result -> jobId
         is Route.Failure -> jobId
-        Route.Home, Route.Verification -> null
+        Route.Home, Route.Verification, Route.Licenses, is Route.LicenseText -> null
     }
 
 /**
@@ -89,7 +91,8 @@ fun StenoApp(
             LaunchedEffect(awaitedJob) {
                 val id = awaitedJob ?: return@LaunchedEffect
                 val started = controller.job(id).filterNotNull().first { it.summary.state != JobState.Queued }
-                navigator.push(routeForJob(id, started.summary.state))
+                val target = routeForJob(id, started.summary.state)
+                if (navigator.current is Route.Failure) navigator.replaceTop(target) else navigator.push(target)
                 awaitedJob = null
             }
 
@@ -117,6 +120,8 @@ fun StenoApp(
                             is Route.Result -> ResultRoute(route, controller, actions)
                             is Route.Failure -> FailureRoute(route.jobId, controller, actions)
                             Route.Verification -> VerificationRoute(controller, actions)
+                            Route.Licenses -> LicensesRoute(actions)
+                            is Route.LicenseText -> LicenseTextRoute(route.entryId, actions)
                         }
                     }
                 }

@@ -99,6 +99,28 @@ fun formatFreeSpace(bytes: Long): String =
         "${(bytes / MEGABYTE).roundToLong()}$NBSP" + "МБ"
     }
 
+/**
+ * Сколько нужно освободить: от гигабайта в ГБ с одним знаком, ниже в целых МБ. Округление всегда
+ * вверх, иначе после освобождения названного объёма места всё равно не хватит.
+ */
+fun formatSpaceNeeded(bytes: Long): String {
+    val value = bytes.coerceAtLeast(0).toDouble()
+    return if (value >= GIGABYTE) {
+        "${formatDecimal(ceil(value / (GIGABYTE / 10)) / 10)}$NBSP" + "ГБ"
+    } else {
+        "${ceil(value / MEGABYTE).toLong()}$NBSP" + "МБ"
+    }
+}
+
+/** Отношение с двумя знаками после запятой: скорость обработки к длительности записи. */
+fun formatRatio(value: Double): String {
+    val hundredths = (value * 100).roundToLong()
+    return "${hundredths / 100},${twoDigits(hundredths % 100)}"
+}
+
+/** Объём памяти в ГиБ по значению в МиБ. */
+fun formatGib(mib: Long): String = "${formatDecimal(mib / 1024.0)}$NBSP" + "ГиБ"
+
 /** Дата в истории: день, месяц из трёх букв, время. */
 fun formatHistoryDate(epochMs: Long, zone: ZoneId = ZoneId.systemDefault()): String {
     val time = Instant.ofEpochMilli(epochMs).atZone(zone)

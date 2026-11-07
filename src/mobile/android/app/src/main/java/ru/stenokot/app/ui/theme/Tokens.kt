@@ -51,11 +51,6 @@ data class StenoColors(
     val inverseSurface: Color,
     val inverseOnSurface: Color,
     val inversePrimary: Color,
-    val mascotLine: Color,
-    val mascotFur: Color,
-    val mascotCream: Color,
-    val mascotPaper: Color,
-    val mascotAccent: Color,
 )
 
 /** Светлая тема «Чистовик»: тёплая бумага, тёмные чернила, глубокий бирюзовый акцент. */
@@ -101,11 +96,6 @@ val LightColors = StenoColors(
     inverseSurface = Color(0xFF30312E),
     inverseOnSurface = Color(0xFFF3F1EC),
     inversePrimary = Color(0xFF8FD0E4),
-    mascotLine = Color(0xFF3A2A1E),
-    mascotFur = Color(0xFFE39A52),
-    mascotCream = Color(0xFFFFF1DE),
-    mascotPaper = Color(0xFFFFFFFF),
-    mascotAccent = Color(0xFF0F5C73),
 )
 
 /** Тёмная тема: тёплый уголь вместо бумаги, те же роли токенов. */
@@ -151,11 +141,6 @@ val DarkColors = StenoColors(
     inverseSurface = Color(0xFFEDEBE5),
     inverseOnSurface = Color(0xFF30312E),
     inversePrimary = Color(0xFF0F5C73),
-    mascotLine = Color(0xFFEDEBE5),
-    mascotFur = Color(0xFFB9702E),
-    mascotCream = Color(0xFF4A3A2C),
-    mascotPaper = Color(0xFF2A2B28),
-    mascotAccent = Color(0xFF8FD0E4),
 )
 
 /** Форма значка говорящего. Пути заданы для области 24 на 24, смещение цифры указано в dp. */

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="licenses_title">Лицензии</string>
+    <string name="licenses_intro">Всё это входит в приложение и работает на устройстве. Нажмите на строку, чтобы прочитать текст лицензии</string>
+    <string name="licenses_group_fonts">Шрифты и значки</string>
+    <string name="licenses_group_models">Модели</string>
+    <string name="licenses_group_libraries">Библиотеки</string>
+    <string name="licenses_row">%1$s · %2$s</string>
+    <string name="licenses_row_spoken">%1$s, %2$s, лицензия %3$s. Открыть текст</string>
+    <string name="licenses_text_note">Текст лицензии приводится на языке оригинала</string>
+    <string name="licenses_text_missing">Текст лицензии не найден</string>
+</resources>

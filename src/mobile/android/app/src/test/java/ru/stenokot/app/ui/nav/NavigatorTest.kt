@@ -19,6 +19,8 @@ class NavigatorTest {
             Route.Failure("job-2"),
             Route.Result("job-3", ResultTab.PROTOCOL, 12),
             Route.Result("job-4"),
+            Route.Licenses,
+            Route.LicenseText("gigaam"),
         )
         routes.forEach { assertEquals(it, decodeRoute(it.encode())) }
     }

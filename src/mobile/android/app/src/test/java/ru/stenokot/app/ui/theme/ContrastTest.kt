@@ -52,6 +52,7 @@ class ContrastTest {
         "onTertiaryContainer" to (c.onTertiaryContainer to c.tertiaryContainer),
         "onError" to (c.onError to c.error),
         "error/surface" to (c.error to c.surface),
+        "error/lowest" to (c.error to c.surfaceContainerLowest),
         "onErrorContainer" to (c.onErrorContainer to c.errorContainer),
         "onSuccess" to (c.onSuccess to c.success),
         "success/surface" to (c.success to c.surface),
