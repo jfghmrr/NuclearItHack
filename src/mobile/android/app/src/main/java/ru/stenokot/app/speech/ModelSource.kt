@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.res.AssetManager
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
+import java.security.MessageDigest
 import ru.stenokot.app.BuildConfig
 import ru.stenokot.app.audio.EngineException
 import ru.stenokot.core.model.ErrorCode
@@ -49,6 +51,20 @@ class ModelSource private constructor(
         return File(root, relative).takeIf { it.isFile }?.length()
     }
 
+    /** Считает SHA-256 файла модели потоково. Нативный код падает на испорченной модели, сверять надо до загрузки. */
+    fun sha256(relative: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val block = ByteArray(HASH_BLOCK)
+        open(relative).use { input ->
+            while (true) {
+                val read = input.read(block)
+                if (read < 0) break
+                digest.update(block, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
     /** Проверяет, что все [relative] на месте и не пусты. Иначе бросает код загрузки модели. */
     fun require(vararg relative: String) {
         for (name in relative) {
@@ -59,8 +75,12 @@ class ModelSource private constructor(
         }
     }
 
+    private fun open(relative: String): InputStream =
+        if (assets != null) assets.open(path(relative)) else File(root, relative).inputStream()
+
     companion object {
         private const val ASSET_ROOT = "models"
+        private const val HASH_BLOCK = 1 shl 16
 
         /** Выбирает источник по типу сборки. */
         fun from(context: Context): ModelSource =

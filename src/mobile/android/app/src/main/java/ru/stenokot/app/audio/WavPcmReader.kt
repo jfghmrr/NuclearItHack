@@ -25,11 +25,13 @@ class WavPcmReader private constructor(
     private val file: RandomAccessFile,
     private val dataOffset: Long,
     override val totalSamples: Long,
-    /** Постоянное усиление записи. Единица означает, что сигнал не менялся. */
-    val gain: Float,
 ) : PcmReader {
     private val channel: FileChannel = file.channel
     private val buffer = ByteBuffer.allocateDirect(BUFFER_BYTES).order(ByteOrder.LITTLE_ENDIAN)
+
+    /** Постоянное усиление записи. Единица означает, что сигнал не менялся. */
+    var gain: Float = 1f
+        private set
 
     /** Возвращает до [count] отсчётов от [start]. За концом записи данных нет, массив будет короче. */
     @Synchronized
@@ -89,8 +91,9 @@ class WavPcmReader private constructor(
             val file = RandomAccessFile(wav, "r")
             try {
                 val layout = readLayout(file)
-                val raw = WavPcmReader(file, layout.dataOffset, layout.samples, 1f)
-                return WavPcmReader(file, layout.dataOffset, layout.samples, measureGain(raw, targetDbfs))
+                val reader = WavPcmReader(file, layout.dataOffset, layout.samples)
+                reader.gain = measureGain(reader, targetDbfs)
+                return reader
             } catch (error: Exception) {
                 file.close()
                 throw error

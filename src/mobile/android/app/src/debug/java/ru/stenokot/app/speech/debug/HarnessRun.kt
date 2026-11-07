@@ -14,6 +14,7 @@ import ru.stenokot.app.audio.EngineException
 import ru.stenokot.app.audio.MediaDecoder
 import ru.stenokot.app.audio.Preflight
 import ru.stenokot.app.audio.WavPcmReader
+import ru.stenokot.app.speech.DiarizationJournal
 import ru.stenokot.app.speech.EngineThreads
 import ru.stenokot.app.speech.GigaAsr
 import ru.stenokot.app.speech.ModelSource
@@ -27,6 +28,7 @@ import ru.stenokot.core.model.AsrSegment
 import ru.stenokot.core.model.SpeakerTurn
 import ru.stenokot.core.merge.DefaultMerger
 import ru.stenokot.core.model.SpeechSegment
+import ru.stenokot.core.storage.DiarJournalLine
 
 /** Параметры запуска из adb. */
 internal data class HarnessRequest(
@@ -38,6 +40,7 @@ internal data class HarnessRequest(
     val diarThreads: Int?,
     val threshold: Float?,
     val embeddingSeconds: Int,
+    val checkResume: Boolean,
     val maxChunks: Int,
 ) {
     companion object {
@@ -52,6 +55,7 @@ internal data class HarnessRequest(
                 diarThreads = intent?.getStringExtra("diarThreads")?.toIntOrNull(),
                 threshold = intent?.getStringExtra("threshold")?.toFloatOrNull(),
                 embeddingSeconds = intent?.getStringExtra("embedSeconds")?.toIntOrNull() ?: 30,
+                checkResume = intent?.getStringExtra("resume") != null,
                 maxChunks = intent?.getStringExtra("maxChunks")?.toIntOrNull() ?: Int.MAX_VALUE,
             )
         }
@@ -103,6 +107,16 @@ internal class HarnessRun(private val context: Context, private val request: Har
                 .put("headerDurationMs", probe.headerDurationMs)
                 .put("headerReliable", probe.headerReliable),
         )
+        val inspected = Preflight.inspect(source, source.name, context.filesDir)
+        report.put(
+            "preflightInfo",
+            JSONObject()
+                .put("fileName", inspected.fileName)
+                .put("sizeBytes", inspected.sizeBytes)
+                .put("durationMs", inspected.durationMs)
+                .put("freeBytes", inspected.freeBytes)
+                .put("requiredBytes", inspected.requiredBytes),
+        )
         if ("decode" !in request.stages) return
         val info = stage("decode", 0.0) {
             runBlocking { MediaDecoder().decode(source, wav, quiet) }
@@ -135,19 +149,29 @@ internal class HarnessRun(private val context: Context, private val request: Har
                 describeAsr(results)
             }
             if ("diar" in request.stages) {
+                val lines = ArrayList<DiarJournalLine>()
                 val turns = stage("diar", seconds) {
-                    WindowedDiarizer(
-                        models = models,
-                        threads = request.diarThreads ?: EngineThreads.diarization(),
-                        threshold = request.threshold ?: WindowedDiarizer.DEFAULT_THRESHOLD,
-                        embeddingSeconds = request.embeddingSeconds,
-                    ).use { it.diarize(pcm, quiet) }
+                    diarizer(models, DiarizationJournal(onWindow = { lines += it })).use { it.diarize(pcm, quiet) }
                 }
                 describeTurns(turns)
+                if (request.checkResume && lines.size > 1) {
+                    val journal = DiarizationJournal(restored = lines.take(lines.size - 1))
+                    val resumed = stage("diar_resume", seconds) { diarizer(models, journal).use { it.diarize(pcm, quiet) } }
+                    report.put("resumeWindows", lines.size)
+                    report.put("resumeIdentical", resumed == turns)
+                }
                 if (results.isNotEmpty()) describeMerge(results, turns, info.durationMs)
             }
         }
     }
+
+    private fun diarizer(models: ModelSource, journal: DiarizationJournal) = WindowedDiarizer(
+        models = models,
+        threads = request.diarThreads ?: EngineThreads.diarization(),
+        journal = journal,
+        threshold = request.threshold ?: WindowedDiarizer.DEFAULT_THRESHOLD,
+        embeddingSeconds = request.embeddingSeconds,
+    )
 
     private fun runAsr(
         models: ModelSource,
@@ -202,12 +226,15 @@ internal class HarnessRun(private val context: Context, private val request: Har
                     .put("seconds", own.sumOf { it.endMs - it.startMs } / 1000.0),
             )
         }
+        val intervals = JSONArray()
+        turns.forEach { intervals.put(JSONArray().put(it.startMs).put(it.endMs).put(it.speaker)) }
         report.put(
             "diarResult",
             JSONObject()
                 .put("speakers", speakers.length())
                 .put("turns", turns.size)
-                .put("perSpeaker", speakers),
+                .put("perSpeaker", speakers)
+                .put("intervals", intervals),
         )
     }
 

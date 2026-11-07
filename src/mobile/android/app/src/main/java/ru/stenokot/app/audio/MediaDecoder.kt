@@ -3,6 +3,7 @@ package ru.stenokot.app.audio
 import android.media.AudioFormat
 import android.media.MediaCodec
 import android.media.MediaFormat
+import android.os.StatFs
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -55,10 +56,19 @@ class MediaDecoder : AudioDecoder {
                     mime = probe.mime,
                     sourceSha256 = sha256(source),
                 )
+            } catch (error: IOException) {
+                throw writeFailure(outWav, error)
             } finally {
                 partial.delete()
             }
         }
+
+    /** Запись оборвалась: при заполненном диске это нехватка места, иначе сбой чтения файла задачи. */
+    private fun writeFailure(outWav: File, error: IOException): EngineException {
+        val free = outWav.parentFile?.let { StatFs(it.path).availableBytes } ?: 0L
+        val code = if (free < MIN_FREE_BYTES) ErrorCode.STORAGE_LOW else ErrorCode.IMPORT_READ_FAILED
+        return EngineException(code, "Запись ${outWav.name} прервана", error)
+    }
 
     /** Отказ кодека на повреждённом фрагменте не обрывает запись: новый кодек, разрыв закроется тишиной. */
     private suspend fun pumpWithRestarts(track: AudioTrackSource, sink: PcmSink, size: Long, progress: Progress) {
@@ -70,16 +80,23 @@ class MediaDecoder : AudioDecoder {
                 pump(track, codec, sink, pacer)
                 return
             } catch (error: IllegalStateException) {
-                if (sink.framesAccepted == 0L || restarts >= MAX_RESTARTS) {
-                    throw EngineException(ErrorCode.DECODE_CORRUPT, "Декодер остановился: ${track.mime}", error)
-                }
-                restarts++
-                track.extractor.advance()
+                restarts = nextRestart(track, sink, restarts, error)
+            } catch (error: IllegalArgumentException) {
+                restarts = nextRestart(track, sink, restarts, error)
             } finally {
                 runCatching { codec.stop() }
                 runCatching { codec.release() }
             }
         }
+    }
+
+    /** Пропускает пакет, на котором споткнулся кодек. Отказ в самом начале или слишком частый означает порчу. */
+    private fun nextRestart(track: AudioTrackSource, sink: PcmSink, restarts: Int, error: RuntimeException): Int {
+        if (sink.framesAccepted == 0L || restarts >= MAX_RESTARTS) {
+            throw EngineException(ErrorCode.DECODE_CORRUPT, "Декодер остановился: ${track.mime}", error)
+        }
+        track.extractor.advance()
+        return restarts + 1
     }
 
     private suspend fun pump(track: AudioTrackSource, codec: MediaCodec, sink: PcmSink, pacer: ProgressPacer) {
@@ -328,6 +345,7 @@ class MediaDecoder : AudioDecoder {
         const val MIN_COMPLETE_RATIO = 0.9
         const val MIN_LOSS_MS = 2_000L
         const val HASH_BLOCK = 1 shl 16
+        const val MIN_FREE_BYTES = 1L shl 20
         const val REPORT_EVERY_MS = 500L
         const val MAX_REPORTED = 0.99f
     }
