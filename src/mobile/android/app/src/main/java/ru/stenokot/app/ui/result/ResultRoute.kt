@@ -49,6 +49,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -92,7 +93,7 @@ private const val KEY_BANNER = "banner"
 private const val KEY_HINT = "hint"
 private const val KEY_OUTPUT = "output"
 private const val TYPE_HEADER = 10
-private const val MAX_PINNED_SPEAKERS = 6
+private const val ONE_LINE_STRIP = 1.5f
 
 /** Разобранная стенограмма и исходный вид списка. Всё считается вне основного потока. */
 @Immutable
@@ -368,10 +369,9 @@ private fun ResultContent(
         (if (outputInList) 1 else 0)
 
     val rowsOffset by rememberUpdatedState(headerItems + 1)
-    val speakerCount = prep?.model?.speakers?.size ?: 0
-    val stripWraps = speakerCount in (MAX_PINNED_SPEAKERS + 1)..MAX_WRAPPED_SPEAKERS
-    val pinnedStrip = (!window.short || searchOpen) && !stripWraps
     var stripHeight by remember { mutableIntStateOf(0) }
+    val oneLinePx = with(LocalDensity.current) { (StenoSize.touchTarget * ONE_LINE_STRIP).roundToPx() }
+    val pinnedStrip = (!window.short && stripHeight <= oneLinePx) || searchOpen
     val pinnedPx by rememberUpdatedState(if (pinnedStrip) stripHeight else 0)
     val view = prep?.let {
         rememberTranscriptView(

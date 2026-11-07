@@ -75,7 +75,7 @@ import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 
 /** Сколько значков ещё переносится по строкам. Больше листается в одну строку. */
-internal const val MAX_WRAPPED_SPEAKERS = 8
+private const val MAX_WRAPPED_SPEAKERS = 8
 
 private const val MIN_LEDGER_WIDTH_DP = 340
 private const val DIMMED_ALPHA = 0.45f
