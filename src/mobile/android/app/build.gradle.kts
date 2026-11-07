@@ -12,6 +12,14 @@ val keystoreProps = rootProject.file("keystore.properties").takeIf { it.exists()
     Properties().apply { file.inputStream().use(::load) }
 }
 
+val modelsLock = providers.fileContents(rootProject.layout.projectDirectory.file("../../../config/models.lock"))
+    .asText.orElse("")
+    .map { text -> text.lines().filter(String::isNotBlank).joinToString("|") }
+val gitCommit = providers.exec {
+    commandLine("git", "rev-parse", "--short", "HEAD")
+    isIgnoreExitValue = true
+}.standardOutput.asText.map { it.trim().ifEmpty { "unknown" } }
+
 android {
     namespace = "ru.stenokot.app"
     compileSdk = 36
@@ -25,6 +33,8 @@ android {
         versionName = "1.0.0"
         ndk { abiFilters += "arm64-v8a" }
         providers.gradleProperty("appSuffix").orNull?.let { suffix -> applicationIdSuffix = suffix }
+        buildConfigField("String", "MODELS_LOCK", "\"${modelsLock.get()}\"")
+        buildConfigField("String", "GIT_COMMIT", "\"${gitCommit.get()}\"")
     }
 
     flavorDimensions += "models"
@@ -119,4 +129,5 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
