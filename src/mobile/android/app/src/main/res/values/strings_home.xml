@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="scr01_title">Стенокот</string>
+    <string name="scr01_promise">Расшифровка разговоров прямо на телефоне. Без интернета</string>
+    <string name="scr01_formats">MP3, WAV, M4A, OGG, FLAC</string>
+    <string name="scr01_btn_import_all">Показать все файлы</string>
+    <string name="scr01_section_audio">Найденные аудио</string>
+    <string name="scr01_section_history">История</string>
+    <string name="scr01_section_queue">Очередь</string>
+    <string name="scr01_empty">Здесь появятся найденные аудио и готовые стенограммы</string>
+    <string name="scr01_row_permission">Показать аудио на устройстве</string>
+    <string name="scr01_models_ready">Модели готовы</string>
+    <string name="scr01_models_copying">Языковая модель: %1$s из %2$s МиБ</string>
+    <string name="scr01_models_copying_hint">Импорт уже доступен</string>
+    <string name="scr01_models_llm_unavailable">Языковая модель недоступна. Протокола не будет</string>
+    <string name="scr01_models_asr_unavailable">Модель распознавания не найдена. Обработка не запустится</string>
+    <string name="scr01_models_storage_low">Для языковой модели нужно ещё %1$s МиБ. Стенограмма работает</string>
+    <string name="scr01_models_free">Свободно %1$s</string>
+    <string name="scr01_models_spoken">%1$s. Открыть модели и замеры</string>
+    <string name="scr01_autostart_hint">Запуск начнётся автоматически</string>
+    <string name="scr01_job_stage">%1$s - %2$s</string>
+    <string name="scr01_queue">В очереди: %1$s</string>
+    <string name="scr01_interrupted_title">Обработка прервалась</string>
+    <string name="scr01_interrupted_body">Сохранён этап «%1$s». Продолжим с этого места</string>
+    <string name="scr01_spoken_file">Выбран файл %1$s, %2$s</string>
+    <string name="scr01_spoken_audio">%1$s, %2$s, %3$s, запустить обработку</string>
+    <string name="scr01_spoken_history">%1$s, %2$s, %3$s, открыть результат</string>
+    <string name="scr01_spoken_job">Идёт обработка %1$s, %2$s, %3$s. Открыть</string>
+    <string name="scr01_spoken_queue">%1$s, ожидает, номер в очереди %2$d</string>
+    <string name="scr01_delete">Удалить запись</string>
+    <string name="scr01_delete_title">Удалить запись?</string>
+    <string name="scr01_delete_body">Запись и её стенограмма исчезнут из приложения. Файл JSON в папке Download/Stenokot останется на месте</string>
+    <string name="scr01_delete_exported">Удалить и файл JSON</string>
+    <string name="scr01_delete_exported_warning">Файл JSON будет удалён с устройства, вернуть его нельзя</string>
+    <string name="scr01_delete_confirm">Удалить</string>
+    <string name="scr01_delete_dismiss">Оставить</string>
+</resources>
