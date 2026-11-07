@@ -257,7 +257,7 @@ class RealStenoController(
             summary = JobUiMapper.summary(job, live, all),
             processing = if (showsProcessing) JobUiMapper.processing(job, live, speed.current(), powerSave()) else null,
             result = if (job.transcriptSaved) {
-                JobUiMapper.result(job, live, utterances, document, modelsUi, playerPath(job))
+                JobUiMapper.result(job, live, utterances, document, modelsUi, playerPath(job), store.files(job.id).pcm.path)
             } else {
                 null
             },

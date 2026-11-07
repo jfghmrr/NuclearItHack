@@ -136,7 +136,10 @@ data class ProtocolUi(
     val errorCode: ErrorCode?,
 )
 
-/** Экран результата. Реплики уже готовы к показу и не меняются. */
+/**
+ * Экран результата. Реплики уже готовы к показу и не меняются. [pcmPath] указывает на рабочий WAV:
+ * по нему строится огибающая плеера, а без него плеер показывает только говорящих.
+ */
 @Immutable
 data class ResultUi(
     val title: String,
@@ -147,6 +150,7 @@ data class ResultUi(
     val audioPath: String?,
     val output: OutputFileUi,
     val protocol: ProtocolUi,
+    val pcmPath: String? = null,
 )
 
 /** Подробности задачи: обработка, результат или ошибка. */

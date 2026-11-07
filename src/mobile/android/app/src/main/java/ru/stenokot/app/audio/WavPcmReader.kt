@@ -100,6 +100,18 @@ class WavPcmReader private constructor(
             }
         }
 
+        /** Открывает [wav] без замера громкости: усиление остаётся единичным, проход по файлу не нужен. */
+        fun openUnscaled(wav: File): WavPcmReader {
+            val file = RandomAccessFile(wav, "r")
+            try {
+                val layout = readLayout(file)
+                return WavPcmReader(file, layout.dataOffset, layout.samples)
+            } catch (error: Exception) {
+                file.close()
+                throw error
+            }
+        }
+
         /** Плавный предел: редкие щелчки после усиления не дают перегруза, речь не затрагивается. */
         internal fun limit(sample: Float): Float {
             val level = abs(sample)

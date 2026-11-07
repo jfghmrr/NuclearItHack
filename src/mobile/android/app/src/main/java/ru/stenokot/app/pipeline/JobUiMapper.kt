@@ -209,6 +209,7 @@ object JobUiMapper {
         document: ProtocolDocument?,
         models: ModelsUi?,
         audioPath: String?,
+        pcmPath: String? = null,
     ): ResultUi? {
         val output = output(job) ?: return null
         return ResultUi(
@@ -220,6 +221,7 @@ object JobUiMapper {
             audioPath = audioPath,
             output = output,
             protocol = protocol(job, live, document, models),
+            pcmPath = pcmPath,
         )
     }
 
