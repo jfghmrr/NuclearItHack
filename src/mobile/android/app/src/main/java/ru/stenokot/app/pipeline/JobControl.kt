@@ -1,6 +1,5 @@
 package ru.stenokot.app.pipeline
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,20 +39,26 @@ class JobControl {
     /**
      * Выполняет прерываемый участок, например декодирование. Нативные вызовы так не прервать,
      * поэтому для них граница наступает только после возврата из вызова.
+     *
+     * После просьбы об остановке любой сбой участка считается остановкой: движок может поймать
+     * отмену и выдать её за свою ошибку, ведь CancellationException это IllegalStateException.
+     * Проверка стоит снаружи области: упавший дочерний async подменил бы исключение изнутри неё.
      */
-    suspend fun <T> stoppable(block: suspend () -> T): T = coroutineScope {
-        val body = async { block() }
-        val watcher = launch {
-            stop.first { it != null }
-            body.cancel()
+    suspend fun <T> stoppable(block: suspend () -> T): T = try {
+        coroutineScope {
+            val body = async { block() }
+            val watcher = launch {
+                stop.first { it != null }
+                body.cancel()
+            }
+            try {
+                body.await()
+            } finally {
+                watcher.cancel()
+            }
         }
-        try {
-            body.await()
-        } catch (cancelled: CancellationException) {
-            check()
-            throw cancelled
-        } finally {
-            watcher.cancel()
-        }
+    } catch (failure: Exception) {
+        check()
+        throw failure
     }
 }

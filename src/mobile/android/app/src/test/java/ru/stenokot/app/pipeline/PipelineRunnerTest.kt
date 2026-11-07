@@ -11,6 +11,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -240,6 +241,52 @@ class PipelineRunnerTest {
         assertEquals(h.engines.transcribed.distinct(), h.engines.transcribed)
     }
 
+    /** Декодер, который ловит отмену и выдаёт её за повреждённый файл, как это бывает с движками. */
+    private fun Harness.decoderMisreadsCancellation() {
+        engines.decodeBehavior = {
+            try {
+                awaitCancellation()
+            } catch (cancelled: CancellationException) {
+                throw EngineFailure(ErrorCode.DECODE_CORRUPT, "Декодер остановился", cancelled)
+            }
+        }
+    }
+
+    @Test
+    fun cancelDuringDecodingIsCancelNotCorruptFile() = runTest {
+        val h = harness { decoderMisreadsCancellation() }
+        val id = h.import("healthy")
+        h.await { it[id]?.stage == Stage.DECODE && it[id]?.phase == JobPhase.RUNNING }
+        delay(50)
+        h.runner.cancel(id)
+        h.await { it[id]?.phase == JobPhase.CANCELLED || it[id]?.phase == JobPhase.FAILED }
+        val job = h.runner.jobs.value.getValue(id)
+        assertEquals(JobPhase.CANCELLED, job.phase)
+        assertNull(job.errorCode)
+    }
+
+    @Test
+    fun serviceTimeoutDuringDecodingInterruptsNotFails() = runTest {
+        val h = harness { decoderMisreadsCancellation() }
+        val id = h.import("healthy")
+        h.await { it[id]?.stage == Stage.DECODE && it[id]?.phase == JobPhase.RUNNING }
+        delay(50)
+        h.runner.interruptForTimeout()
+        h.await { it[id]?.phase == JobPhase.INTERRUPTED || it[id]?.phase == JobPhase.FAILED }
+        val job = h.runner.jobs.value.getValue(id)
+        assertEquals(JobPhase.INTERRUPTED, job.phase)
+        assertEquals(ErrorCode.FGS_TIMEOUT, job.errorCode)
+        assertEquals(Stage.DECODE, job.stage)
+    }
+
+    @Test
+    fun genuineDecoderFailureStaysAFailure() = runTest {
+        val h = harness { engines.decodeBehavior = { throw EngineFailure(ErrorCode.DECODE_CORRUPT, "мусор") } }
+        val id = h.import("broken")
+        h.await { it[id]?.phase == JobPhase.FAILED }
+        assertEquals(ErrorCode.DECODE_CORRUPT, h.runner.jobs.value.getValue(id).errorCode)
+    }
+
     @Test
     fun cancelOfQueuedJobKeepsItFromRunning() = runTest {
         val h = harness()
@@ -356,6 +403,17 @@ class PipelineRunnerTest {
         assertTrue(output.exportFailed)
         assertTrue(h.store.files(id).transcript.exists())
         assertEquals(LlmStatus.APPLIED, h.runner.jobs.value.getValue(id).llm.status)
+    }
+
+    @Test
+    fun takenOutputNameIsReportedWithRealPath() = runTest {
+        val h = harness { outputs.nameTaken = true }
+        val id = h.import("taken")
+        h.await(done(id))
+        val job = h.runner.jobs.value.getValue(id)
+        assertEquals("Download/Stenokot/taken (1).json", job.output?.path)
+        assertTrue(OUTPUT_RENAMED_WARNING in job.warnings)
+        assertTrue(OUTPUT_RENAMED_WARNING in h.store.files(id).metadata.readText())
     }
 
     @Test

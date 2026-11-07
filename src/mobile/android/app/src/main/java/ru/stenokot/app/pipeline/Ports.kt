@@ -44,8 +44,16 @@ interface SourceGateway {
     fun freeBytes(): Long
 }
 
-/** Адрес опубликованного файла. */
-data class PublishedFile(val path: String, val uri: String?, val fallback: Boolean)
+/**
+ * Адрес опубликованного файла. [renamed] означает, что под нужным именем лежит чужой файл, чаще всего
+ * от прошлой установки: заменить его без диалога нельзя, система выдала имя вида `name (1).json`.
+ */
+data class PublishedFile(
+    val path: String,
+    val uri: String?,
+    val fallback: Boolean,
+    val renamed: Boolean = false,
+)
 
 /** Вид служебного файла в `Download/Stenokot/meta/`. */
 enum class MetaKind(val suffix: String) {

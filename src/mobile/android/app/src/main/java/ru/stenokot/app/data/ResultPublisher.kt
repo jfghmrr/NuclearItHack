@@ -36,7 +36,7 @@ class ResultPublisher(context: Context) : OutputGateway {
         return try {
             val written = write(ROOT_PATH, name, bytes)
             val shownName = displayName(written) ?: name
-            PublishedFile(publicPath(ROOT_PATH, shownName), written.toString(), fallback = false)
+            PublishedFile(publicPath(ROOT_PATH, shownName), written.toString(), fallback = false, renamed = shownName != name)
         } catch (failure: Exception) {
             fallback(name, bytes)
         }

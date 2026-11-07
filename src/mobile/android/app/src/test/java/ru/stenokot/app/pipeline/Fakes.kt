@@ -64,6 +64,7 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
     var noSpeech = false
     var windows = 3
     var probeFailure: Exception? = null
+    var decodeBehavior: (suspend () -> Unit)? = null
     val restoredPerPass = ArrayList<Int>()
     var llmCancels = 0
     var llmBehavior: suspend (Int) -> LlmResult = { LlmResult(LlmStatus.APPLIED, null, null) }
@@ -88,6 +89,7 @@ class FakeEngines(private val segmentCount: Int = 5) : PipelineEngines {
 
     override suspend fun decode(source: File, outWav: File, progress: Progress): AudioInfo {
         events += "decode:${source.readText()}"
+        decodeBehavior?.invoke()
         outWav.writeText("pcm")
         progress.report(1f, null)
         return AudioInfo(60_000, 44_100, 2, "audio/mpeg", "hash")
@@ -214,10 +216,12 @@ class FakeOutputs : OutputGateway {
     val meta = ArrayList<String>()
     val removed = ArrayList<String>()
     var failPublish = false
+    var nameTaken = false
 
     override suspend fun publishTranscript(stem: String, bytes: ByteArray): PublishedFile {
         if (failPublish) error("Диск недоступен")
         transcripts[stem] = bytes
+        if (nameTaken) return PublishedFile("Download/Stenokot/$stem (1).json", "content://$stem", false, renamed = true)
         return PublishedFile("Download/Stenokot/$stem.json", "content://$stem", fallback = false)
     }
 

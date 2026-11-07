@@ -356,11 +356,15 @@ class JobPipeline(
             throw EngineFailure(ErrorCode.CONTRACT_INVALID, verdict.errors.take(5).joinToString("; "))
         }
         AtomicFiles.replace(run.files.transcript, bytes)
-        val output = publish(job, bytes, run.files)
-        book.mutate(run.id) { it.copy(output = output) }
+        val published = publish(job, bytes, run.files)
+        book.mutate(run.id) { current ->
+            val updated = current.copy(output = published.first)
+            if (published.second) updated.warned(OUTPUT_RENAMED_WARNING) else updated
+        }
     }
 
-    private suspend fun publish(job: JobRecord, bytes: ByteArray, files: JobFiles): OutputRecord {
+    /** Возвращает запись о файле и признак того, что нужное имя занято чужим файлом. */
+    private suspend fun publish(job: JobRecord, bytes: ByteArray, files: JobFiles): Pair<OutputRecord, Boolean> {
         val sha = sha256(bytes)
         val createdAt = clock()
         return try {
@@ -373,7 +377,7 @@ class JobPipeline(
                 validated = true,
                 sha256 = sha,
                 fallback = published.fallback,
-            )
+            ) to published.renamed
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
@@ -384,7 +388,7 @@ class JobPipeline(
                 validated = true,
                 sha256 = sha,
                 exportFailed = true,
-            )
+            ) to false
         }
     }
 
@@ -470,6 +474,9 @@ class JobPipeline(
         const val BYTES_IN_MB = 1024L * 1024
     }
 }
+
+/** Предупреждение: контрактный файл пришлось записать под другим именем. */
+const val OUTPUT_RENAMED_WARNING: String = "OUTPUT_RENAMED"
 
 /** Считает SHA-256 и возвращает шестнадцатеричную строку. */
 fun sha256(bytes: ByteArray): String =
