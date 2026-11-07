@@ -224,8 +224,11 @@ class WindowedDiarizer(
     )
 
     companion object {
-        /** Стартовый порог. Значение получено на английских совещаниях и калибруется на своих записях. */
-        const val DEFAULT_THRESHOLD = 0.9f
+        /**
+         * Порог подобран на русских диалогах с известной разметкой. Значение 0.9 с английских совещаний
+         * сводило двух собеседников в одного на записях до полутора минут, монолог не дробится и при 0.3.
+         */
+        const val DEFAULT_THRESHOLD = 0.6f
 
         private const val SAMPLE_RATE = 16000
         private const val WINDOW_SAMPLES = 300L * SAMPLE_RATE
