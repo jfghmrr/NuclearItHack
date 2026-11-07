@@ -31,7 +31,23 @@ data class MergeParams(
     val minSpeakerMaxMs: Long = 6_000,
     val pauseSplitMs: Long = 1_500,
     val maxUtteranceMs: Long = 30_000,
-)
+    val coverTurns: Boolean = false,
+    val silentPauseMs: Long = Long.MAX_VALUE,
+) {
+    companion object {
+        /**
+         * Настройка экспорта, выбрана по ошибке диаризации итогового файла. Границы реплик берутся из
+         * интервалов говорящих, реплики разных говорящих идут внахлёст, пауза без речи делит реплику.
+         * Малых говорящих решает книга говорящих: у неё есть отпечатки голоса, здесь их нет.
+         */
+        val EXPORT = MergeParams(
+            minSpeakerMinMs = 0,
+            minSpeakerMaxMs = 0,
+            coverTurns = true,
+            silentPauseMs = 500,
+        )
+    }
+}
 
 /**
  * Собирает реплики из слов и интервалов говорящих. Работает только со списком слов: разрез идёт
@@ -40,7 +56,7 @@ data class MergeParams(
  */
 class DefaultMerger(
     private val audioDurationMs: Long,
-    private val params: MergeParams = MergeParams(),
+    private val params: MergeParams = MergeParams.EXPORT,
 ) : Merger {
 
     override fun merge(asr: List<AsrSegment>, turns: List<SpeakerTurn>): List<Utterance> {
@@ -265,7 +281,8 @@ class DefaultMerger(
             var from = 0
             for (i in 1..count) {
                 val boundary = i == count || speaker[i] != speaker[i - 1] ||
-                    words[i].startMs - wordEnd[i - 1] >= params.pauseSplitMs
+                    words[i].startMs - wordEnd[i - 1] >= params.pauseSplitMs ||
+                    isSilentPause(i)
                 if (boundary) {
                     splitLong(from, i, ranges)
                     from = i
@@ -273,15 +290,22 @@ class DefaultMerger(
             }
             val numbers = HashMap<Int, Int>()
             val out = ArrayList<Utterance>(ranges.size)
+            val ceilings = endCeilings(ranges)
+            val ownEnds = HashMap<Int, Long>()
+            var previousStart = 0L
             ranges.forEachIndexed { position, range ->
-                val number = numbers.getOrPut(speaker[range.first]) { numbers.size }
-                val nextStart = ranges.getOrNull(position + 1)?.let { words[it.first].startMs }
+                val owner = speaker[range.first]
+                val number = numbers.getOrPut(owner) { numbers.size }
                 val own = range.map { words[it].copy(endMs = wordEnd[it], speaker = number) }
+                val startMs = utteranceStart(range.first, range.last, maxOf(previousStart, ownEnds[owner] ?: 0L))
+                val endMs = utteranceEnd(startMs, range.last, ceilings[position])
+                previousStart = startMs
+                ownEnds[owner] = endMs
                 out += Utterance(
                     id = position + 1,
                     speaker = number,
-                    startMs = own.first().startMs,
-                    endMs = utteranceEnd(range.first, range.last, nextStart),
+                    startMs = startMs,
+                    endMs = endMs,
                     words = own,
                     text = own.joinToString(" ") { it.text },
                     overlap = range.any { overlap[it] },
@@ -327,16 +351,52 @@ class DefaultMerger(
             return best
         }
 
+        /** Слова у модели стоят только в начале, поэтому тишину видно лишь по интервалам говорящих. */
+        private fun isSilentPause(i: Int): Boolean {
+            val pause = words[i].startMs - wordEnd[i - 1]
+            return pause >= params.silentPauseMs && index.size > 0 &&
+                !index.isSpeechAt(wordEnd[i - 1] + pause / 2)
+        }
+
         /**
-         * Конец реплики учитывает конец сегмента говорящего и среза, но не заходит на следующую
-         * реплику и не выводит её за предельную длину.
+         * Предел конца каждой реплики: начало следующей реплики, а при [MergeParams.coverTurns]
+         * только своего говорящего, потому что интервалы разных говорящих могут пересекаться.
          */
-        private fun utteranceEnd(first: Int, last: Int, nextStartMs: Long?): Long {
+        private fun endCeilings(ranges: List<IntRange>): LongArray {
+            val ceilings = LongArray(ranges.size)
+            val nextOwn = HashMap<Int, Long>()
+            var next = Long.MAX_VALUE
+            for (position in ranges.indices.reversed()) {
+                val first = ranges[position].first
+                ceilings[position] = if (params.coverTurns) nextOwn[speaker[first]] ?: Long.MAX_VALUE else next
+                nextOwn[speaker[first]] = words[first].startMs
+                next = words[first].startMs
+            }
+            return ceilings
+        }
+
+        /**
+         * Начало реплики при [MergeParams.coverTurns] уходит к началу интервала говорящего: начало
+         * первого слова у модели запаздывает. [floorMs] держит порядок реплик и не даёт войти в
+         * предыдущую реплику того же говорящего.
+         */
+        private fun utteranceStart(first: Int, last: Int, floorMs: Long): Long {
+            val firstWord = words[first].startMs
+            if (!params.coverTurns) return firstWord
+            val turnStart = index.startOfTurnAt(speaker[first], firstWord) ?: return firstWord
+            return minOf(firstWord, maxOf(turnStart, floorMs, wordEnd[last] - params.maxUtteranceMs))
+        }
+
+        /**
+         * Конец реплики учитывает конец сегмента говорящего и среза, но не заходит за [ceilingMs] и
+         * не выводит реплику за предельную длину.
+         */
+        private fun utteranceEnd(startMs: Long, last: Int, ceilingMs: Long): Long {
             val spokenEnd = index.endOfTurnAt(speaker[last], words[last].startMs)
                 ?: return wordEnd[last]
             val limit = minOf(
                 minOf(spokenEnd, chunkEnd[last]),
-                minOf(nextStartMs ?: Long.MAX_VALUE, words[first].startMs + params.maxUtteranceMs),
+                minOf(ceilingMs, startMs + params.maxUtteranceMs),
             )
             return minOf(audioDurationMs, maxOf(wordEnd[last], limit))
         }

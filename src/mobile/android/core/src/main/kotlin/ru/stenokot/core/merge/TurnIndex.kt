@@ -62,7 +62,18 @@ internal class TurnIndex(turns: List<SpeakerTurn>, durationMs: Long) {
     }
 
     /** Конец интервала говорящего [speaker], содержащего момент [atMs]. */
-    fun endOfTurnAt(speaker: Int, atMs: Long): Long? {
+    fun endOfTurnAt(speaker: Int, atMs: Long): Long? = ownTurnAt(speaker, atMs)?.endMs
+
+    /** Начало интервала говорящего [speaker], содержащего момент [atMs]. */
+    fun startOfTurnAt(speaker: Int, atMs: Long): Long? = ownTurnAt(speaker, atMs)?.startMs
+
+    /** Говорит ли кто-нибудь в момент [atMs]. */
+    fun isSpeechAt(atMs: Long): Boolean {
+        val index = firstEndingAfter(atMs)
+        return index < size && turns[index].startMs <= atMs
+    }
+
+    private fun ownTurnAt(speaker: Int, atMs: Long): SpeakerTurn? {
         val own = bySpeaker[speaker] ?: return null
         var low = 0
         var high = own.size - 1
@@ -72,7 +83,7 @@ internal class TurnIndex(turns: List<SpeakerTurn>, durationMs: Long) {
             when {
                 atMs < turn.startMs -> high = middle - 1
                 atMs >= turn.endMs -> low = middle + 1
-                else -> return turn.endMs
+                else -> return turn
             }
         }
         return null
