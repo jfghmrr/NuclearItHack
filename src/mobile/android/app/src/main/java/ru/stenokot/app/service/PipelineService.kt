@@ -197,7 +197,7 @@ class PipelineService : Service() {
         private const val PERCENT = 100
         private const val START_GRACE_MS = 5_000L
         private const val WAKE_LOCK_TAG = "stenokot:pipeline"
-        private const val WAKE_LOCK_TIMEOUT_MS = 6L * 60 * 60 * 1000
+        private const val WAKE_LOCK_TIMEOUT_MS = 12L * 60 * 60 * 1000
 
         /**
          * Запускает службу. Вызывается при видимом приложении. Отказ системы не теряет задачу:
