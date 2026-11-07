@@ -91,7 +91,7 @@ private const val WARNING_LANG_FAILED = "LANG_ID_FAILED"
 private const val KEY_BANNER = "banner"
 private const val KEY_HINT = "hint"
 private const val KEY_OUTPUT = "output"
-private const val KEY_META = "meta"
+private const val KEY_HEADING = "heading"
 private const val TYPE_HEADER = 10
 private const val PINNED_STRIP_LIMIT = 2f
 
@@ -222,7 +222,11 @@ private class TranscriptNavigator(
     }
 }
 
-/** SCR-04 и SCR-05. */
+/**
+ * SCR-04 и SCR-05. Переход к реплике это разовая просьба: она выполняется и снимается с маршрута, иначе
+ * повторилась бы при возвращении на экран. Вкладка задаётся явно, потому что после возврата сохранённая
+ * вкладка восстанавливается как была, независимо от маршрута.
+ */
 @Composable
 fun ResultRoute(route: Route.Result, controller: StenoController, actions: AppActions) {
     val job by remember(route.jobId) { controller.job(route.jobId) }.collectAsStateWithLifecycle()
@@ -259,7 +263,6 @@ private fun ResultContent(
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var selected by rememberSaveable(stateSaver = SpeakerSetSaver) { mutableStateOf(emptySet<Int>()) }
     var matchCursor by rememberSaveable { mutableIntStateOf(0) }
-    var focusApplied by rememberSaveable(route.focusUtterance) { mutableStateOf(false) }
     val searchField = rememberTextFieldState()
     val transcriptList = rememberLazyListState()
     val protocolList = rememberLazyListState()
@@ -342,7 +345,7 @@ private fun ResultContent(
     val meta = audioMeta(result, noSpeech)
     val failed = result.output.exportFailed
     val bannerInList = stacked && phase != ProtocolPhase.APPLIED
-    val metaInList = stacked && window.tiny
+    val headingInList = stacked && window.largeText
     val outputInList = !rail
 
     val prep = prepared
@@ -351,14 +354,14 @@ private fun ResultContent(
     val headerItems = if (searchOpen) {
         0
     } else {
-        (if (metaInList) 1 else 0) + (if (bannerInList) 1 else 0) +
+        (if (headingInList) 1 else 0) + (if (bannerInList) 1 else 0) +
             (if (hintText != null) 1 else 0) + (if (outputInList) 1 else 0)
     }
     val transcriptHeader: LazyListScope.() -> Unit = {
         if (!searchOpen) {
-            if (metaInList) {
-                item(key = KEY_META, contentType = TYPE_HEADER) {
-                    ResultMeta(meta, Modifier.padding(horizontal = window.gutter + StenoSpace.s))
+            if (headingInList) {
+                item(key = KEY_HEADING, contentType = TYPE_HEADER) {
+                    ResultHeading(result.title, meta, Modifier.padding(horizontal = window.gutter + StenoSpace.s))
                 }
             }
             if (bannerInList) {
@@ -446,11 +449,11 @@ private fun ResultContent(
     LaunchedEffect(prep, route.focusUtterance) {
         val model = prep?.model ?: return@LaunchedEffect
         val index = route.focusUtterance?.let(model::indexOfId) ?: return@LaunchedEffect
-        if (focusApplied) return@LaunchedEffect
-        focusApplied = true
         val row = model.rows[index]
+        tab = ResultTab.TRANSCRIPT
         player.seekTo(row.startMs, play = route.play)
         navigator.reveal(row.startMs, resetNarrowing)
+        actions.navigator.replaceTop(route.copy(tab = ResultTab.TRANSCRIPT, focusUtterance = null, play = false))
     }
     LaunchedEffect(transcriptList) {
         snapshotFlow { transcriptList.isScrollInProgress }.collect { scrolling -> if (scrolling) keyboard?.hide() }
@@ -545,8 +548,7 @@ private fun ResultContent(
     val tabStatus = bannerText(phase, result.protocol).takeIf { phase == ProtocolPhase.APPLIED }
     val topBar: @Composable () -> Unit = {
         ResultTopBar(
-            title = result.title,
-            meta = meta.takeIf { !metaInList },
+            heading = (result.title to meta).takeIf { !headingInList },
             onBack = actions.back,
             onExport = onExport,
             onMenu = { menuOpen = true },

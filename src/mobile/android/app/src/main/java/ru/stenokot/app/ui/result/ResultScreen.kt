@@ -75,7 +75,7 @@ import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 
 private val RailWidth = 320.dp
-private val TabMinFont = 10.sp
+private val TabMinFont = 7.sp
 private val TabIndicatorHeight = 3.dp
 private val ReadyDot = 6.dp
 private const val NARROW_TITLE_DP = 380
@@ -147,14 +147,27 @@ internal fun ResultMeta(meta: String, modifier: Modifier = Modifier) {
     )
 }
 
+/** Имя файла и сводка целиком: для начала списка, когда в верхней панели им не хватает ширины. */
+@Composable
+internal fun ResultHeading(title: String, meta: String, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            modifier = Modifier.testTag(Tags.FILE_NAME).semantics { heading() },
+            style = StenoTheme.type.cardTitle,
+            color = StenoTheme.colors.onSurface,
+        )
+        ResultMeta(meta)
+    }
+}
+
 /**
- * Верхняя панель: файл и его сводка, заметный экспорт и меню записи. На крошечном окне сводка уходит
- * в начало списка: [meta] тогда равно null.
+ * Верхняя панель: файл и его сводка, заметный экспорт и меню записи. На крупном шрифте кнопка оставила
+ * бы имени пару букв, поэтому оно уходит в начало списка: [heading] тогда равно null.
  */
 @Composable
 internal fun ResultTopBar(
-    title: String,
-    meta: String?,
+    heading: Pair<String, String>?,
     onBack: () -> Unit,
     onExport: () -> Unit,
     onMenu: () -> Unit,
@@ -170,8 +183,10 @@ internal fun ResultTopBar(
     ) {
         BackButton(onBack)
         Column(Modifier.weight(1f).padding(vertical = StenoSpace.xs)) {
-            ResultTitle(title)
-            meta?.let { ResultMeta(it) }
+            heading?.let { (title, meta) ->
+                ResultTitle(title)
+                ResultMeta(meta)
+            }
         }
         ExportButton(onExport)
         MenuButton(onMenu)
@@ -229,8 +244,8 @@ private fun ProtocolMark(phase: ProtocolPhase) {
 
 /**
  * Вкладки результата. Значок на вкладке протокола держит статус, когда баннера в списке нет. Если
- * передан [status], он остаётся в дереве доступности под прежней меткой: так автоматика и TalkBack
- * узнают, что протокол готов.
+ * передан [status], он остаётся в дереве доступности под прежней меткой на линии под вкладками:
+ * наложить узел на вкладку нельзя, он отнял бы у неё часть области нажатия.
  */
 @Composable
 internal fun ResultTabs(
@@ -241,7 +256,7 @@ internal fun ResultTabs(
     onTab: (ResultTab) -> Unit,
 ) {
     val colors = StenoTheme.colors
-    Box(modifier.fillMaxWidth().background(colors.background)) {
+    Column(modifier.fillMaxWidth().background(colors.background)) {
         PrimaryTabRow(
             selectedTabIndex = tab.ordinal,
             modifier = Modifier.padding(horizontal = LocalWindowLayout.current.gutter),
@@ -283,26 +298,17 @@ internal fun ResultTabs(
                 },
             )
         }
+        val divider = Modifier.fillMaxWidth().height(StenoSize.hairline).background(colors.outlineVariant)
         Spacer(
-            Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .height(StenoSize.hairline)
-                .background(colors.outlineVariant),
+            if (status != null) {
+                divider.testTag(Tags.BANNER_LLM).clearAndSetSemantics {
+                    text = AnnotatedString(status)
+                    liveRegion = LiveRegionMode.Polite
+                }
+            } else {
+                divider
+            },
         )
-        if (status != null) {
-            Spacer(
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .height(StenoSize.hairline)
-                    .testTag(Tags.BANNER_LLM)
-                    .clearAndSetSemantics {
-                        text = AnnotatedString(status)
-                        liveRegion = LiveRegionMode.Polite
-                    },
-            )
-        }
     }
 }
 
