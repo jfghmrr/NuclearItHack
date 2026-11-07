@@ -52,7 +52,7 @@ class AppGraph(context: Context) {
     /** Очередь и стадии. */
     val runner = PipelineRunner(
         store = store,
-        engines = EngineFactory(),
+        engines = EngineFactory(app, ledger.version),
         device = device,
         sources = AndroidSources(app) { jobsRoot },
         outputs = publisher,
