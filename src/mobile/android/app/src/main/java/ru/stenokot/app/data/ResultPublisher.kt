@@ -3,11 +3,13 @@ package ru.stenokot.app.data
 import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
+import android.database.sqlite.SQLiteConstraintException
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import ru.stenokot.app.pipeline.EngineFailure
 import ru.stenokot.app.pipeline.MetaKind
 import ru.stenokot.app.pipeline.OutputGateway
@@ -21,6 +23,11 @@ import java.io.IOException
  * Запись идёт с IS_PENDING, поэтому автоматика никогда не увидит половину файла, а повторная
  * обработка заменяет свою запись и не плодит `name (1).json`. Служебные файлы лежат в `meta/`,
  * чтобы поиск `*.json` в основной папке находил только контракт.
+ *
+ * Файл, оставшийся от удалённой установки, заменить нельзя: у него больше нет владельца, и система
+ * отказывает в чтении, записи, удалении и переименовании. Без диалога или особого разрешения результат
+ * получает имя `name (1).json`, и задача сообщает об этом. Если пропал сам файл, а запись осталась,
+ * имя получается точным.
  */
 class ResultPublisher(context: Context) : OutputGateway {
     private val app = context.applicationContext
@@ -37,7 +44,11 @@ class ResultPublisher(context: Context) : OutputGateway {
             val written = write(ROOT_PATH, name, bytes)
             val shownName = displayName(written) ?: name
             PublishedFile(publicPath(ROOT_PATH, shownName), written.toString(), fallback = false, renamed = shownName != name)
+        } catch (failure: SQLiteConstraintException) {
+            Log.w(TAG, "Индекс занят записью прошлой установки", failure)
+            landedInFolder(name, bytes) ?: fallback(name, bytes)
         } catch (failure: Exception) {
+            Log.w(TAG, "Запись через MediaStore не удалась", failure)
             fallback(name, bytes)
         }
     }
@@ -67,6 +78,17 @@ class ResultPublisher(context: Context) : OutputGateway {
         } catch (failure: IOException) {
             throw EngineFailure(ErrorCode.EXPORT_FAILED, "Файл не записан", failure)
         }
+    }
+
+    /**
+     * Запись прошлой установки остаётся в индексе и после исчезновения файла. Система уже переименовала
+     * наш файл в нужное имя, но индекс обновить не смогла, и IS_PENDING не снимается. Прочитать такой
+     * файл приложение не вправе, а размер виден всегда. Чужого файла здесь быть не может: занятое имя
+     * система заменила бы на `name (1).json` ещё при создании записи.
+     */
+    private fun landedInFolder(name: String, bytes: ByteArray): PublishedFile? {
+        val file = File(publicPath(ROOT_PATH, name))
+        return if (file.length() == bytes.size.toLong()) PublishedFile(file.path, null, fallback = false) else null
     }
 
     private fun fallback(name: String, bytes: ByteArray): PublishedFile {
@@ -137,6 +159,7 @@ class ResultPublisher(context: Context) : OutputGateway {
         File(Environment.getExternalStorageDirectory(), relativePath + name).path
 
     private companion object {
+        const val TAG = "ResultPublisher"
         const val MIME_JSON = "application/json"
         const val ROOT_PATH = "Download/Stenokot/"
         const val META_PATH = "Download/Stenokot/meta/"
