@@ -486,8 +486,14 @@ class SpeakerRefiner(private val params: RefineParams = RefineParams()) {
         for ((speaker, own) in turns.groupBy { it.speaker }) {
             val indices = byOwner[speaker].orEmpty()
             val fallback = decision.fallback[speaker] ?: free.getValue(speaker)
-            for (turn in own) {
-                val inside = indices.filter { phrases[it].startMs < turn.endMs && phrases[it].endMs > turn.startMs }
+            var first = 0
+            for (turn in own.sortedBy { it.startMs }) {
+                while (first < indices.size && phrases[indices[first]].endMs <= turn.startMs) first++
+                val inside = ArrayList<Int>()
+                var position = first
+                while (position < indices.size && phrases[indices[position]].startMs < turn.endMs) {
+                    inside += indices[position++]
+                }
                 placed += inside
                 if (inside.isEmpty()) out += turn.copy(speaker = fallback) else split(turn, inside, phrases, labels, out)
             }
