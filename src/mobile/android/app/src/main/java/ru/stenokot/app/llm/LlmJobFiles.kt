@@ -7,36 +7,14 @@ import java.nio.file.StandardCopyOption
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import ru.stenokot.app.data.LangDocument
+import ru.stenokot.app.data.MergedDocument
+import ru.stenokot.app.data.toUtterance
 import ru.stenokot.core.llm.LlmWindow
 import ru.stenokot.core.llm.WindowResult
 import ru.stenokot.core.llm.parseWindowOutput
 import ru.stenokot.core.model.Language
 import ru.stenokot.core.model.Utterance
-import ru.stenokot.core.model.Word
-
-/** Слово в merged.json. */
-@Serializable
-private data class MergedWord(val t: String, val s: Long, val e: Long, val k: Int)
-
-/** Реплика в merged.json. */
-@Serializable
-private data class MergedUtterance(
-    val id: Int,
-    val speaker: Int,
-    val startMs: Long,
-    val endMs: Long,
-    val words: List<MergedWord> = emptyList(),
-    val text: String,
-    val overlap: Boolean = false,
-)
-
-/** Содержимое merged.json: неизменяемая база, из которой протокол копирует реплики. */
-@Serializable
-private data class MergedFile(val utterances: List<MergedUtterance>)
-
-/** Содержимое lang.json. Значение отсутствует, если определить язык не удалось. */
-@Serializable
-private data class LanguageFile(val language: Language? = null, val failed: Boolean = false)
 
 /**
  * Строка журнала окон: сырой ответ модели. Разбор ответа не зависит от запуска, поэтому после смерти
@@ -58,19 +36,9 @@ internal class LlmJobFiles(private val dir: File) {
 
     /** Читает реплики и язык. */
     fun readJob(): LlmJob {
-        val utterances = FileJson.decodeFromString<MergedFile>(merged.readText()).utterances.map { line ->
-            Utterance(
-                id = line.id,
-                speaker = line.speaker,
-                startMs = line.startMs,
-                endMs = line.endMs,
-                words = line.words.map { Word(it.t, it.s, it.e, it.k) },
-                text = line.text,
-                overlap = line.overlap,
-            )
-        }
+        val utterances = FileJson.decodeFromString<MergedDocument>(merged.readText()).utterances.map { it.toUtterance() }
         val language = runCatching {
-            FileJson.decodeFromString<LanguageFile>(languageFile.readText())
+            FileJson.decodeFromString<LangDocument>(languageFile.readText())
         }.getOrNull()?.takeUnless { it.failed }?.language
         return LlmJob(utterances, language, utterances.maxOfOrNull { it.endMs } ?: 0L)
     }
