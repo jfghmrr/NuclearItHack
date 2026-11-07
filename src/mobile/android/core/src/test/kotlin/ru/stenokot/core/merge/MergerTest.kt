@@ -14,6 +14,7 @@ import ru.stenokot.core.model.AsrToken
 import ru.stenokot.core.model.SpeakerTurn
 import ru.stenokot.core.model.SpeechSegment
 import ru.stenokot.core.model.Utterance
+import ru.stenokot.core.vad.ChunkPlanner
 
 class MergerTest {
     private fun segment(index: Int, startMs: Long, endMs: Long, tokens: List<AsrToken>) =
@@ -367,6 +368,26 @@ class MergerTest {
             val out = DefaultMerger(duration).merge(listOf(segment(0, 0, duration, tokens)), turns)
             assertEquals("И4", tokens.map { it.text.trim() }, out.flatMap { it.words }.map { it.text })
         }
+    }
+
+    /** Запись без пауз режется внахлёст, слова каждого среза распознаны заново и склеиваются обратно. */
+    @Test
+    fun plannedOverlapsStitchBackWithoutLossOrDuplicates() {
+        val durationMs = 70_000L
+        val stepMs = 280L
+        val words = (0 until durationMs / stepMs).map { "слово$it" }
+        val planner = ChunkPlanner()
+        val chunks = planner.plan(FloatArray((durationMs * 16 / 512).toInt()) { 0.95f }, durationMs * 16)
+        assertTrue(chunks.size >= 3)
+        val asr = chunks.map { chunk ->
+            val tokens = words.indices
+                .map { index -> index to index * stepMs }
+                .filter { (_, ms) -> ms * 16 >= chunk.startSample && ms * 16 < chunk.endSample }
+                .map { (index, ms) -> AsrToken(" ${words[index]}", ms) }
+            AsrSegment(chunk, "", tokens)
+        }
+        val out = DefaultMerger(durationMs).merge(asr, listOf(SpeakerTurn(0, durationMs, 0)))
+        assertEquals(words, out.flatMap { it.words }.map { it.text })
     }
 
     @Test

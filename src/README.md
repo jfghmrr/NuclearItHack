@@ -1,19 +1,22 @@
 # Сборка и запуск
 
-Android-проект находится в `src/mobile/android`.
+Android-проект находится в `src/mobile/android`. Итоговый APK один, все модели лежат внутри него.
 
 ## Что нужно
 
 | Компонент | Версия |
 |---|---|
-| JDK | 21 (подходит JBR из Android Studio) |
+| JDK | 21, подходит JBR из Android Studio |
 | Android SDK | platform 36, build-tools 36.0.0 |
 | NDK | 28.2.13676358 для приложения, 29.0.13113456 для llama.cpp |
 | CMake | 3.31.6 |
+| Утилиты | `git`, `curl`, `tar`, `shasum` |
 
 ```bash
 sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358" "ndk;29.0.13113456" "cmake;3.31.6"
 ```
+
+Версии проекта: AGP 9.3.3, Gradle 9.5.0 через обёртку, Kotlin 2.4.21, Compose BOM 2026.06.01, compileSdk и targetSdk 36, minSdk 29. Остальное закреплено в `src/mobile/android/gradle/libs.versions.toml`.
 
 ## Сборка из чистого клона
 
@@ -26,7 +29,12 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 ./gradlew :app:assembleFullRelease
 ```
 
-Модели и нативные библиотеки sherpa-onnx не хранятся в Git: скрипт скачивает их и сверяет SHA-256 по `config/models.lock`. Без `keystore.properties` release-сборка подписывается отладочным ключом.
+Результат: `app/build/outputs/apk/full/release/app-full-release.apk`.
+
+- Подмодуль `third_party/llama.cpp` закреплён на тег v0.9.0. Если клон сделан без `--recurse-submodules`, выполните `git submodule update --init --depth 1`
+- Модели и нативные библиотеки sherpa-onnx не хранятся в Git. Скрипт скачивает их и сверяет SHA-256 по `config/models.lock`. Для скачивания нужна сеть, для работы приложения нет
+- Каталог моделей задаёт переменная `STENOKOT_MODELS_DIR`, по умолчанию `models` в корне репозитория
+- Без `keystore.properties` release-сборка подписывается отладочным ключом
 
 ## Варианты сборки
 
@@ -37,14 +45,16 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 
 ## Запуск
 
+Команды выполняются из `src/mobile/android`.
+
 ```bash
 adb install -r -g app/build/outputs/apk/full/release/app-full-release.apk
-adb push запись.mp3 /sdcard/Download/
+adb push dialog1.mp3 /sdcard/Download/
 adb shell am start -a android.intent.action.VIEW -t audio/mpeg \
-  -d file:///sdcard/Download/запись.mp3 -n ru.stenokot.app/.MainActivity
+  -d file:///sdcard/Download/dialog1.mp3 -n ru.stenokot.app/.MainActivity
 ```
 
-Результат появится в `/sdcard/Download/Stenokot/запись.json`. Подробнее в [docs/AUTOMATION.md](../docs/AUTOMATION.md).
+Результат появится в `/sdcard/Download/Stenokot/dialog1.json`. Подробнее в [docs/AUTOMATION.md](../docs/AUTOMATION.md).
 
 ## Тесты
 
@@ -52,3 +62,5 @@ adb shell am start -a android.intent.action.VIEW -t audio/mpeg \
 cd src/mobile/android
 ./gradlew :core:test
 ```
+
+Тесты `:core` идут на JVM и не требуют устройства. Результаты - в [docs/TEST_RESULTS.md](../docs/TEST_RESULTS.md).
