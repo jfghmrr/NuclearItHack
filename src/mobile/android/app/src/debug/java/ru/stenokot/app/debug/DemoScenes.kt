@@ -133,7 +133,7 @@ private fun ds1(state: JobState, work: ProcessingUi? = null, result: ResultUi? =
     JobDetailUi(Ds1Summary.copy(state = state), work, result, diagnostics = null)
 
 private fun output(stem: String, exportFailed: Boolean = false) = OutputFileUi(
-    path = "Download/Stenokot/$stem.json",
+    path = "Download/Skvor/$stem.json",
     sizeBytes = DemoData.mib(0.05),
     createdAtMs = DemoData.at(11, 6, 14, 26),
     validated = true,
@@ -352,7 +352,7 @@ private fun homeScene(id: String): DemoScene? {
                 job(2, JobState.Queued, 2),
                 job(3, JobState.Paused(Stage.ASR, PauseReason.QUEUED_BEHIND_OTHER_JOB), 3),
                 job(4, done(LlmStatus.APPLIED)),
-                job(5, JobState.TranscriptReady("Download/Stenokot/zapis_soveshchaniya_5.json")),
+                job(5, JobState.TranscriptReady("Download/Skvor/zapis_soveshchaniya_5.json")),
                 job(6, JobState.Failed(Stage.DECODE, ErrorCode.DECODE_CORRUPT, null)),
                 job(7, JobState.Cancelled),
                 job(8, done(LlmStatus.SKIPPED_LOW_MEMORY)),
@@ -425,7 +425,7 @@ private fun processingScene(id: String): DemoScene? = when (id) {
         done(LlmStatus.APPLIED),
         ds1Result(protocol(LlmStatus.APPLIED, windowsDone = 8, document = DemoData.protocolDs1)),
     )
-    "S03-X2" -> doneScene(JobState.TranscriptReady("Download/Stenokot/x.json"), ds1Result(protocol(null)))
+    "S03-X2" -> doneScene(JobState.TranscriptReady("Download/Skvor/x.json"), ds1Result(protocol(null)))
     "S03-X3" -> doneScene(
         done(LlmStatus.APPLIED),
         ds1Result(protocol(LlmStatus.APPLIED, windowsDone = 8, document = DemoData.protocolDs1), exportFailed = true),
@@ -554,7 +554,7 @@ private fun resultScene(id: String): DemoScene? {
             done(LlmStatus.FAILED),
             ds1Result(protocol(LlmStatus.FAILED, error = ErrorCode.LLM_MODEL_UNAVAILABLE)),
         )
-        "S04-R" -> resultScene(JobState.TranscriptReady("Download/Stenokot/x.json"), ds1Result(protocol(null)))
+        "S04-R" -> resultScene(JobState.TranscriptReady("Download/Skvor/x.json"), ds1Result(protocol(null)))
         "S04-A2" -> resultScene(
             running(Stage.LLM, 0f),
             ds1Result(protocol(null, running = true, windowsDone = 0)),

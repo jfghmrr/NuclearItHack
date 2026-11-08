@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "Stenokot"
+rootProject.name = "Skvor"
 include(":app", ":core", ":engine-llm")

@@ -118,7 +118,7 @@ private fun ForcedNight(dark: Boolean, content: @Composable () -> Unit) {
         val forced = Configuration(configuration).apply {
             uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or night
         }
-        ContextThemeWrapper(base, R.style.Theme_Stenokot).apply { applyOverrideConfiguration(forced) }
+        ContextThemeWrapper(base, R.style.Theme_Skvor).apply { applyOverrideConfiguration(forced) }
     }
     CompositionLocalProvider(
         LocalContext provides themed,

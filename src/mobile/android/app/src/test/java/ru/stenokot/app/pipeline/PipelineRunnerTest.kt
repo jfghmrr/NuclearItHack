@@ -468,7 +468,7 @@ class PipelineRunnerTest {
         val id = h.import("taken")
         h.await(done(id))
         val job = h.runner.jobs.value.getValue(id)
-        assertEquals("Download/Stenokot/taken (1).json", job.output?.path)
+        assertEquals("Download/Skvor/taken (1).json", job.output?.path)
         assertTrue(OUTPUT_RENAMED_WARNING in job.warnings)
         assertTrue(OUTPUT_RENAMED_WARNING in h.store.files(id).metadata.readText())
     }

@@ -341,17 +341,17 @@ class RulesTest {
 
     @Test
     fun externalSourceCannotPointIntoPrivateFiles() {
-        val roots = listOf("/data/user/0/ru.stenokot.app", "/data/data/ru.stenokot.app")
-        val pkg = "ru.stenokot.app"
+        val roots = listOf("/data/user/0/ru.skvor.app", "/data/data/ru.skvor.app")
+        val pkg = "ru.skvor.app"
         assertTrue(IntentRules.allowedSource("file", "/storage/emulated/0/Download/a.mp3", null, roots, pkg))
         assertTrue(IntentRules.allowedSource(null, "/sdcard/Download/a.mp3", null, roots, pkg))
-        assertFalse(IntentRules.allowedSource("file", "/data/user/0/ru.stenokot.app/files/jobs/x/source.wav", null, roots, pkg))
-        assertFalse(IntentRules.allowedSource("file", "/data/data/ru.stenokot.app", null, roots, pkg))
-        assertTrue(IntentRules.allowedSource("file", "/data/user/0/ru.stenokot.application/a.mp3", null, roots, pkg))
+        assertFalse(IntentRules.allowedSource("file", "/data/user/0/ru.skvor.app/files/jobs/x/source.wav", null, roots, pkg))
+        assertFalse(IntentRules.allowedSource("file", "/data/data/ru.skvor.app", null, roots, pkg))
+        assertTrue(IntentRules.allowedSource("file", "/data/user/0/ru.skvor.application/a.mp3", null, roots, pkg))
         assertFalse(IntentRules.allowedSource("file", null, null, roots, pkg))
         assertTrue(IntentRules.allowedSource("content", "/x", "com.android.providers.downloads.documents", roots, pkg))
-        assertFalse(IntentRules.allowedSource("content", "/x", "ru.stenokot.app.fileprovider", roots, pkg))
-        assertFalse(IntentRules.allowedSource("content", "/x", "ru.stenokot.app", roots, pkg))
+        assertFalse(IntentRules.allowedSource("content", "/x", "ru.skvor.app.fileprovider", roots, pkg))
+        assertFalse(IntentRules.allowedSource("content", "/x", "ru.skvor.app", roots, pkg))
         assertFalse(IntentRules.allowedSource("http", "/a.mp3", "example.com", roots, pkg))
     }
 }

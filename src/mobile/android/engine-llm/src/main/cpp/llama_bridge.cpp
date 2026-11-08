@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr const char *kTag = "StenokotLlama";
+constexpr const char *kTag = "SkvorLlama";
 
 /** Коды итога генерации. Значения совпадают с GenerationStatus в LlamaBridge.kt. */
 enum Status : jlong {

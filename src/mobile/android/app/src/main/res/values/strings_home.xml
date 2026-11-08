@@ -41,7 +41,7 @@
     <string name="scr01_delete_title">Удалить запись?</string>
     <string name="scr01_delete_body">Запись и её стенограмма исчезнут из приложения</string>
     <string name="scr01_delete_body_no_json">Запись исчезнет из приложения. Файла JSON у неё нет</string>
-    <string name="scr01_delete_keeps_json">Файл JSON в папке Download/Stenokot останется на месте</string>
+    <string name="scr01_delete_keeps_json">Файл JSON в папке Download/Skvor останется на месте</string>
     <string name="scr01_delete_exported">Удалить и файл JSON</string>
     <string name="scr01_delete_exported_warning">Файл JSON будет удалён с устройства, вернуть его нельзя</string>
     <string name="scr01_delete_confirm">Удалить</string>

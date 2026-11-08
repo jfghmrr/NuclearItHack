@@ -203,7 +203,7 @@ internal class FakeController(private val context: Context? = null) : StenoContr
                 elapsed += TICK_MS
             }
         }
-        publish(id, JobState.TranscriptReady("Download/Stenokot/live.json"))
+        publish(id, JobState.TranscriptReady("Download/Skvor/live.json"))
         delay(3 * TICK_MS)
         publish(id, JobState.Done(LlmStatus.APPLIED, emptyList()))
         startNextQueued()
@@ -247,7 +247,7 @@ internal class FakeController(private val context: Context? = null) : StenoContr
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
-            put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/Stenokot/")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/Skvor/")
         }
         val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return
         resolver.openOutputStream(uri, "wt")?.use { it.write(DEMO_JSON.toByteArray()) }

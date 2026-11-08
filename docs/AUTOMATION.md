@@ -5,28 +5,28 @@
 ## Запуск
 
 ```bash
-adb install -r -g stenokot-<commit>.apk
+adb install -r -g skvor-<commit>.apk
 adb push dialog1.mp3 /sdcard/Download/
 adb shell am start -a android.intent.action.VIEW -t audio/mpeg \
-  -d file:///sdcard/Download/dialog1.mp3 -n ru.stenokot.app/.MainActivity
+  -d file:///sdcard/Download/dialog1.mp3 -p ru.skvor.app
 ```
 
 - Ключ `-g` выдаёт разрешение на чтение аудио. Без него адрес `file://` не открыть, и задача завершится `FAILED:IMPORT_NO_PERMISSION`
 - Для других форматов укажите свой тип: `audio/wav`, `audio/mp4`, `audio/ogg`, `audio/flac`
 - Несколько файлов можно отправить подряд: они встанут в очередь и пройдут по порядку
 - Тот же путь через интерфейс: `btn_import`, затем файл в системном окне выбора. Окно открывается в `Download`, можно выбрать несколько файлов. Запускать обработку отдельно не нужно
-- Папка `/sdcard/Android/data/ru.stenokot.app/files/inbox/` видна приложению без разрешений. Файл, положенный туда через `adb push`, появляется на Главной в разделе «Аудио на устройстве» с подписью «Папка приложения». Нажатие на строку запускает обработку
+- Папка `/sdcard/Android/data/ru.skvor.app/files/inbox/` видна приложению без разрешений. Файл, положенный туда через `adb push`, появляется на Главной в разделе «Аудио на устройстве» с подписью «Папка приложения». Нажатие на строку запускает обработку
 
 ## Результат
 
-Контрактный файл: `/sdcard/Download/Stenokot/dialog1.json`. Имя берётся из имени исходного файла без расширения. Повторная обработка того же файла заменяет свой результат, другой файл с тем же именем получает имя с расширением, например `dialog1.wav.json`.
+Контрактный файл: `/sdcard/Download/Skvor/dialog1.json`. Имя берётся из имени исходного файла без расширения. Повторная обработка того же файла заменяет свой результат, другой файл с тем же именем получает имя с расширением, например `dialog1.wav.json`.
 
-Если записать в `Download` не удалось, тот же файл появляется в `/sdcard/Android/data/ru.stenokot.app/files/export/`, и этот путь показывает `txt_output_path`. Служебные данные лежат отдельно в `/sdcard/Download/Stenokot/meta/`, поэтому поиск `*.json` в основной папке находит только контрактные файлы.
+Если записать в `Download` не удалось, тот же файл появляется в `/sdcard/Android/data/ru.skvor.app/files/export/`, и этот путь показывает `txt_output_path`. Служебные данные лежат отдельно в `/sdcard/Download/Skvor/meta/`, поэтому поиск `*.json` в основной папке находит только контрактные файлы.
 
 Файл публикуется целиком: пока запись не закончена, в папке его не видно. Экспорт вручную не нужен.
 
 ```bash
-adb shell ls /sdcard/Download/Stenokot/
+adb shell ls /sdcard/Download/Skvor/
 ```
 
 ## Признаки готовности

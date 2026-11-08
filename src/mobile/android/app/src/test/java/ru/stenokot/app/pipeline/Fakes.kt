@@ -303,8 +303,8 @@ class FakeOutputs : OutputGateway {
     override suspend fun publishTranscript(stem: String, bytes: ByteArray): PublishedFile {
         if (failPublish) error("Диск недоступен")
         transcripts[stem] = bytes
-        if (nameTaken) return PublishedFile("Download/Stenokot/$stem (1).json", "content://$stem", false, renamed = true)
-        return PublishedFile("Download/Stenokot/$stem.json", "content://$stem", fallback = false)
+        if (nameTaken) return PublishedFile("Download/Skvor/$stem (1).json", "content://$stem", false, renamed = true)
+        return PublishedFile("Download/Skvor/$stem.json", "content://$stem", fallback = false)
     }
 
     override suspend fun publishMeta(stem: String, kind: MetaKind, source: File) {

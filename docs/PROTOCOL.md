@@ -14,14 +14,14 @@
 |---|---|
 | Системный выбор файла | Кнопка «Импорт аудио» |
 | «Открыть с помощью», «Поделиться» | `ACTION_VIEW`, `ACTION_SEND`, `ACTION_SEND_MULTIPLE` с `content://` |
-| Команда | `adb shell am start -a android.intent.action.VIEW -t audio/mpeg -d file:///sdcard/Download/a.mp3 -n ru.stenokot.app/.MainActivity` |
+| Команда | `adb shell am start -a android.intent.action.VIEW -t audio/mpeg -d file:///sdcard/Download/a.mp3 -p ru.skvor.app` |
 | Запись в приложении | Кнопка «Записать», WAV 16 кГц моно |
 
 Форматы: MP3, WAV (включая RF64 и файлы больше 4 ГБ), M4A, OGG, FLAC. Следующий файл можно отправить в уже открытое приложение той же командой: задачи идут в очередь по одной. Адрес `file://` внутрь закрытых каталогов приложения и `content://` его собственного провайдера отклоняются до обработки.
 
 ## Выход
 
-Контрактный файл появляется в `Download/Stenokot/<имя>.json` сразу после проверки валидатором, до запуска протокола:
+Контрактный файл появляется в `Download/Skvor/<имя>.json` сразу после проверки валидатором, до запуска протокола:
 
 ```json
 {
@@ -45,8 +45,8 @@
 
 | Файл | Что внутри |
 |---|---|
-| `Download/Stenokot/meta/<имя>.metadata.json` | Версии и SHA-256 моделей, SHA-256 входа и JSON, время стадий, `rtf_core`, `rtf_full`, пик памяти, предупреждения |
-| `Download/Stenokot/meta/<имя>.protocol.json` | Протокол: разделы с темой и временем, пункты `decision`, `action`, `question` со ссылкой на номер реплики |
+| `Download/Skvor/meta/<имя>.metadata.json` | Версии и SHA-256 моделей, SHA-256 входа и JSON, время стадий, `rtf_core`, `rtf_full`, пик памяти, предупреждения |
+| `Download/Skvor/meta/<имя>.protocol.json` | Протокол: разделы с темой и временем, пункты `decision`, `action`, `question` со ссылкой на номер реплики |
 
 ## Состояние
 
@@ -68,7 +68,7 @@ Android 10 и новее, `arm64-v8a`. Сети нет: в манифесте н
 adb install -r -g skvor.apk
 adb push meeting.mp3 /sdcard/Download/meeting.mp3
 adb shell am start -a android.intent.action.VIEW -t audio/mpeg \
-  -d file:///sdcard/Download/meeting.mp3 -n ru.stenokot.app/.MainActivity
-adb shell 'until [ -f /sdcard/Download/Stenokot/meeting.json ]; do sleep 1; done'
-adb pull /sdcard/Download/Stenokot/meeting.json
+  -d file:///sdcard/Download/meeting.mp3 -p ru.skvor.app
+adb shell 'until [ -f /sdcard/Download/Skvor/meeting.json ]; do sleep 1; done'
+adb pull /sdcard/Download/Skvor/meeting.json
 ```

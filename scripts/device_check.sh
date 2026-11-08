@@ -7,7 +7,7 @@ set -euo pipefail
 APK="$1"
 AUDIO="$2"
 SERIAL="${3:-emulator-5554}"
-PKG=ru.stenokot.app
+PKG=ru.skvor.app
 OUT="$(mkdir -p "${STENOKOT_OUT:-device_check}" && cd "${STENOKOT_OUT:-device_check}" && pwd)"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SDK="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
@@ -32,7 +32,7 @@ fi
 echo "сетевых разрешений нет"
 
 "${ADB[@]}" uninstall "$PKG" >/dev/null 2>&1 || true
-"${ADB[@]}" shell rm -rf /sdcard/Download/Stenokot
+"${ADB[@]}" shell rm -rf /sdcard/Download/Skvor
 "${ADB[@]}" install -r -g "$APK"
 "${ADB[@]}" push "$AUDIO" "/sdcard/Download/$NAME" >/dev/null
 "${ADB[@]}" shell cmd connectivity airplane-mode enable
@@ -51,9 +51,9 @@ echo "итог: ${final:-нет итога за 30 минут}"
 [ -n "$final" ] || exit 1
 case "$final" in FAILED:*|CANCELLED) exit 1 ;; esac
 
-"${ADB[@]}" pull "/sdcard/Download/Stenokot/$STEM.json" "$OUT/" >/dev/null
-"${ADB[@]}" pull "/sdcard/Download/Stenokot/meta/$STEM.metadata.json" "$OUT/" >/dev/null
-"${ADB[@]}" pull "/sdcard/Download/Stenokot/meta/$STEM.protocol.json" "$OUT/" >/dev/null 2>&1 || echo "протокола нет"
+"${ADB[@]}" pull "/sdcard/Download/Skvor/$STEM.json" "$OUT/" >/dev/null
+"${ADB[@]}" pull "/sdcard/Download/Skvor/meta/$STEM.metadata.json" "$OUT/" >/dev/null
+"${ADB[@]}" pull "/sdcard/Download/Skvor/meta/$STEM.protocol.json" "$OUT/" >/dev/null 2>&1 || echo "протокола нет"
 DURATION="$(grep -o '"audio_duration_ms": *[0-9]*' "$OUT/$STEM.metadata.json" | grep -o '[0-9]*$')"
 cd "$ROOT/src/mobile/android"
 "${GRADLE:-./gradlew}" -q :core:validateTranscript --args="$OUT/$STEM.json $DURATION"

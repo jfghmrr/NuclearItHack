@@ -338,7 +338,7 @@ internal object DemoData {
         ),
         jsonValid = true,
         jsonSha256 = "demo-not-a-real-hash",
-        jsonPath = "Download/Stenokot/podcast_gorodskie_sady_ep12.json",
+        jsonPath = "Download/Skvor/podcast_gorodskie_sady_ep12.json",
         llmTokens = 4_200,
         lastJobId = "ds1",
         threads = 3,

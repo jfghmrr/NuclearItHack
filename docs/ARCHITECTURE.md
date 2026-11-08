@@ -22,7 +22,7 @@
 
 ```text
 Импорт -> Предпроверка -> Декодирование -> VAD -> Язык -> ASR -> Диаризация окнами -> Уточнение по фразам
-       -> Слияние -> Проверка JSON -> Download/Stenokot/<имя>.json -> пауза 3 с -> LLM в процессе :llm -> Протокол
+       -> Слияние -> Проверка JSON -> Download/Skvor/<имя>.json -> пауза 3 с -> LLM в процессе :llm -> Протокол
 ```
 
 Каждая стадия читает вход с диска и пишет выход на диск. Модель стадии закрывается до начала следующей. Исключение одно: распознаватель может ждать следующий файл уже загруженным, если свободно не меньше 1450 МиБ.
@@ -48,8 +48,8 @@ filesDir/jobs/<uuid>/
 filesDir/speed.json         скорость этого устройства для оценки времени
 filesDir/recordings/        записи с микрофона
 noBackupFilesDir/models/<версия>/    копия файла языковой модели, отметка llm.READY
-Download/Stenokot/<имя>.json
-Download/Stenokot/meta/<имя>.metadata.json, <имя>.protocol.json
+Download/Skvor/<имя>.json
+Download/Skvor/meta/<имя>.metadata.json, <имя>.protocol.json
 ```
 
 ## Основные решения

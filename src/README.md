@@ -45,7 +45,7 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 3. Тесты `:core:test` и `:app:testDevDebugUnitTest`
 4. `:app:assembleFullRelease`, подпись ключом команды из секретов репозитория
 5. Проверка `aapt2 dump permissions`: сборка падает, если в APK есть `INTERNET` или `ACCESS_NETWORK_STATE`
-6. Публикация APK `stenokot-<commit>.apk` в Releases, SHA-256 в описании релиза
+6. Публикация APK `skvor-<commit>.apk` в Releases, SHA-256 в описании релиза
 
 Пробный запуск 42394754449 на коммите `f0bba51` собрал APK из чистого клона примерно за 17 минут.
 
@@ -62,10 +62,10 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 adb install -r -g app/build/outputs/apk/full/release/app-full-release.apk
 adb push dialog1.mp3 /sdcard/Download/
 adb shell am start -a android.intent.action.VIEW -t audio/mpeg \
-  -d file:///sdcard/Download/dialog1.mp3 -n ru.stenokot.app/.MainActivity
+  -d file:///sdcard/Download/dialog1.mp3 -p ru.skvor.app
 ```
 
-Результат появится в `/sdcard/Download/Stenokot/dialog1.json`. Подробнее в [docs/AUTOMATION.md](../docs/AUTOMATION.md).
+Результат появится в `/sdcard/Download/Skvor/dialog1.json`. Подробнее в [docs/AUTOMATION.md](../docs/AUTOMATION.md).
 
 ## Тесты
 

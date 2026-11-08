@@ -9,12 +9,12 @@ class ExportPanelTest {
 
     @Test
     fun fullPathBecomesRelativeFolder() {
-        assertEquals("Download/Stenokot", outputFolder("$root/Download/Stenokot/clip.json", root))
+        assertEquals("Download/Skvor", outputFolder("$root/Download/Skvor/clip.json", root))
     }
 
     @Test
     fun relativePathStaysAsItIs() {
-        assertEquals("Download/Stenokot", outputFolder("Download/Stenokot/clip.json", root))
+        assertEquals("Download/Skvor", outputFolder("Download/Skvor/clip.json", root))
     }
 
     @Test

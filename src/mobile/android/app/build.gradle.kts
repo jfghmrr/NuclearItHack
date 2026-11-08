@@ -48,7 +48,7 @@ android {
     ndkVersion = "28.2.13676358"
 
     defaultConfig {
-        applicationId = "ru.stenokot.app"
+        applicationId = "ru.skvor.app"
         minSdk = 29
         targetSdk = 36
         versionCode = 1

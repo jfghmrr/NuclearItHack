@@ -71,7 +71,7 @@ data class PublishedFile(
     val renamed: Boolean = false,
 )
 
-/** Вид служебного файла в `Download/Stenokot/meta/`. */
+/** Вид служебного файла в `Download/Skvor/meta/`. */
 enum class MetaKind(val suffix: String) {
     METADATA("metadata"),
     PROTOCOL("protocol"),

@@ -24,7 +24,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="false"
-        android:theme="@style/Theme.Stenokot">
+        android:theme="@style/Theme.Skvor">
         <activity
             android:name=".MainActivity"
             android:exported="true"

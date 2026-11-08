@@ -20,7 +20,7 @@ import java.io.IOException
 import java.io.OutputStream
 
 /**
- * Публикует результат в `Download/Stenokot/` через MediaStore: на API 29 и выше разрешения не нужны.
+ * Публикует результат в `Download/Skvor/` через MediaStore: на API 29 и выше разрешения не нужны.
  * Запись идёт с IS_PENDING, поэтому автоматика никогда не увидит половину файла, а повторная
  * обработка заменяет свою запись и не плодит `name (1).json`. Служебные файлы лежат в `meta/`,
  * чтобы поиск `*.json` в основной папке находил только контракт.
@@ -192,8 +192,8 @@ class ResultPublisher(context: Context) : OutputGateway {
         const val TAG = "ResultPublisher"
         const val MIME_JSON = "application/json"
         const val JSON_SUFFIX = ".json"
-        const val ROOT_PATH = "Download/Stenokot/"
-        const val META_PATH = "Download/Stenokot/meta/"
+        const val ROOT_PATH = "Download/Skvor/"
+        const val META_PATH = "Download/Skvor/meta/"
         const val FALLBACK_DIR = "export"
     }
 }
