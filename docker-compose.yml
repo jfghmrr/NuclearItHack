@@ -1,0 +1,37 @@
+# Сборка «Сквор» в Docker. Обёртка: scripts/docker_build.sh.
+#   docker compose build              образ с JDK 21 и Android SDK
+#   docker compose run --rm apk       модели, release-APK в ./out/
+#   docker compose run --rm test      модели и модульные тесты
+# Модели и кэш Gradle лежат в именованных томах и переживают пересборку образа.
+x-build: &build
+  image: skvor-build:latest
+  platform: linux/amd64
+  build:
+    context: .
+    dockerfile: Dockerfile
+    platforms: [linux/amd64]
+    args:
+      GIT_COMMIT: ${GIT_COMMIT:-}
+  # Не больше четырёх ядер и ограничение памяти: CMake и Gradle не должны занять всю машину.
+  cpus: ${SKVOR_CPUS:-4}
+  mem_limit: ${SKVOR_MEMORY:-6g}
+  environment:
+    HOST_UID: ${HOST_UID:-}
+    HOST_GID: ${HOST_GID:-}
+  volumes:
+    - models:/models
+    - gradle:/gradle
+    - ./out:/out
+    - ./src/mobile/android:/signing:ro
+
+services:
+  apk:
+    <<: *build
+    command: ["apk"]
+  test:
+    <<: *build
+    command: ["test"]
+
+volumes:
+  models:
+  gradle:

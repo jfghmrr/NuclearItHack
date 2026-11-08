@@ -1,0 +1,27 @@
+# Контекст сборки образа: исходники без истории Git, результатов сборки, моделей и секретов.
+# Хеш коммита передаётся аргументом GIT_COMMIT, см. Dockerfile.
+**/.git
+**/.gradle
+**/.kotlin
+**/build
+**/.cxx
+**/.idea
+**/*.iml
+**/.DS_Store
+**/*.apk
+**/*.aab
+**/*.log
+models
+**/*.onnx
+**/*.gguf
+src/mobile/android/app/src/main/jniLibs
+src/mobile/android/local.properties
+src/mobile/android/keystore.properties
+**/*.jks
+**/*.keystore
+**/*.key
+**/*.pem
+.env
+out
+tmp
+artifacts
