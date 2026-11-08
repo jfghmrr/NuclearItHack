@@ -65,7 +65,7 @@ adb shell am start -a android.intent.action.VIEW -t audio/mpeg \
   -d file:///sdcard/Download/dialog1.mp3 -p ru.skvor.app
 ```
 
-Результат появится в `/sdcard/Download/Skvor/dialog1.json`. Подробнее в [docs/AUTOMATION.md](../docs/AUTOMATION.md).
+Результат появится в `/sdcard/Download/Skvor/dialog1.json`.
 
 ## Тесты
 

@@ -188,8 +188,8 @@ Done(DEFERRED или SKIPPED_BY_BUDGET) -> Running(LLM) -> Done один пов�
 | kotlinx-coroutines | 1.11.0 | Конвейер |
 | AGP, Gradle, Kotlin | 9.3.3, 9.5.0, 2.4.21 | Сборка |
 
-Сборка закрепляет `compileSdk` и `targetSdk` 36, `minSdk` 29. Модели перечислены в [MODEL_MANIFEST.md](MODEL_MANIFEST.md).
+Сборка закрепляет `compileSdk` и `targetSdk` 36, `minSdk` 29.
 
 ## Безопасность
 
-Разрешений `INTERNET` и `ACCESS_NETWORK_STATE` нет. Подробности в [SECURITY.md](SECURITY.md).
+Разрешений `INTERNET` и `ACCESS_NETWORK_STATE` нет.

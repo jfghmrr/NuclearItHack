@@ -1,0 +1,20 @@
+Сравнение контрольных сумм SHA-256: файл на диске и запись в metadata.json, Honor NTN-LX1, 8 ноября 2026
+
+Podcast_RU.mp3 (вход)
+  файл:     e5dc8f5b6e3035cf396ccb10066c929f1b7c3eb38f2268415306c43d81a3fd9e
+  metadata: e5dc8f5b6e3035cf396ccb10066c929f1b7c3eb38f2268415306c43d81a3fd9e
+  совпадает: да
+Podcast_RU.json (результат)
+  файл:     a208156fc460d57cab0e1deca7dc451b10a49d223ac0f01d10db02caa2c94748
+  metadata: a208156fc460d57cab0e1deca7dc451b10a49d223ac0f01d10db02caa2c94748
+  совпадает: да
+
+Team_meeting_EN.mp3 (вход)
+  файл:     2a9379f4a71851862f3a1322f1c7019437076cd56c5a1ad664209460f85776e6
+  metadata: 2a9379f4a71851862f3a1322f1c7019437076cd56c5a1ad664209460f85776e6
+  совпадает: да
+Team_meeting_EN.json (результат)
+  файл:     464958d9d5ce14e3b3e893887fb0d37895569c6a69bce49b343f6864e102655a
+  metadata: 464958d9d5ce14e3b3e893887fb0d37895569c6a69bce49b343f6864e102655a
+  совпадает: да
+
