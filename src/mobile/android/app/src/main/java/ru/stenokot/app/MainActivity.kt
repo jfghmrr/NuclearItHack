@@ -22,7 +22,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.isNavigationBarContrastEnforced = false
         controller = ControllerProvider.get(applicationContext, intent)
-        entry = IntentEntry(controller)
+        entry = IntentEntry(controller, privateRoots(), packageName)
         setContent {
             StenoApp(
                 activity = this,
@@ -33,6 +33,15 @@ class MainActivity : ComponentActivity() {
         }
         openIncoming(intent) { entry.onCreate(intent, savedInstanceState) }
     }
+
+    /** Закрытые каталоги приложения в обоих написаниях: через /data/data и через /data/user. */
+    private fun privateRoots(): List<String> = listOfNotNull(
+        applicationInfo.dataDir,
+        dataDir.path,
+        filesDir.parentFile?.path,
+        createDeviceProtectedStorageContext().dataDir.path,
+        "/data/data/$packageName",
+    ).flatMap { listOf(it, runCatching { java.io.File(it).canonicalPath }.getOrDefault(it)) }.distinct()
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)

@@ -4,14 +4,23 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import java.io.File
 import ru.stenokot.app.domain.StenoController
 
 /**
  * Приём файлов из VIEW, SEND и SEND_MULTIPLE, в том числе путей file:// из `adb shell am start`.
  * Активность вызывает [onCreate], [onNewIntent] и [onSaveInstanceState]. Результат вызова это номер
  * первой задачи, на экран которой надо перейти.
+ *
+ * Чужое приложение не должно заставить нас прочитать собственные закрытые файлы и выложить результат в
+ * общую папку. Поэтому пути внутри [privateRoots] и адреса нашего же провайдера [ownPackage] отбрасываются.
+ * Запись с микрофона в эту точку не приходит, она импортируется изнутри.
  */
-class IntentEntry(private val controller: StenoController) {
+class IntentEntry(
+    private val controller: StenoController,
+    private val privateRoots: List<String>,
+    private val ownPackage: String,
+) {
     /** Обрабатывает запуск активности. Пересоздание и открытие из недавних файл не повторяют. */
     fun onCreate(intent: Intent?, savedInstanceState: Bundle?): String? {
         val restored = savedInstanceState?.getBoolean(HANDLED_KEY, false) ?: false
@@ -27,7 +36,13 @@ class IntentEntry(private val controller: StenoController) {
         outState.putBoolean(HANDLED_KEY, true)
     }
 
-    private fun importFrom(intent: Intent?): String? = controller.import(uris(intent))
+    private fun importFrom(intent: Intent?): String? {
+        val accepted = uris(intent).filter { uri ->
+            val path = uri.path?.let { runCatching { File(it).canonicalPath }.getOrDefault(it) }
+            IntentRules.allowedSource(uri.scheme, path, uri.authority, privateRoots, ownPackage)
+        }
+        return if (accepted.isEmpty()) null else controller.import(accepted)
+    }
 
     private companion object {
         const val HANDLED_KEY = "stenokot.intent.handled"
@@ -61,4 +76,22 @@ class IntentEntry(private val controller: StenoController) {
 object IntentRules {
     /** Файл принимается один раз: восстановленная активность и запуск из истории его уже видели. */
     fun shouldImport(restored: Boolean, fromHistory: Boolean): Boolean = !restored && !fromHistory
+
+    /**
+     * Можно ли принять адрес снаружи. Путь file:// сравнивается после приведения к каноническому виду,
+     * поэтому обход через `..` и ссылки не проходит. Адрес content:// нашего же провайдера чужое
+     * приложение выдать не может, такой вход отбрасывается целиком.
+     */
+    fun allowedSource(
+        scheme: String?,
+        canonicalPath: String?,
+        authority: String?,
+        privateRoots: List<String>,
+        ownPackage: String,
+    ): Boolean = when (scheme) {
+        null, "file" -> canonicalPath != null &&
+            privateRoots.none { root -> canonicalPath == root || canonicalPath.startsWith("$root/") }
+        "content" -> authority != null && authority != ownPackage && !authority.startsWith("$ownPackage.")
+        else -> false
+    }
 }
