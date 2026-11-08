@@ -34,6 +34,8 @@ import ru.stenokot.app.R
 import ru.stenokot.app.ui.AppActions
 import ru.stenokot.app.ui.components.LinkRow
 import ru.stenokot.app.ui.components.ListBlock
+import ru.stenokot.app.ui.components.Mascot
+import ru.stenokot.app.ui.components.MascotKind
 import ru.stenokot.app.ui.components.SectionHeader
 import ru.stenokot.app.ui.components.StenoIcon
 import ru.stenokot.app.ui.theme.StenoMotion
@@ -87,6 +89,7 @@ fun HelpRoute(actions: AppActions, onReplayIntro: () -> Unit) {
     val exportLabel = stringResource(R.string.scr04_btn_export)
 
     ServicePage(title = stringResource(R.string.help_title), onBack = actions.back) {
+        Mascot(MascotKind.HELP, size = StenoSize.mascotPlateSmall)
         Text(
             text = stringResource(R.string.help_lead),
             modifier = Modifier.testTag(HelpTags.LEAD),

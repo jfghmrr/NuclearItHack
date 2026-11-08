@@ -98,7 +98,7 @@ fun MicPermissionRoute(controller: StenoController, actions: AppActions) {
         ) {
             if (!layout.tiny) {
                 MascotPlate(
-                    kind = MascotKind.EMPTY,
+                    kind = MascotKind.RECORD,
                     plate = if (layout.short) StenoSize.mascotPlateSmall else StenoSize.mascotPlate,
                     motion = EnterMotion.EMPTY,
                 )

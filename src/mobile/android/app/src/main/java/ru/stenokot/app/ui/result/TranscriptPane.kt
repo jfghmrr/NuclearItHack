@@ -54,6 +54,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import ru.stenokot.app.R
 import ru.stenokot.app.ui.Tags
+import ru.stenokot.app.ui.components.Mascot
+import ru.stenokot.app.ui.components.MascotKind
 import ru.stenokot.app.ui.components.QuietAction
 import ru.stenokot.app.ui.components.SpeakerBadge
 import ru.stenokot.app.ui.components.StenoIcon
@@ -371,6 +373,7 @@ private fun NothingFound(onReset: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(StenoSpace.s),
     ) {
+        Mascot(MascotKind.SEARCH, size = StenoSize.mascotPlateSmall)
         Text(
             text = stringResource(R.string.scr04_search_none),
             style = StenoTheme.type.bodyLarge,

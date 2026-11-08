@@ -96,6 +96,7 @@ import ru.stenokot.app.ui.Tags
 import ru.stenokot.app.ui.components.ActionDock
 import ru.stenokot.app.ui.components.BannerTone
 import ru.stenokot.app.ui.components.GroupLabel
+import ru.stenokot.app.ui.components.Mascot
 import ru.stenokot.app.ui.components.MascotKind
 import ru.stenokot.app.ui.components.MascotPlate
 import ru.stenokot.app.ui.components.OutlinedAction
@@ -638,6 +639,7 @@ private fun NothingFound(onReset: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(StenoSpace.xs),
     ) {
+        Mascot(MascotKind.SEARCH, size = StenoSize.mascotPlateSmall)
         Text(stringResource(R.string.scr01_nothing_found), style = type.titleMedium, color = colors.onSurface)
         Text(
             text = stringResource(R.string.scr01_nothing_found_hint),
