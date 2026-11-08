@@ -51,7 +51,7 @@
 | 6. Результаты собственных тестов | [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md), [artifacts/test-results/](artifacts/test-results/README.md) |
 | 7. Видеодемонстрация | [artifacts/demo/skvor_tour_honor.mp4](artifacts/demo/skvor_tour_honor.mp4): все функции на Honor, 5 мин 49 с. Там же исходные и полученные файлы, логи, сравнение контрольных сумм и [презентация](artifacts/demo/skvor_presentation.pptx): [artifacts/demo](artifacts/demo/README.md) |
 
-## Команда
+## Команда Mugsize
 
 | Участник | Роль | GitHub |
 |---|---|---|
