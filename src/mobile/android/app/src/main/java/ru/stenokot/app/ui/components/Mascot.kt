@@ -22,17 +22,17 @@ import ru.stenokot.app.ui.theme.enterOnce
 
 /**
  * Сюжет маскота. [sideInset] это доля пустого поля слева от фигуры: она нужна, чтобы прижатый
- * к левому краю кот стоял на одной линии с текстом, а не с границей картинки.
+ * к левому краю скворец стоял на одной линии с текстом, а не с границей картинки.
  */
 enum class MascotKind(@DrawableRes val art: Int, val sideInset: Float) {
-    EMPTY(R.drawable.mascot_empty, 0.185f),
-    NO_SPEECH(R.drawable.mascot_no_speech, 0.14f),
-    WAITING(R.drawable.mascot_waiting, 0.056f),
-    DONE(R.drawable.mascot_done, 0.1875f),
-    FILE_ERROR(R.drawable.mascot_file_error, 0.1875f),
-    STORAGE(R.drawable.mascot_storage, 0.204f),
-    MEMORY(R.drawable.mascot_memory, 0.104f),
-    INTERRUPTED(R.drawable.mascot_interrupted, 0.183f),
+    EMPTY(R.drawable.mascot_empty, 0.198f),
+    NO_SPEECH(R.drawable.mascot_no_speech, 0.131f),
+    WAITING(R.drawable.mascot_waiting, 0.206f),
+    DONE(R.drawable.mascot_done, 0.198f),
+    FILE_ERROR(R.drawable.mascot_file_error, 0.131f),
+    STORAGE(R.drawable.mascot_storage, 0.198f),
+    MEMORY(R.drawable.mascot_memory, 0.131f),
+    INTERRUPTED(R.drawable.mascot_interrupted, 0.165f),
 }
 
 /** Маскот: готовая иллюстрация, тёмный вариант приходит из ресурсов. TalkBack его пропускает. */
@@ -50,8 +50,8 @@ private val MascotKind.plateArt: Float
     get() = FIGURE_SHARE / (1f - 2f * sideInset)
 
 /**
- * Маскот на круглой подложке, как на макете. Спящий кот целиком лежит внутри круга, сидящий выступает
- * за него сверху и снизу, и область под него выше. Прозрачное поле картинки может выходить за область,
+ * Маскот на круглой подложке, как на макете. Скворец выступает за круг сверху и снизу, поэтому
+ * область под него выше круга. Прозрачное поле картинки может выходить за область,
  * сама фигура нет. Движение либо однократное [motion], либо [breathing] на время ожидания.
  */
 @Composable
@@ -65,7 +65,7 @@ fun MascotPlate(
     val art = Modifier.requiredSize(plate * kind.plateArt)
     val height = if (kind == MascotKind.WAITING) plate else plate * PLATE_HEIGHT
     Box(modifier.size(plate * PLATE_WIDTH, height), contentAlignment = Alignment.Center) {
-        Box(Modifier.size(plate).background(StenoTheme.colors.primaryContainer, CircleShape))
+        Box(Modifier.size(plate).background(StenoTheme.colors.mascotPlate, CircleShape))
         when {
             breathing -> Image(painterResource(kind.art), null, art.breathing())
             motion != null -> Image(painterResource(kind.art), null, art.enterOnce(motion))

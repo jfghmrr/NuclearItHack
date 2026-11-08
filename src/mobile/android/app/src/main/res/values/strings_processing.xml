@@ -15,7 +15,7 @@
     <string name="scr03_cancelled_title">Обработка отменена</string>
     <string name="scr03_cancelled_body">Запись осталась в приложении. Можно запустить её снова или импортировать другую</string>
     <string name="scr03_progress_spoken">%1$s, %2$s</string>
-    <string name="scr03_headline">Стенокот слушает.</string>
+    <string name="scr03_headline">Сквор слушает.</string>
     <string name="scr03_on_device">Всё происходит на вашем устройстве.</string>
     <string name="scr03_percent_unit" formatted="false">% этапа</string>
     <string name="scr03_stage_done">Готово</string>

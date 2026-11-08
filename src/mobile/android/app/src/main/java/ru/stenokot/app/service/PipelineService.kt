@@ -225,7 +225,7 @@ class PipelineService : Service() {
         private const val ACTION_CANCEL = "ru.stenokot.app.action.CANCEL"
         private const val CHANNEL_ID = "pipeline"
         private const val CHANNEL_NAME = "Обработка записи"
-        private const val APP_TITLE = "Стенокот"
+        private const val APP_TITLE = "Сквор"
         private const val IDLE_LABEL = "Обработка записи"
         private const val CANCEL_LABEL = "Отмена"
         private const val PAUSED_LABEL = "Обработка приостановлена. Откройте приложение, чтобы продолжить"

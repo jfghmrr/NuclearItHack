@@ -38,5 +38,5 @@
     <string name="scr07_detail_stage">Стадия</string>
     <string name="scr07_detail_job">Задача</string>
     <string name="scr07_detail_note">Подробность</string>
-    <string name="diagnostics_clip_label">Диагностика Стенокота</string>
+    <string name="diagnostics_clip_label">Диагностика Сквора</string>
 </resources>

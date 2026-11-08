@@ -15,7 +15,7 @@
     <string name="scr01_reset">Сбросить</string>
     <string name="scr01_stage_percent">%1$s этапа</string>
     <string name="scr01_empty_title">Слушайте.\nОстальное запишем.</string>
-    <string name="scr01_empty_body">Запишите разговор или добавьте аудио. Стенокот соберёт текст, говорящих и протокол.</string>
+    <string name="scr01_empty_body">Запишите разговор или добавьте аудио. Сквор соберёт текст, говорящих и протокол.</string>
     <string name="scr01_empty_badge">Работает без интернета</string>
     <string name="scr01_formats">MP3, WAV, M4A, OGG, FLAC</string>
     <string name="scr01_btn_import_all">Показать все файлы</string>

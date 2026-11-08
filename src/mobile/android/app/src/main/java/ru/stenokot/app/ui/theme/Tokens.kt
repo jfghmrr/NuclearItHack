@@ -57,6 +57,8 @@ data class StenoColors(
     val inverseOnSurface: Color,
     val inversePrimary: Color,
     val recording: Color,
+    /** Круглая подложка под маскотом: тёмный скворец должен читаться и на графите. */
+    val mascotPlate: Color,
     val scrim: Color,
 )
 
@@ -107,6 +109,7 @@ val LightColors = StenoColors(
     inverseOnSurface = Color(0xFFF5F6F8),
     inversePrimary = Color(0xFF92B6FF),
     recording = Color(0xFFC2412D),
+    mascotPlate = Color(0xFFE8EFFF),
     scrim = Color(0x52121316),
 )
 
@@ -154,6 +157,7 @@ val DarkColors = StenoColors(
     inverseOnSurface = Color(0xFF121316),
     inversePrimary = Color(0xFF245DCC),
     recording = Color(0xFFFF8A75),
+    mascotPlate = Color(0xFFE9E6DF),
     scrim = Color(0x99000000),
 )
 

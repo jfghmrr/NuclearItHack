@@ -23,5 +23,5 @@
     <string name="settings_diagnostics_hint">Время, память и этапы</string>
     <string name="settings_about">О приложении</string>
     <string name="settings_about_hint">Версия, компоненты и лицензии</string>
-    <string name="settings_footer">Стенокот · Всё важное под рукой</string>
+    <string name="settings_footer">Сквор · Всё важное под рукой</string>
 </resources>

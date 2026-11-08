@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Стенокот</string>
+    <string name="app_name">Сквор</string>
     <string name="common_btn_import">Импорт аудио</string>
     <string name="common_btn_record">Записать</string>
     <string name="common_btn_start">Запустить транскрибацию</string>

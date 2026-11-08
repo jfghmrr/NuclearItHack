@@ -21,12 +21,12 @@
     <string name="rec_no_space">Мало места на устройстве, запись не началась</string>
     <string name="rec_open_settings">Открыть настройки</string>
     <string name="rec_dismiss">Понятно</string>
-    <string name="rec_notification_title">Стенокот</string>
+    <string name="rec_notification_title">Сквор</string>
     <string name="rec_notification_text">Идёт запись</string>
     <string name="rec_notification_stop">Остановить</string>
     <string name="mic_title">Доступ к микрофону</string>
     <string name="mic_headline">Можно записать разговор?</string>
-    <string name="mic_body">Стенокоту нужен микрофон, чтобы записывать аудио. Разрешение можно изменить в настройках Android.</string>
+    <string name="mic_body">Сквору нужен микрофон, чтобы записывать аудио. Разрешение можно изменить в настройках Android.</string>
     <string name="mic_note">Запрос появляется только перед записью</string>
     <string name="mic_continue">Продолжить</string>
     <string name="mic_import">Импортировать аудио</string>
