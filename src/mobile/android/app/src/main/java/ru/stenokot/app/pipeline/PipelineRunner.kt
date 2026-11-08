@@ -246,6 +246,17 @@ class PipelineRunner(
         book.mutate(id, change = change)
     }
 
+    /**
+     * Обновляет запись после ручной правки и, если задача уже завершена, переписывает и публикует
+     * metadata.json: SHA-256 контрактного файла в замерах должен совпадать с опубликованным. Пока
+     * задача не завершена, metadata.json напишет [finalize] уже с новым значением.
+     */
+    suspend fun updateEdited(id: String, change: (JobRecord) -> JobRecord): Boolean {
+        book.mutate(id, change = change)
+        val job = book.snapshot().firstOrNull { it.id == id } ?: return false
+        return job.phase != JobPhase.DONE || writeMetadata(id)
+    }
+
     private fun hasWork(all: Collection<JobRecord>, hold: Boolean): Boolean {
         if (hold) return all.any { JobQueue.isActive(it) && !it.awaitsWorker }
         return all.any { JobQueue.isActive(it) || it.awaitsWorker } || JobQueue.nextRetry(all) != null

@@ -234,7 +234,7 @@ class RealStenoController(
                 val published = publisher.publishTranscript(job.stem, bytes)
                 store.saveEdits(id, if (edited) next else EditsDocument(machine.size))
                 utteranceCache = null
-                runner.updateJob(id) { current ->
+                runner.updateEdited(id) { current ->
                     current.copy(
                         output = current.output?.copy(
                             path = published.path,

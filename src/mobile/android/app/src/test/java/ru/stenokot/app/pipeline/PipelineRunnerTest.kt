@@ -43,6 +43,20 @@ class PipelineRunnerTest {
     }
 
     @Test
+    fun editOfFinishedJobRepublishesMetadataWithNewHash() = runTest {
+        val h = harness()
+        val id = h.import("meeting")
+        h.await(done(id))
+        h.outputs.meta.clear()
+
+        val ok = h.runner.updateEdited(id) { job -> job.copy(output = job.output?.copy(sha256 = "edited")) }
+
+        assertTrue(ok)
+        assertEquals(listOf("meeting:metadata"), h.outputs.meta)
+        assertTrue(h.store.files(id).metadata.readText().contains("\"edited\""))
+    }
+
+    @Test
     fun jobPassesAllStagesAndSavesJsonBeforeLanguageModel() = runTest {
         val h = harness()
         val id = h.import("meeting")
