@@ -9,6 +9,7 @@
 | Полученные файлы | [output/Podcast_RU.json](output/Podcast_RU.json), [output/Team_meeting_EN.json](output/Team_meeting_EN.json) |
 | Логи | [logs/](logs): `metadata.json` каждого прогона с временем стадий, версиями и SHA-256 моделей, строки журнала `PIPELINE` |
 | Сравнение контрольных сумм | [checksums.png](checksums.png) и [logs/checksums.txt](logs/checksums.txt): SHA-256 входа и результата на диске совпадают с записанными в `metadata.json` |
+| Презентация | [skvor_presentation.pptx](skvor_presentation.pptx): 12 слайдов на 5 минут, с анимациями и заметками докладчика. Архитектура, модели, измеренное качество и скорость, функции, ограничения, команда |
 | Стенд | Телефон Honor NTN-LX1, Android 13, Snapdragon 662, 6 ГБ RAM, без сети у приложения. Видео снято с экрана телефона через `scrcpy` по `adb`, без монтажа и ускорения |
 
 Видео и файлы сняты на сборке 1.1.0, 8 ноября 2026, до переименования папки результатов: путь в `metadata.json` поэтому отличается от `Download/Skvor` в 1.2.0. Журналы оставлены как есть, без правки.
