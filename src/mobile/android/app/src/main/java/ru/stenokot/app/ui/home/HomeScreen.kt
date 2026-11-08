@@ -9,10 +9,12 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -496,12 +498,23 @@ private fun FilterChip(
     val selected = filter == current
     val narrow = LocalWindowLayout.current.widthDp < NARROW_CHIPS_DP
     val shape = RoundedCornerShape(StenoRadius.field)
+    val fill by animateColorAsState(
+        if (selected) colors.primaryContainer else colors.background,
+        tween(StenoMotion.MEDIUM),
+        label = "chipFill",
+    )
+    val edge by animateColorAsState(
+        if (selected) colors.primaryContainer else colors.outlineVariant,
+        tween(StenoMotion.MEDIUM),
+        label = "chipEdge",
+    )
     Box(
         modifier = Modifier
             .widthIn(min = StenoSize.touchTarget)
             .heightIn(min = StenoSize.touchTarget)
             .clip(shape)
-            .background(if (selected) colors.primaryContainer else colors.background, shape)
+            .background(fill, shape)
+            .border(StenoSize.hairline, edge, shape)
             .testTag(Tags.chipFilter(filter.name.lowercase()))
             .selectable(selected = selected, role = Role.Tab, onClick = { onSelect(filter) })
             .padding(horizontal = if (narrow) ChipPaddingNarrow else ChipPadding, vertical = StenoSpace.s),
@@ -510,7 +523,7 @@ private fun FilterChip(
         Text(
             text = stringResource(label),
             style = if (selected) StenoTheme.type.labelSmall else StenoTheme.type.bodySmall,
-            color = if (selected) colors.primary else colors.onSurfaceVariant,
+            color = if (selected) colors.primary else colors.onSurface,
         )
     }
 }

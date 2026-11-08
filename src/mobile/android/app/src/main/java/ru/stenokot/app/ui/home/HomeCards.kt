@@ -23,6 +23,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +64,7 @@ import ru.stenokot.app.ui.theme.StenoRadius
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
+import ru.stenokot.app.ui.theme.animatedFraction
 import ru.stenokot.core.model.JobState
 import ru.stenokot.core.model.LlmStatus
 import ru.stenokot.core.model.PreflightInfo
@@ -242,11 +244,20 @@ private fun ActiveCard(job: JobSummaryUi, onOpen: (JobSummaryUi) -> Unit) {
                 style = type.meta,
                 color = colors.primary,
             )
-            percent?.let {
-                Text(it, style = type.meta.copy(fontWeight = FontWeight.W700), color = colors.primary)
-            }
+            line?.fraction?.let { StagePercentLabel(it) }
         }
     }
+}
+
+/** Процент этапа в карточке: цифра доходит до нового значения плавно, вслух читается вся карточка. */
+@Composable
+private fun StagePercentLabel(fraction: Float) {
+    val shown by animatedFraction(fraction.coerceIn(0f, 1f))
+    Text(
+        text = stringResource(R.string.scr01_stage_percent, formatPercent(shown)),
+        style = StenoTheme.type.meta.copy(fontWeight = FontWeight.W700),
+        color = StenoTheme.colors.primary,
+    )
 }
 
 @Composable
