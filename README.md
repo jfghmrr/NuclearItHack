@@ -12,7 +12,7 @@
 
 <p align="center">
   <img src="docs/screens/01-home.png" alt="Главная: библиотека записей" width="200">
-  <img src="docs/screens/02-processing.png" alt="Обработка: этап 2 из 5, 82 % этапа" width="200">
+  <img src="docs/screens/02-processing.png" alt="Обработка: этап 3 из 5" width="200">
   <img src="docs/screens/04-transcript.png" alt="Стенограмма и плеер" width="200">
   <img src="docs/screens/05-protocol.png" alt="Протокол в тёмной теме" width="200">
 </p>
@@ -27,7 +27,7 @@
 | 4. Архитектура и модели | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/MODEL_MANIFEST.md](docs/MODEL_MANIFEST.md), раздел [Модели](#модели) |
 | 5. Ограничения | [docs/LIMITATIONS.md](docs/LIMITATIONS.md), раздел [Ограничения](#ограничения) |
 | 6. Результаты собственных тестов | [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md), [artifacts/test-results/](artifacts/test-results/README.md) |
-| 7. Видеодемонстрация | [artifacts/demo/](artifacts/demo/README.md) |
+| 7. Видеодемонстрация | [artifacts/demo/skvor_demo_honor.mp4](artifacts/demo/skvor_demo_honor.mp4), 110 с, Honor, сборка 1.1.0; описание в [artifacts/demo/](artifacts/demo/README.md) |
 
 ## Команда
 
@@ -43,8 +43,8 @@
 
 Дайте эмулятору загрузиться до конца: после первого запуска система ещё 3-5 минут занята службами Google. На нашем чистом эмуляторе установка в эти минуты дважды обрывалась перезапуском системного процесса, а после затихания проходила за 8-120 с. APK весит 1,35 ГБ и требует около 3,2 ГБ свободного места, на чистом эмуляторе по умолчанию свободно 5,0 ГБ. Если `adb` сообщил ошибку, подождите минуту и повторите установку.
 
-**Скачать:** [Сквор 1.0.2](https://github.com/jfghmrr/NuclearItHack/releases/tag/v1.0.2), файл `stenokot-9270b3f.apk`, 1,35 ГБ, подписан ключом команды.
-SHA-256: `6fb10dd043977cde70beec065e78074605c01fdf60b0eaefc178ad12fffd7013`
+**Скачать:** [Сквор 1.1.0](https://github.com/jfghmrr/NuclearItHack/releases/tag/v1.1.0), файл `skvor-6968155.apk`, 1,35 ГБ, подписан ключом команды.
+SHA-256: `82bcb205b91d97bc837e114f7ddb860c77bd910cf870b923e0ddae7b6ae23ff2`
 
 APK собирает GitHub Actions по тегу `v*` ([.github/workflows/release.yml](.github/workflows/release.yml)): сборка из чистого клона, тесты, проверка разрешений, публикация в [Releases](https://github.com/jfghmrr/NuclearItHack/releases) с SHA-256 в описании релиза.
 
