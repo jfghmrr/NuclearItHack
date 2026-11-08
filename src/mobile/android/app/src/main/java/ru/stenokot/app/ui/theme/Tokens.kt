@@ -61,100 +61,100 @@ data class StenoColors(
 )
 
 /**
- * Светлая тема. Значения взяты из `design_tokens.json`. Вторичный текст на одну ступень темнее
- * макета: исходный #63736A даёт на `subtle` и `tint` меньше 4,5:1.
+ * Светлая тема: белые поверхности на холодном светло-сером фоне, синий акцент. Значения из дизайна
+ * «Сквор»; успех показан тем же синим, отдельного зелёного в палитре нет.
  */
 val LightColors = StenoColors(
     isDark = false,
-    primary = Color(0xFF176B5B),
+    primary = Color(0xFF245DCC),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFE4EDE1),
-    onPrimaryContainer = Color(0xFF176B5B),
-    secondary = Color(0xFF5D6D64),
+    primaryContainer = Color(0xFFE8EFFF),
+    onPrimaryContainer = Color(0xFF1F4FAD),
+    secondary = Color(0xFF5D626E),
     onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFEFEEE7),
-    onSecondaryContainer = Color(0xFF21352F),
-    tertiary = Color(0xFF855A27),
+    secondaryContainer = Color(0xFFEEF0F4),
+    onSecondaryContainer = Color(0xFF202329),
+    tertiary = Color(0xFF975444),
     onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFF4EADB),
-    onTertiaryContainer = Color(0xFF855A27),
-    error = Color(0xFFAE4938),
+    tertiaryContainer = Color(0xFFFFDDD2),
+    onTertiaryContainer = Color(0xFF38231D),
+    error = Color(0xFFA33426),
     onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFF9E9E3),
-    onErrorContainer = Color(0xFFAE4938),
-    success = Color(0xFF27674B),
+    errorContainer = Color(0xFFFBE4DF),
+    onErrorContainer = Color(0xFF7A2115),
+    success = Color(0xFF245DCC),
     onSuccess = Color(0xFFFFFFFF),
-    successContainer = Color(0xFFE4EDE1),
-    onSuccessContainer = Color(0xFF27674B),
-    warning = Color(0xFF855A27),
+    successContainer = Color(0xFFE8EFFF),
+    onSuccessContainer = Color(0xFF1F4FAD),
+    warning = Color(0xFF8A5712),
     onWarning = Color(0xFFFFFFFF),
-    warningContainer = Color(0xFFF4EADB),
-    onWarningContainer = Color(0xFF855A27),
-    background = Color(0xFFF7F6F1),
-    onBackground = Color(0xFF21352F),
-    surface = Color(0xFFFFFEFA),
-    onSurface = Color(0xFF21352F),
-    surfaceVariant = Color(0xFFEFEEE7),
-    onSurfaceVariant = Color(0xFF5D6D64),
-    surfaceContainerLowest = Color(0xFFFFFEFA),
-    surfaceContainerLow = Color(0xFFF7F6F1),
-    surfaceContainer = Color(0xFFEFEEE7),
-    surfaceContainerHigh = Color(0xFFEFEEE7),
-    surfaceContainerHighest = Color(0xFFEFEEE7),
-    outline = Color(0xFF75837A),
-    outlineVariant = Color(0xFFDDE3D9),
-    inverseSurface = Color(0xFF21352F),
-    inverseOnSurface = Color(0xFFF7F6F1),
-    inversePrimary = Color(0xFFA3D4B4),
-    recording = Color(0xFFBD5742),
-    scrim = Color(0x54142C25),
+    warningContainer = Color(0xFFFBEFDC),
+    onWarningContainer = Color(0xFF6E450D),
+    background = Color(0xFFF7F8FA),
+    onBackground = Color(0xFF202329),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF202329),
+    surfaceVariant = Color(0xFFEEF0F4),
+    onSurfaceVariant = Color(0xFF5D626E),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF1F3F7),
+    surfaceContainer = Color(0xFFEEF0F4),
+    surfaceContainerHigh = Color(0xFFE8EBF0),
+    surfaceContainerHighest = Color(0xFFE3E6ED),
+    outline = Color(0xFF777E8C),
+    outlineVariant = Color(0xFFD8DCE4),
+    inverseSurface = Color(0xFF202329),
+    inverseOnSurface = Color(0xFFF5F6F8),
+    inversePrimary = Color(0xFF92B6FF),
+    recording = Color(0xFFC2412D),
+    scrim = Color(0x52121316),
 )
 
-/** Тёмная тема: те же роли на глубоком зелёном. Значения взяты из `design_tokens.json`. */
+/** Тёмная тема: нейтральный графит, светлый текст и мягкий синий акцент. */
 val DarkColors = StenoColors(
     isDark = true,
-    primary = Color(0xFFA3D4B4),
-    onPrimary = Color(0xFF173825),
-    primaryContainer = Color(0xFF2A4737),
-    onPrimaryContainer = Color(0xFFA3D4B4),
-    secondary = Color(0xFFB4C3B7),
-    onSecondary = Color(0xFF15251F),
-    secondaryContainer = Color(0xFF24372E),
-    onSecondaryContainer = Color(0xFFEEF3E9),
-    tertiary = Color(0xFFE8C58D),
-    onTertiary = Color(0xFF3F3523),
-    tertiaryContainer = Color(0xFF3F3523),
-    onTertiaryContainer = Color(0xFFE8C58D),
-    error = Color(0xFFF6B5A2),
-    onError = Color(0xFF442D27),
-    errorContainer = Color(0xFF442D27),
-    onErrorContainer = Color(0xFFF6B5A2),
-    success = Color(0xFFA2D3B5),
-    onSuccess = Color(0xFF173825),
-    successContainer = Color(0xFF2A4737),
-    onSuccessContainer = Color(0xFFA2D3B5),
+    primary = Color(0xFF92B6FF),
+    onPrimary = Color(0xFF0B244A),
+    primaryContainer = Color(0xFF223452),
+    onPrimaryContainer = Color(0xFFB5CDFF),
+    secondary = Color(0xFFB3B6BF),
+    onSecondary = Color(0xFF121316),
+    secondaryContainer = Color(0xFF27292D),
+    onSecondaryContainer = Color(0xFFF5F6F8),
+    tertiary = Color(0xFFE6B3A7),
+    onTertiary = Color(0xFF38231D),
+    tertiaryContainer = Color(0xFF463029),
+    onTertiaryContainer = Color(0xFFFFE1D8),
+    error = Color(0xFFFFB4A5),
+    onError = Color(0xFF60140C),
+    errorContainer = Color(0xFF3C2521),
+    onErrorContainer = Color(0xFFFFDAD2),
+    success = Color(0xFF92B6FF),
+    onSuccess = Color(0xFF0B244A),
+    successContainer = Color(0xFF223452),
+    onSuccessContainer = Color(0xFFB5CDFF),
     warning = Color(0xFFE8C58D),
-    onWarning = Color(0xFF3F3523),
-    warningContainer = Color(0xFF3F3523),
-    onWarningContainer = Color(0xFFE8C58D),
-    background = Color(0xFF15251F),
-    onBackground = Color(0xFFEEF3E9),
-    surface = Color(0xFF1E3028),
-    onSurface = Color(0xFFEEF3E9),
-    surfaceVariant = Color(0xFF24372E),
-    onSurfaceVariant = Color(0xFFB4C3B7),
-    surfaceContainerLowest = Color(0xFF1E3028),
-    surfaceContainerLow = Color(0xFF15251F),
-    surfaceContainer = Color(0xFF24372E),
-    surfaceContainerHigh = Color(0xFF24372E),
-    surfaceContainerHighest = Color(0xFF24372E),
-    outline = Color(0xFF7F9184),
-    outlineVariant = Color(0xFF374A3F),
-    inverseSurface = Color(0xFFEEF3E9),
-    inverseOnSurface = Color(0xFF15251F),
-    inversePrimary = Color(0xFF176B5B),
-    recording = Color(0xFFBD5742),
-    scrim = Color(0x8C0A1410),
+    onWarning = Color(0xFF3A2C14),
+    warningContainer = Color(0xFF3A3124),
+    onWarningContainer = Color(0xFFF2D9AE),
+    background = Color(0xFF121316),
+    onBackground = Color(0xFFF5F6F8),
+    surface = Color(0xFF1C1D20),
+    onSurface = Color(0xFFF5F6F8),
+    surfaceVariant = Color(0xFF27292D),
+    onSurfaceVariant = Color(0xFFB3B6BF),
+    surfaceContainerLowest = Color(0xFF0D0E10),
+    surfaceContainerLow = Color(0xFF17181B),
+    surfaceContainer = Color(0xFF27292D),
+    surfaceContainerHigh = Color(0xFF2D2F34),
+    surfaceContainerHighest = Color(0xFF33353B),
+    outline = Color(0xFF858B98),
+    outlineVariant = Color(0xFF383B43),
+    inverseSurface = Color(0xFFF5F6F8),
+    inverseOnSurface = Color(0xFF121316),
+    inversePrimary = Color(0xFF245DCC),
+    recording = Color(0xFFFF8A75),
+    scrim = Color(0x99000000),
 )
 
 /** Форма значка говорящего. Пути заданы для области 24 на 24, смещение цифры указано в dp. */
@@ -198,16 +198,16 @@ class SpeakerPalette(private val styles: List<SpeakerStyle>) {
 
 private val shapes = SpeakerShape.entries
 
-/** Пары заливки и цифры из макета. Первые пять заданы дизайном, остальные продолжают тот же ряд. */
+/** Пары заливки и цифры. Первые три из дизайна: синий, персиковый, серый; остальные продолжают ряд. */
 private val SpeakerFills = listOf(
-    Color(0xFFE4EDE1) to Color(0xFF236849),
-    Color(0xFFF1E1D1) to Color(0xFF8D4A28),
+    Color(0xFFE8EFFF) to Color(0xFF245DCC),
+    Color(0xFFFFDDD2) to Color(0xFF8E4A3B),
+    Color(0xFFE5E5ED) to Color(0xFF4F5060),
     Color(0xFFEBE2F0) to Color(0xFF745290),
-    Color(0xFFDFEAF5) to Color(0xFF355E84),
-    Color(0xFFF5E0EA) to Color(0xFF8D4265),
     Color(0xFFD9EDEE) to Color(0xFF1F6A70),
+    Color(0xFFF5E0EA) to Color(0xFF8D4265),
     Color(0xFFEFECCF) to Color(0xFF66601C),
-    Color(0xFFE6E9ED) to Color(0xFF56606C),
+    Color(0xFFE2EEE4) to Color(0xFF2F6648),
 )
 
 /** Говорящие на светлом фоне: линии тем же цветом, что и цифра. */
@@ -215,15 +215,18 @@ val LightSpeakers = SpeakerPalette(
     SpeakerFills.mapIndexed { i, (fill, ink) -> SpeakerStyle(fill, ink, shapes[i], ink) },
 )
 
-/** Говорящие на тёмном фоне: значок тот же, линии светлее, чтобы читаться на тёмной поверхности. */
+/** Говорящие на графите: тёмная заливка значка, светлая цифра и светлые линии того же тона. */
 val DarkSpeakers = SpeakerPalette(
     listOf(
-        Color(0xFFA2D3B5), Color(0xFFF0A878), Color(0xFFC2ACF2), Color(0xFF9CC2F5),
-        Color(0xFFF2A0CE), Color(0xFF63D2CE), Color(0xFFCDCB66), Color(0xFFB4BEC8),
-    ).mapIndexed { i, line ->
-        val (fill, ink) = SpeakerFills[i]
-        SpeakerStyle(fill, ink, shapes[i], line)
-    },
+        Triple(Color(0xFF223452), Color(0xFFB5CDFF), Color(0xFF92B6FF)),
+        Triple(Color(0xFF463029), Color(0xFFFFD2C6), Color(0xFFE6B3A7)),
+        Triple(Color(0xFF37383F), Color(0xFFE5E5ED), Color(0xFFC6C6CE)),
+        Triple(Color(0xFF3A2F4D), Color(0xFFDCCBFA), Color(0xFFC2ACF2)),
+        Triple(Color(0xFF1E3B3D), Color(0xFF9EE6E2), Color(0xFF63D2CE)),
+        Triple(Color(0xFF47283A), Color(0xFFF8C2DF), Color(0xFFF2A0CE)),
+        Triple(Color(0xFF3A3920), Color(0xFFE3E19A), Color(0xFFCDCB66)),
+        Triple(Color(0xFF25382E), Color(0xFFBFE3CC), Color(0xFFA2D3B5)),
+    ).mapIndexed { i, (fill, ink, line) -> SpeakerStyle(fill, ink, shapes[i], line) },
 )
 
 /** Шаг сетки в dp. */
@@ -237,38 +240,38 @@ object StenoSpace {
     val xxxl = 48.dp
 }
 
-/** Радиусы из макета. Семантические имена удобнее чисел: кнопка, карточка, поле, лист. */
+/** Радиусы дизайна: 8, 12, 16, 20, 28. Семантические имена удобнее чисел: кнопка, карточка, поле, лист. */
 object StenoRadius {
     val xs = 4.dp
     val s = 8.dp
     val m = 12.dp
-    val l = 14.dp
-    val xl = 18.dp
-    val xxl = 27.dp
+    val l = 16.dp
+    val xl = 20.dp
+    val xxl = 28.dp
 
     /** Значок в карточке записи. */
     val tile = 12.dp
 
     /** Поле поиска, фильтр, информационный блок. */
-    val field = 14.dp
+    val field = 16.dp
 
     /** Кнопка действия. */
-    val button = 17.dp
+    val button = 16.dp
 
     /** Карточка содержимого. */
-    val card = 18.dp
+    val card = 20.dp
 
     /** Карточка записи в списке. */
-    val record = 19.dp
+    val record = 20.dp
 
     /** Карточка текущего этапа. */
     val stage = 20.dp
 
     /** Диалог подтверждения. */
-    val dialog = 24.dp
+    val dialog = 28.dp
 
     /** Нижний лист. */
-    val sheet = 27.dp
+    val sheet = 28.dp
 }
 
 /** Размеры, общие для компонентов. */

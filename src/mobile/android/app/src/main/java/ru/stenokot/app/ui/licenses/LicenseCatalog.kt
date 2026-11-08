@@ -34,7 +34,7 @@ object LicenseCatalog {
         LicenseGroup(
             R.string.licenses_group_fonts,
             listOf(
-                LicenseEntry("noto", "Noto Sans", "Шрифт интерфейса", OFL, "The Noto Project Authors", "OFL-NotoSans.txt"),
+                LicenseEntry("roboto", "Roboto", "Шрифт интерфейса", OFL, "The Roboto Project Authors", "OFL-Roboto.txt"),
             ),
         ),
         LicenseGroup(

@@ -618,7 +618,7 @@ private fun otherScene(id: String): DemoScene? = when (id) {
     "S08-D3" -> modelsScene(DemoData.modelsNoAsr)
     "S08-E" -> verificationScene(DemoData.modelsReady, DemoData.verificationPartial, "DONE")
     "S08-L" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.Licenses)
-    "S08-T" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.LicenseText("noto"))
+    "S08-T" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.LicenseText("roboto"))
     "S08-T2" -> verificationScene(DemoData.modelsReady, DemoData.verificationEmpty).copy(route = Route.LicenseText("gigaam"))
     "S09-M" -> modelsScene(DemoData.modelsReady)
     "S09-M2" -> modelsScene(DemoData.modelsReady, ModelCheckUi(verdicts = verdicts(DemoData.modelsReady)))
