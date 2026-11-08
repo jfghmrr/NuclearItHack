@@ -341,7 +341,7 @@ private fun HomeHeader(models: ModelsUi, callbacks: HomeCallbacks) {
             BrandLine()
             Text(
                 text = stringResource(R.string.scr01_title),
-                modifier = Modifier.semantics { heading() },
+                modifier = Modifier.padding(top = if (layout.short) StenoSpace.s else StenoSpace.l).semantics { heading() },
                 style = titleStyle,
                 color = colors.onBackground,
                 maxLines = 1,

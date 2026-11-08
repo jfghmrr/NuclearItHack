@@ -102,6 +102,15 @@ fun SettingsRoute(controller: StenoController, actions: AppActions) {
                     .padding(horizontal = layout.gutter)
                     .padding(bottom = StenoSpace.xl),
             ) {
+                Section(R.string.settings_section_comfort) {
+                    ListBlock(
+                        rows = listOf(
+                            { ThemeRow(appearance.theme, appearance::selectTheme) },
+                            { NotificationsRow() },
+                            { MotionRow(appearance.mascotMotion, appearance::selectMotion) },
+                        ),
+                    )
+                }
                 Section(R.string.settings_section_data) {
                     ListBlock(
                         rows = listOf(
@@ -128,15 +137,6 @@ fun SettingsRoute(controller: StenoController, actions: AppActions) {
                                     tag = Tags.PRIVACY_ROW,
                                 )
                             },
-                        ),
-                    )
-                }
-                Section(R.string.settings_section_comfort) {
-                    ListBlock(
-                        rows = listOf(
-                            { NotificationsRow() },
-                            { ThemeRow(appearance.theme, appearance::selectTheme) },
-                            { MotionRow(appearance.mascotMotion, appearance::selectMotion) },
                         ),
                     )
                 }
