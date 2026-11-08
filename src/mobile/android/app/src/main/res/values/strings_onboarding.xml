@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onb_skip">Пропустить</string>
+    <string name="onb_next">Далее</string>
+    <string name="onb_start">Начать</string>
+    <string name="onb_page">Страница %1$d из %2$d</string>
+
+    <string name="onb_import_title">Импорт или запись</string>
+    <string name="onb_import_body">Выберите файл кнопкой импорта или откройте его в Скворе из другого приложения через «Открыть с помощью» и «Поделиться». Разговор можно и записать прямо в приложении.</string>
+
+    <string name="onb_device_title">Всё происходит на телефоне</string>
+    <string name="onb_device_body">Сквор распознаёт речь и различает говорящих прямо на устройстве. Интернет не нужен, запись никуда не отправляется. Обработка начинается сама, этапы видны на экране.</string>
+    <string name="onb_device_chip_offline">Без интернета</string>
+    <string name="onb_device_chip_local">Только на устройстве</string>
+
+    <string name="onb_result_title">Кто что сказал</string>
+    <string name="onb_result_body">Реплики с номером говорящего и временем. Нажмите на реплику, чтобы услышать её. Долгое нажатие открывает правку текста и говорящего.</string>
+    <string name="onb_result_line_1">Добрый день, начнём.</string>
+    <string name="onb_result_line_2">Да, все на месте.</string>
+
+    <string name="onb_export_title">Готовый файл</string>
+    <string name="onb_export_body">JSON сохраняется сам в папку Download/Stenokot. Кнопка «Экспорт» поможет поделиться файлом или протоколом разговора.</string>
+    <string name="onb_export_file">разговор.json</string>
+    <string name="onb_export_folder">Download/Stenokot</string>
+</resources>

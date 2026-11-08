@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="help_title">Помощь</string>
+    <string name="help_settings_hint">Как пользоваться и частые вопросы</string>
+    <string name="help_lead">Сквор превращает запись разговора в текст с говорящими и временем. Всё считается на телефоне, без интернета.</string>
+
+    <string name="help_section_start">Как начать</string>
+    <string name="help_start_import_title">Импорт файла</string>
+    <string name="help_start_import_body">«%1$s» открывает системное окно выбора файла. Аудио можно открыть и из другого приложения: «Открыть с помощью» или «Поделиться», затем Сквор. Обработка начинается сама, подтверждать ничего не нужно.</string>
+    <string name="help_start_record_title">Запись в приложении</string>
+    <string name="help_start_record_body">«%1$s» записывает разговор с микрофона. При первой записи система спросит доступ к микрофону. После остановки запись сразу уходит в обработку.</string>
+
+    <string name="help_section_file">Что происходит с файлом</string>
+    <string name="help_file_check_title">Проверка до начала</string>
+    <string name="help_file_check_body">Сначала Сквор проверяет формат, звуковую дорожку и свободное место. Если файл не подходит, вы узнаете об этом сразу, а не через полчаса.</string>
+    <string name="help_file_stages_title">Пять этапов</string>
+    <string name="help_file_stages_body">Подготовка аудио, распознавание речи, определение говорящих, сохранение стенограммы и формирование протокола. На экране видны текущий этап, его доля и прошедшее время.</string>
+    <string name="help_file_offline_title">Без интернета</string>
+    <string name="help_file_offline_body">У приложения нет разрешения на доступ в сеть, все модели лежат внутри него. Аудио и текст не покидают телефон, пока вы сами не поделитесь файлом.</string>
+
+    <string name="help_section_result">Результат</string>
+    <string name="help_result_transcript_title">Стенограмма и говорящие</string>
+    <string name="help_result_transcript_body">Вкладка «%1$s»: дословный текст по репликам, у каждой номер говорящего и время. Текст не исправляется и не сокращается. Говорящих можно отфильтровать, по тексту есть поиск.</string>
+    <string name="help_result_player_title">Плеер</string>
+    <string name="help_result_player_body">Нажмите на реплику, и плеер перейдёт к её началу. Под шкалой видно, кто и когда говорит.</string>
+    <string name="help_result_edit_title">Правка реплики</string>
+    <string name="help_result_edit_body">Долгое нажатие на реплику: «%1$s», «%2$s» или «%3$s». Время реплики не меняется, исходный результат распознавания хранится отдельно, а файл JSON сразу перезаписывается.</string>
+    <string name="help_result_protocol_title">Протокол</string>
+    <string name="help_result_protocol_body">Вкладка «%1$s»: темы и пункты разговора. Их составляет языковая модель на телефоне уже после сохранения стенограммы. У каждого пункта есть цитата, нажатие ведёт к реплике. Это черновик поверх стенограммы, сам текст он не меняет.</string>
+    <string name="help_result_export_title">Экспорт</string>
+    <string name="help_result_export_body">JSON сохраняется сам: Download/Stenokot/имя записи.json. Кнопка «%1$s» показывает путь и размер файла, умеет поделиться им, скопировать путь и открыть папку. Там же можно выбрать протокол.</string>
+
+    <string name="help_section_faq">Частые вопросы</string>
+    <string name="help_faq_open">Развёрнуто</string>
+    <string name="help_faq_closed">Свёрнуто</string>
+    <string name="help_faq_formats_q">Какие форматы поддерживаются?</string>
+    <string name="help_faq_formats_a">MP3, WAV, M4A, OGG и FLAC. Если файл не читается, Сквор скажет об этом до начала обработки.</string>
+    <string name="help_faq_time_q">Сколько длится обработка?</string>
+    <string name="help_faq_time_a">Зависит от телефона и длины записи. На телефоне среднего уровня это примерно от половины до полной длительности записи: разговор на 3 минуты обрабатывается около полутора минут. Экран обработки показывает оценку по замерам вашего телефона. Протокол строится после сохранения стенограммы.</string>
+    <string name="help_faq_speakers_q">Почему два человека стали одним говорящим?</string>
+    <string name="help_faq_speakers_a">Говорящих различают по голосу. Тихие и очень короткие реплики вроде «да» или «угу», а также похожие голоса иногда достаются соседнему говорящему. Исправьте это долгим нажатием на реплику: «%1$s».</string>
+    <string name="help_faq_language_q">Можно ли английские и смешанные записи?</string>
+    <string name="help_faq_language_a">Да. Язык определяется для всей записи: русская речь распознаётся русской моделью, английская английской. Отдельные английские слова в русском разговоре распознаёт русская модель, поэтому часть из них может быть записана неточно.</string>
+    <string name="help_faq_error_q">Что делать при ошибке, нехватке памяти или места?</string>
+    <string name="help_faq_error_a">На экране ошибки есть причина и одно главное действие. Мало места: освободите указанный объём и нажмите «Повторить проверку». Мало памяти: закройте другие приложения и нажмите «Повторить безопасно». Если системе пришлось прервать обработку, готовые этапы сохранены, и Сквор продолжит с места остановки.</string>
+    <string name="help_faq_files_q">Где лежат файлы?</string>
+    <string name="help_faq_files_a">Стенограммы JSON лежат в папке Download/Stenokot, служебные сведения о прогоне в Download/Stenokot/meta. Если общая папка недоступна, файл сохраняется в папку приложения, и экран результата это показывает.</string>
+    <string name="help_faq_private_q">Это приватно?</string>
+    <string name="help_faq_private_a">Да. У Сквора нет разрешения на интернет, это можно проверить в «Настройки», раздел «Приватность». Аудио, текст и протокол остаются на телефоне.</string>
+    <string name="help_faq_background_q">Можно ли закрыть приложение во время обработки?</string>
+    <string name="help_faq_background_a">Да. Обработка продолжается в фоне, прогресс виден в уведомлении. Если система всё же остановит её, при следующем открытии Сквор предложит продолжить с последнего сохранённого этапа.</string>
+
+    <string name="help_section_tips">Советы для хорошей записи</string>
+    <string name="help_tip_distance_title">Телефон ближе к говорящим</string>
+    <string name="help_tip_distance_body">Положите телефон в центре стола, микрофоном к людям, не дальше метра от каждого. Не накрывайте микрофон и не держите телефон в кармане.</string>
+    <string name="help_tip_noise_title">Меньше фонового шума</string>
+    <string name="help_tip_noise_body">Выключите музыку и телевизор, отойдите от вентилятора и дороги. Сквор справляется с шумом, но чистая запись даёт более точный текст.</string>
+    <string name="help_tip_turns_title">Говорите по очереди</string>
+    <string name="help_tip_turns_body">Когда двое говорят одновременно, реплики могут пересекаться по времени, но текст двух голосов не разделяется.</string>
+
+    <string name="help_replay_intro">Показать знакомство снова</string>
+    <string name="help_replay_intro_hint">Четыре коротких экрана о главном</string>
+</resources>
