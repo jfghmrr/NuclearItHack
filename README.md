@@ -14,7 +14,15 @@
   <img src="docs/screens/01-home.png" alt="Главная: библиотека записей" width="200">
   <img src="docs/screens/02-processing.png" alt="Обработка: этап 3 из 5" width="200">
   <img src="docs/screens/04-transcript.png" alt="Стенограмма и плеер" width="200">
-  <img src="docs/screens/05-protocol.png" alt="Протокол в тёмной теме" width="200">
+  <img src="docs/screens/05-protocol.png" alt="Протокол со ссылкой на реплику" width="200">
+</p>
+
+<p align="center">
+  <img src="docs/screens/01-onboarding.png" alt="Знакомство при первом запуске" width="160">
+  <img src="docs/screens/03-done.png" alt="Результат готов" width="160">
+  <img src="docs/screens/06-edit.png" alt="Правка реплики" width="160">
+  <img src="docs/screens/07-english.png" alt="Английская запись" width="160">
+  <img src="docs/screens/09-settings.png" alt="Настройки и помощь" width="160">
 </p>
 
 ## Отчётные материалы
