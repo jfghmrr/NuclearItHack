@@ -16,6 +16,7 @@ import ru.stenokot.core.model.Utterance
 /**
  * Реплика, готовая к показу. Посчитана вне композиции, строки только читают её. [overlapSpeakers]
  * называет всех, кто звучит одновременно с ней, а null означает, что собеседник по времени не найден.
+ * [edited] отмечает реплику, исправленную вручную.
  */
 @Immutable
 class TranscriptRowUi(
@@ -29,6 +30,7 @@ class TranscriptRowUi(
     val text: AnnotatedString,
     val overlap: Boolean,
     val overlapSpeakers: String? = null,
+    val edited: Boolean = false,
 )
 
 /** Стенограмма, разобранная один раз на запись: строки, индексы и текст для поиска. */
@@ -120,9 +122,14 @@ private fun displayNumber(utterance: Utterance): Int = utterance.speaker + 1
 
 /**
  * Разбирает реплики для показа. Текст не меняется ни на символ. Реплики записи на английском
- * помечаются языком, чтобы TalkBack читал их правильным голосом.
+ * помечаются языком, чтобы TalkBack читал их правильным голосом. [edited] это номера реплик,
+ * исправленных вручную.
  */
-fun buildTranscriptModel(utterances: List<Utterance>, language: Language): TranscriptModel {
+fun buildTranscriptModel(
+    utterances: List<Utterance>,
+    language: Language,
+    edited: Set<Int> = emptySet(),
+): TranscriptModel {
     val locale = if (language == Language.EN) LocaleList("en") else null
     val reach = LongArray(utterances.size)
     utterances.forEachIndexed { index, item ->
@@ -140,6 +147,7 @@ fun buildTranscriptModel(utterances: List<Utterance>, language: Language): Trans
             text = plainText(item.text, locale),
             overlap = item.overlap,
             overlapSpeakers = if (item.overlap) overlapLabel(utterances, reach, index) else null,
+            edited = index in edited,
         )
     }
     return TranscriptModel(

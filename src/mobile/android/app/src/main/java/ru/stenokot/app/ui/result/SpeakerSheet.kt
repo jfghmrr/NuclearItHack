@@ -44,7 +44,7 @@ import ru.stenokot.app.ui.theme.StenoTheme
 
 /** Строка выбора: значок слева, две строки текста и переключатель справа. */
 @Composable
-private fun ChoiceRow(
+internal fun ChoiceRow(
     title: String,
     subtitle: String,
     selected: Boolean,

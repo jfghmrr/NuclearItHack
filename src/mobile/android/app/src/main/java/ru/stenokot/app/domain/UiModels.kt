@@ -138,7 +138,8 @@ data class ProtocolUi(
 
 /**
  * Экран результата. Реплики уже готовы к показу и не меняются. [pcmPath] указывает на рабочий WAV:
- * по нему строится огибающая плеера, а без него плеер показывает только говорящих.
+ * по нему строится огибающая плеера, а без него плеер показывает только говорящих. [edited] это номера
+ * реплик, исправленных вручную: [utterances] уже показывают исправленный вид.
  */
 @Immutable
 data class ResultUi(
@@ -151,6 +152,7 @@ data class ResultUi(
     val output: OutputFileUi,
     val protocol: ProtocolUi,
     val pcmPath: String? = null,
+    val edited: Set<Int> = emptySet(),
 )
 
 /** Подробности задачи: обработка, результат или ошибка. */

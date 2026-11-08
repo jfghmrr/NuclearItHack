@@ -267,6 +267,8 @@ private fun ResultContent(
     var exportOpen by rememberSaveable { mutableStateOf(false) }
     var speakersOpen by rememberSaveable { mutableStateOf(false) }
     var deleteOpen by rememberSaveable { mutableStateOf(false) }
+    var editIndex by rememberSaveable { mutableStateOf<Int?>(null) }
+    var editStep by rememberSaveable { mutableStateOf(EditStep.ACTIONS) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var selected by rememberSaveable(stateSaver = SpeakerSetSaver) { mutableStateOf(emptySet<Int>()) }
     var matchCursor by rememberSaveable { mutableIntStateOf(0) }
@@ -285,9 +287,9 @@ private fun ResultContent(
     val phase = protocolPhase(state, result.protocol, noSpeech)
     val document = result.protocol.document
 
-    val prepared by produceState<PreparedTranscript?>(null, result.utterances, result.language, matchStyle) {
+    val prepared by produceState<PreparedTranscript?>(null, result.utterances, result.language, result.edited, matchStyle) {
         value = withContext(Dispatchers.Default) {
-            val model = buildTranscriptModel(result.utterances, result.language)
+            val model = buildTranscriptModel(result.utterances, result.language, result.edited)
             PreparedTranscript(
                 model = model,
                 initial = buildTranscriptView(model, "", emptySet(), matchStyle),
@@ -337,6 +339,13 @@ private fun ResultContent(
     val onCopyDiagnostics: () -> Unit = {
         copyText(context, pathLabel, controller.diagnosticsPackage(jobId))
         scope.launch { snackbar.showSnackbar(copiedDiagnostics) }
+    }
+    val editDone = stringResource(R.string.scr04_edit_done)
+    val editReverted = stringResource(R.string.scr04_edit_reverted)
+    val editFailed = stringResource(R.string.scr04_edit_failed)
+    val runEdit: (String, suspend () -> Boolean) -> Unit = { success, action ->
+        editIndex = null
+        scope.launch { snackbar.showSnackbar(if (action()) success else editFailed) }
     }
     val onOpenFile: () -> Unit = { actions.navigator.push(Route.ResultFile(jobId)) }
     BackHandler(enabled = searchOpen, onBack = closeSearch)
@@ -490,6 +499,10 @@ private fun ResultContent(
                 active = active,
                 match = match,
                 onRow = { row -> player.seekTo(row.startMs, play = true) },
+                onEdit = { row ->
+                    editStep = EditStep.ACTIONS
+                    editIndex = row.index
+                },
                 header = transcriptHeader,
                 pinned = pinnedStrip,
                 onStripHeight = { stripHeight = it },
@@ -714,6 +727,44 @@ private fun ResultContent(
             },
             onDismiss = { speakersOpen = false },
         )
+    }
+    val editRow = editIndex?.let { index -> prep?.model?.rows?.getOrNull(index) }
+    if (editRow != null && prep != null) {
+        val closeEdit: () -> Unit = { editIndex = null }
+        when (editStep) {
+            EditStep.ACTIONS -> UtteranceActionsSheet(
+                row = editRow,
+                canChangeSpeaker = prep.model.speakers.size > 1,
+                onText = { editStep = EditStep.TEXT },
+                onSpeaker = { editStep = EditStep.SPEAKER },
+                onRevert = {
+                    runEdit(editReverted) {
+                        val reverted = controller.revertUtterance(jobId, editRow.index)
+                        if (reverted) selected = emptySet()
+                        reverted
+                    }
+                },
+                onDismiss = closeEdit,
+            )
+            EditStep.TEXT -> EditTextDialog(
+                initial = editRow.text.text,
+                onSave = { text -> runEdit(editDone) { controller.editText(jobId, editRow.index, text) } },
+                onDismiss = closeEdit,
+            )
+            EditStep.SPEAKER -> EditSpeakerSheet(
+                speakers = prep.model.speakers,
+                replies = prep.model.repliesBySpeaker,
+                current = editRow.speaker,
+                onApply = { number ->
+                    runEdit(editDone) {
+                        val changed = controller.editSpeaker(jobId, editRow.index, number - 1)
+                        if (changed) selected = emptySet()
+                        changed
+                    }
+                },
+                onDismiss = closeEdit,
+            )
+        }
     }
     if (deleteOpen) {
         DeleteDialog(

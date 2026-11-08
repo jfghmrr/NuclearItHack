@@ -130,4 +130,20 @@
     <string name="scr05_chapter_spoken">Глава %1$s, с %2$s до %3$s, открыть в стенограмме</string>
     <string name="scr05_item_spoken">%1$s. %2$s, %3$s. %4$s. Открыть реплику</string>
     <string name="scr05_item_click">Открыть реплику</string>
+    <string name="scr04_row_edit">Исправить реплику</string>
+    <string name="scr04_row_edited">изменено</string>
+    <string name="scr04_edit_sheet_title">Реплика</string>
+    <string name="scr04_edit_text">Изменить текст</string>
+    <string name="scr04_edit_text_hint">Время реплики не меняется</string>
+    <string name="scr04_edit_speaker">Сменить говорящего</string>
+    <string name="scr04_edit_speaker_hint">Выбрать из говорящих этой записи</string>
+    <string name="scr04_edit_revert">Вернуть исходный</string>
+    <string name="scr04_edit_revert_hint">Текст и говорящий как после распознавания</string>
+    <string name="scr04_edit_field">Текст реплики</string>
+    <string name="scr04_edit_empty">Текст не может быть пустым</string>
+    <string name="scr04_edit_save">Сохранить</string>
+    <string name="scr04_edit_speaker_body">Файл результата будет пересобран, номера говорящих останутся без пропусков.</string>
+    <string name="scr04_edit_done">Исправлено, файл обновлён</string>
+    <string name="scr04_edit_reverted">Возвращён исходный вид</string>
+    <string name="scr04_edit_failed">Правка не сохранена, файл остался прежним</string>
 </resources>

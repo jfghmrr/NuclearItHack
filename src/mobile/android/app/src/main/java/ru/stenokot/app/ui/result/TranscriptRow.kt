@@ -1,7 +1,7 @@
 package ru.stenokot.app.ui.result
 
 import android.content.Context
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
@@ -55,6 +56,12 @@ internal class RowStrings(context: Context) {
     /** Подпись действия для TalkBack. */
     val clickLabel: String = context.getString(R.string.scr04_row_click)
 
+    /** Подпись действия правки для TalkBack. */
+    val editLabel: String = context.getString(R.string.scr04_row_edit)
+
+    /** Тихая отметка исправленной реплики. */
+    val editedMark: String = context.getString(R.string.scr04_row_edited)
+
     /** Отметка активной реплики для TalkBack. */
     val activeLabel: String = context.getString(R.string.scr04_row_active)
 
@@ -77,6 +84,7 @@ internal class RowStrings(context: Context) {
             ),
         )
         if (row.overlap) append(". ").append(overlap(row))
+        if (row.edited) append(". ").append(editedMark)
     }
 }
 
@@ -149,6 +157,14 @@ private fun RowHeader(item: VisibleRow, strings: RowStrings) {
         } else {
             Spacer(Modifier.weight(1f))
         }
+        if (row.edited) {
+            Text(
+                text = strings.editedMark,
+                modifier = Modifier.testTag(Tags.EDIT_MARK),
+                style = type.meta,
+                color = colors.onSurfaceVariant,
+            )
+        }
         if (!timeBelow) Text(row.startLabel, style = type.monoSmall, color = colors.onSurfaceVariant)
     }
     if (timeBelow) Text(row.startLabel, style = type.monoSmall, color = colors.onSurfaceVariant)
@@ -156,7 +172,8 @@ private fun RowHeader(item: VisibleRow, strings: RowStrings) {
 
 /**
  * Реплика как абзац разговора. Текст показывается целиком. Строка не знает позицию плеера: подсветка
- * рисуется по [active] и [match], поэтому смена реплики не перекомпоновывает список.
+ * рисуется по [active] и [match], поэтому смена реплики не перекомпоновывает список. Долгое нажатие
+ * открывает правку реплики.
  */
 @Composable
 internal fun TranscriptRow(
@@ -166,6 +183,7 @@ internal fun TranscriptRow(
     active: () -> Int,
     match: () -> Int,
     onClick: (TranscriptRowUi) -> Unit,
+    onLongClick: (TranscriptRowUi) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val row = item.row
@@ -176,7 +194,11 @@ internal fun TranscriptRow(
             .heightIn(min = StenoSize.touchTarget)
             .rowBackdrop(layout, row.index, active, match, colors.primaryContainer, colors.primary)
             .testTag(Tags.rowUtt(row.index))
-            .clickable(onClickLabel = strings.clickLabel) { onClick(row) }
+            .combinedClickable(
+                onClickLabel = strings.clickLabel,
+                onLongClickLabel = strings.editLabel,
+                onLongClick = { onLongClick(row) },
+            ) { onClick(row) }
             .clearAndSetSemantics {
                 val spoken = strings.spoken(row)
                 contentDescription = if (active() == row.index) "${strings.activeLabel}. $spoken" else spoken
@@ -184,6 +206,10 @@ internal fun TranscriptRow(
                 role = Role.Button
                 onClick(strings.clickLabel) {
                     onClick(row)
+                    true
+                }
+                onLongClick(strings.editLabel) {
+                    onLongClick(row)
                     true
                 }
             }

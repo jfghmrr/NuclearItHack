@@ -17,6 +17,7 @@ import ru.stenokot.app.pipeline.PublishedFile
 import ru.stenokot.core.model.ErrorCode
 import java.io.File
 import java.io.IOException
+import java.io.OutputStream
 
 /**
  * Публикует результат в `Download/Stenokot/` через MediaStore: на API 29 и выше разрешения не нужны.
@@ -74,11 +75,16 @@ class ResultPublisher(context: Context) : OutputGateway {
      * Сохраняет файл по адресу из системного диалога. Режим `wt` обязателен: `w` не всегда обрезает
      * файл, и от прежнего содержимого остался бы хвост.
      */
-    fun export(source: File, target: Uri) {
+    fun export(source: File, target: Uri) = exportFrom(target) { stream -> source.inputStream().use { it.copyTo(stream) } }
+
+    /** Сохраняет готовые байты [bytes] по адресу из системного диалога: так уходит исправленный результат. */
+    fun export(bytes: ByteArray, target: Uri) = exportFrom(target) { stream -> stream.write(bytes) }
+
+    private fun exportFrom(target: Uri, write: (OutputStream) -> Unit) {
         try {
             val output = resolver.openOutputStream(target, "wt")
                 ?: throw EngineFailure(ErrorCode.EXPORT_FAILED, "Адрес не открылся на запись")
-            output.use { stream -> source.inputStream().use { it.copyTo(stream) } }
+            output.use(write)
         } catch (failure: SecurityException) {
             throw EngineFailure(ErrorCode.EXPORT_FAILED, "Нет доступа к адресу", failure)
         } catch (failure: IOException) {

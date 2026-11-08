@@ -6,6 +6,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import ru.stenokot.core.contract.EditsDocument
+import ru.stenokot.core.contract.UtteranceEdit
 import ru.stenokot.core.model.ErrorCode
 import ru.stenokot.core.model.LlmStatus
 import ru.stenokot.core.model.Stage
@@ -209,5 +211,22 @@ class StorageTest {
         val failed = record(phase = JobPhase.FAILED).copy(errorCode = ErrorCode.DECODE_CORRUPT)
         assertEquals(JobPhase.FAILED, JobReconciler.reconcile(failed, files()).phase)
         assertEquals(JobPhase.CANCELLED, JobReconciler.reconcile(record(phase = JobPhase.CANCELLED), files()).phase)
+    }
+
+    @Test
+    fun editsLiveBesideMachineResultAndEmptySetRemovesFile() {
+        val store = JobStore { folder.root }
+        val files = store.files("a")
+        files.dir.mkdirs()
+        files.transcript.writeText("machine")
+        assertEquals(null, store.readEdits("a"))
+        val edits = EditsDocument(3, listOf(UtteranceEdit(1, 1_000, text = "Исправлено.", speaker = 0)))
+        store.saveEdits("a", edits)
+        assertEquals(edits, store.readEdits("a"))
+        assertEquals("machine", files.transcript.readText())
+        assertFalse(File(files.dir, "edits.json.tmp").exists())
+        store.saveEdits("a", EditsDocument(3))
+        assertFalse(files.edits.exists())
+        assertEquals("machine", files.transcript.readText())
     }
 }

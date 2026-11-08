@@ -19,6 +19,14 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import ru.stenokot.core.contract.DefaultTranscriptValidator
+import ru.stenokot.core.contract.EditsDocument
+import ru.stenokot.core.contract.TranscriptEditor
+import ru.stenokot.core.contract.ValidationResult
 import ru.stenokot.app.BuildConfig
 import ru.stenokot.app.data.AudioDiscovery
 import ru.stenokot.app.data.JobPhase
@@ -73,7 +81,9 @@ class RealStenoController(
     private val network = MutableStateFlow(NetworkAudit(internetAbsent = false, networkStateAbsent = false))
 
     @Volatile
-    private var utteranceCache: Pair<String, List<Utterance>>? = null
+    private var utteranceCache: Pair<String, ShownUtterances>? = null
+
+    private val editLock = Mutex()
 
     @Volatile
     private var protocolCache: Triple<String, Long, ProtocolDocument?>? = null
@@ -182,11 +192,81 @@ class RealStenoController(
                 ExportKind.METADATA -> files.metadata
                 ExportKind.PROTOCOL -> files.protocol
             }
-            val failed = runCatching { publisher.export(source, target) }.isFailure
+            val failed = runCatching {
+                val edited = if (kind == ExportKind.TRANSCRIPT) editedBytes(id) else null
+                if (edited != null) publisher.export(edited, target) else publisher.export(source, target)
+            }.isFailure
             runner.updateJob(id) { job ->
                 job.copy(output = job.output?.copy(exportFailed = failed))
             }
         }
+    }
+
+    override suspend fun editText(id: String, index: Int, text: String): Boolean =
+        edit(id) { machine, edits -> TranscriptEditor.withText(machine, edits, index, text) }
+
+    override suspend fun editSpeaker(id: String, index: Int, speaker: Int): Boolean =
+        edit(id) { machine, edits -> TranscriptEditor.withSpeaker(machine, edits, index, speaker) }
+
+    override suspend fun revertUtterance(id: String, index: Int): Boolean =
+        edit(id) { machine, edits -> TranscriptEditor.reverted(machine, edits, index) }
+
+    /**
+     * Правка идёт только по явному действию пользователя. Сначала файл собирается и проверяется, потом
+     * публикуется, и только после успешной публикации сохраняются правки: при любом сбое остаются и
+     * прежний файл, и прежние правки. Без правок публикуются байты машинного transcript.json.
+     */
+    private suspend fun edit(
+        id: String,
+        change: (List<Utterance>, EditsDocument?) -> EditsDocument?,
+    ): Boolean = withContext(io) {
+        editLock.withLock {
+            try {
+                val job = runner.jobs.value[id]?.takeIf { it.transcriptSaved } ?: return@withLock false
+                val files = store.files(id)
+                val machine = store.readUtterances(id).map { it.toUtterance() }
+                val next = change(machine, store.readEdits(id)) ?: return@withLock false
+                val edited = TranscriptEditor.applies(machine, next)
+                val bytes = if (edited) TranscriptEditor.encode(machine, next) else files.transcript.readBytes()
+                if (DefaultTranscriptValidator().validate(bytes, job.durationMs ?: 0) !is ValidationResult.Ok) {
+                    return@withLock false
+                }
+                val published = publisher.publishTranscript(job.stem, bytes)
+                store.saveEdits(id, if (edited) next else EditsDocument(machine.size))
+                utteranceCache = null
+                runner.updateJob(id) { current ->
+                    current.copy(
+                        output = current.output?.copy(
+                            path = published.path,
+                            uri = published.uri,
+                            sizeBytes = bytes.size.toLong(),
+                            createdAtMs = clock(),
+                            validated = true,
+                            sha256 = sha256(bytes),
+                            fallback = published.fallback,
+                            exportFailed = false,
+                        ),
+                    )
+                }
+                true
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
+            }
+        }
+    }
+
+    /** Байты исправленного результата для экспорта или null, если правок нет. */
+    private fun editedBytes(id: String): ByteArray? {
+        val machine = store.readUtterances(id).map { it.toUtterance() }
+        val edits = store.readEdits(id)
+        if (!TranscriptEditor.applies(machine, edits)) return null
+        val job = runner.jobs.value[id] ?: return null
+        val bytes = TranscriptEditor.encode(machine, edits)
+        val verdict = DefaultTranscriptValidator().validate(bytes, job.durationMs ?: 0)
+        check(verdict is ValidationResult.Ok) { "Исправленный результат не прошёл проверку" }
+        return bytes
     }
 
     override fun refreshAudio() {
@@ -247,7 +327,7 @@ class RealStenoController(
     private fun detail(
         job: JobRecord,
         live: LiveProgress?,
-        utterances: List<Utterance>,
+        shown: ShownUtterances,
         document: ProtocolDocument?,
         modelsUi: ModelsUi?,
     ): JobDetailUi {
@@ -257,7 +337,14 @@ class RealStenoController(
             summary = JobUiMapper.summary(job, live, all),
             processing = if (showsProcessing) JobUiMapper.processing(job, live, speed.current(), powerSave()) else null,
             result = if (job.transcriptSaved) {
-                JobUiMapper.result(job, live, utterances, document, modelsUi, playerPath(job), store.files(job.id).pcm.path)
+                JobUiMapper.result(job, live, shown.utterances, document, modelsUi, playerPath(job), store.files(job.id).pcm.path)
+                    ?.let { result ->
+                        if (shown.edited.isEmpty()) {
+                            result
+                        } else {
+                            result.copy(speakers = shown.utterances.distinctBy { it.speaker }.size, edited = shown.edited)
+                        }
+                    }
             } else {
                 null
             },
@@ -294,13 +381,18 @@ class RealStenoController(
         )
     }
 
-    /** Реплики неизменны после записи, поэтому держим в памяти только последнюю открытую задачу. */
-    private fun readUtterances(job: JobRecord): List<Utterance> {
-        if (!job.transcriptSaved) return emptyList()
+    /**
+     * Реплики меняются только ручной правкой, а она сбрасывает кэш, поэтому держим в памяти только
+     * последнюю открытую задачу. Возвращает реплики с правками и номера исправленных.
+     */
+    private fun readUtterances(job: JobRecord): ShownUtterances {
+        if (!job.transcriptSaved) return ShownUtterances(emptyList(), emptySet())
         utteranceCache?.takeIf { it.first == job.id }?.let { return it.second }
-        val utterances = store.readUtterances(job.id).map { it.toUtterance() }
-        utteranceCache = job.id to utterances
-        return utterances
+        val machine = store.readUtterances(job.id).map { it.toUtterance() }
+        val edits = store.readEdits(job.id)
+        val shown = ShownUtterances(TranscriptEditor.apply(machine, edits), TranscriptEditor.editedIndices(machine, edits))
+        utteranceCache = job.id to shown
+        return shown
     }
 
     /** Протокол дописывается по окнам, поэтому читается заново только при смене времени файла. */
@@ -361,6 +453,9 @@ class RealStenoController(
         jobs = emptyList(),
         statusCode = JobUiMapper.homeStatus(emptyList(), null, emptySet()),
     )
+
+    /** Реплики для экрана: уже с ручными правками, и номера исправленных. */
+    private class ShownUtterances(val utterances: List<Utterance>, val edited: Set<Int>)
 
     private data class NetworkAudit(val internetAbsent: Boolean, val networkStateAbsent: Boolean)
 

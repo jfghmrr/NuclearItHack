@@ -1,5 +1,6 @@
 package ru.stenokot.app.data
 
+import ru.stenokot.core.contract.EditsDocument
 import ru.stenokot.core.model.ErrorCode
 import ru.stenokot.core.model.LlmStatus
 import ru.stenokot.core.model.Stage
@@ -21,6 +22,7 @@ class JobFiles(val dir: File) {
     val turns: File get() = File(dir, "turns.json")
     val merged: File get() = File(dir, "merged.json")
     val transcript: File get() = File(dir, "transcript.json")
+    val edits: File get() = File(dir, "edits.json")
     val protocol: File get() = File(dir, "protocol.json")
     val metadata: File get() = File(dir, "metadata.json")
     val metrics: File get() = File(dir, "metrics.jsonl")
@@ -67,6 +69,23 @@ class JobStore(private val root: () -> File) {
         val file = files(id).merged
         if (!file.exists()) return emptyList()
         return ServiceJson.decodeFromString(MergedDocument.serializer(), file.readText()).utterances
+    }
+
+    /** Читает ручные правки задачи. Отсутствующий или нечитаемый файл означает, что правок нет. */
+    fun readEdits(id: String): EditsDocument? {
+        val file = files(id).edits
+        if (!file.exists()) return null
+        return runCatching { ServiceJson.decodeFromString(EditsDocument.serializer(), file.readText()) }.getOrNull()
+    }
+
+    /** Атомарно сохраняет правки. Пустой набор удаляет файл: результат снова машинный. */
+    fun saveEdits(id: String, edits: EditsDocument) {
+        val file = files(id).edits
+        if (edits.edits.isEmpty()) {
+            file.delete()
+        } else {
+            AtomicFiles.replaceText(file, ServiceJson.encodeToString(EditsDocument.serializer(), edits))
+        }
     }
 
     /** Читает протокол задачи, если он есть и читается. */

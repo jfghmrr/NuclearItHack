@@ -395,6 +395,7 @@ internal fun TranscriptPane(
     active: () -> Int,
     match: () -> Int,
     onRow: (TranscriptRowUi) -> Unit,
+    onEdit: (TranscriptRowUi) -> Unit,
     header: LazyListScope.() -> Unit,
     pinned: Boolean,
     onStripHeight: (Int) -> Unit,
@@ -427,7 +428,7 @@ internal fun TranscriptPane(
             key = { it.row.id },
             contentType = { if (it.startsGroup) TYPE_ROW_FIRST else TYPE_ROW_NEXT },
         ) { item ->
-            TranscriptRow(item, layout, strings, active, match, onRow)
+            TranscriptRow(item, layout, strings, active, match, onRow, onEdit)
         }
     }
 }

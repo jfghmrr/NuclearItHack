@@ -32,6 +32,19 @@ interface StenoController {
     /** Сохраняет выбранный файл задачи по адресу, полученному от системы. */
     fun export(id: String, kind: ExportKind, target: Uri)
 
+    /**
+     * Заменяет текст реплики [index] задачи [id]. Машинный результат не меняется: правка сохраняется
+     * отдельно, контрактный файл собирается заново, проверяется и публикуется на прежнее место.
+     * Значение false означает, что правка не прошла проверку или не записалась, и прежний файл остался.
+     */
+    suspend fun editText(id: String, index: Int, text: String): Boolean = false
+
+    /** Отдаёт реплику [index] говорящему [speaker], номер с нуля среди уже показанных. Итог как у [editText]. */
+    suspend fun editSpeaker(id: String, index: Int, speaker: Int): Boolean = false
+
+    /** Возвращает реплике [index] машинный вид. Без правок файл совпадает с машинным байт в байт. */
+    suspend fun revertUtterance(id: String, index: Int): Boolean = false
+
     /** Перечитывает список аудио на устройстве. */
     fun refreshAudio()
 

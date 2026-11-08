@@ -132,6 +132,16 @@ object Tags {
     const val SPEAKER_ALL = "chip_speaker_all"
     const val SPEAKER_APPLY = "btn_speakers_apply"
     const val SPEAKER_CLEAR = "btn_speaker_clear"
+    const val EDIT_SHEET = "edit_sheet"
+    const val EDIT_TEXT = "edit_text"
+    const val EDIT_SPEAKER = "edit_speaker"
+    const val EDIT_REVERT = "edit_revert"
+    const val EDIT_FIELD = "edit_field"
+    const val EDIT_SAVE = "edit_save"
+    const val EDIT_CANCEL = "edit_cancel"
+    const val EDIT_SPEAKER_SHEET = "edit_speaker_sheet"
+    const val EDIT_SPEAKER_APPLY = "edit_speaker_apply"
+    const val EDIT_MARK = "edit_mark"
     const val SEARCH_PREV = "btn_search_prev"
     const val SEARCH_NEXT = "btn_search_next"
     const val EXPORT_SHEET = "sheet_export"
@@ -163,6 +173,9 @@ object Tags {
 
     /** Реплика стенограммы. Номер считается по всей записи и не меняется при сужении списка. */
     fun rowUtt(index: Int) = "row_utt_$index"
+
+    /** Говорящий в выборе при правке реплики. */
+    fun editSpeaker(number: Int) = "edit_speaker_$number"
 
     /** Фильтр библиотеки. */
     fun chipFilter(name: String) = "chip_filter_$name"
