@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="scr01_brand_mark">с.</string>
-    <string name="scr01_brand_name">СТЕНОКОТ</string>
+    <string name="scr01_brand_name">сквор</string>
     <string name="scr01_title">Записи</string>
     <string name="scr01_promise">Разговоры остаются на устройстве</string>
     <string name="scr01_settings">Настройки</string>

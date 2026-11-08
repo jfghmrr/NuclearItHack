@@ -291,8 +291,8 @@ object StenoSize {
     val iconLarge = 28.dp
     val tile = 40.dp
     val mascot = 120.dp
-    val mascotPlate = 152.dp
-    val mascotPlateSmall = 100.dp
+    val mascotPlate = 128.dp
+    val mascotPlateSmall = 92.dp
     val ledgerMargin = 58.dp
     val railGutter = 32.dp
     val stepDot = 23.dp

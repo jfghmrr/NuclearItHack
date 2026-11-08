@@ -11,6 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +61,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -122,11 +124,12 @@ import ru.stenokot.core.model.PreflightInfo
 private const val META_DOT = " · "
 private const val SPOKEN_SEPARATOR = ", "
 private const val IMPORT_WEIGHT = 1f
-private const val RECORD_WEIGHT = 1.1f
+private const val RECORD_WEIGHT = 1f
 private const val EMPTY_HEIGHT_SHARE = 0.68f
 private val TightDock = 320.dp
 private val EmptyTextWidth = 310.dp
-private val BrandMarkSize = 25.sp
+private val BrandMarkSize = 24.sp
+private val BrandTile = 34.dp
 private val ModelsTop = 2.dp
 private val ChipPadding = 20.dp
 private val ChipPaddingNarrow = 16.dp
@@ -359,6 +362,7 @@ private fun HomeHeader(models: ModelsUi, callbacks: HomeCallbacks) {
     }
 }
 
+/** Знак приложения: скворец на плашке и имя строчными, как в дизайне. TalkBack слышит только имя. */
 @Composable
 private fun BrandLine() {
     val colors = StenoTheme.colors
@@ -367,17 +371,24 @@ private fun BrandLine() {
     Row(
         modifier = Modifier.clearAndSetSemantics { contentDescription = name },
         horizontalArrangement = Arrangement.spacedBy(StenoSpace.s),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = stringResource(R.string.scr01_brand_mark),
-            style = type.titleLarge.copy(fontSize = BrandMarkSize, lineHeight = BrandMarkSize * 1.2f),
-            color = colors.primary,
+        Image(
+            painter = painterResource(R.drawable.mascot_empty),
+            contentDescription = null,
+            modifier = Modifier
+                .size(BrandTile)
+                .background(colors.mascotPlate, RoundedCornerShape(StenoRadius.s))
+                .padding(StenoSpace.xs / 2),
         )
         Text(
             text = stringResource(R.string.scr01_brand_name),
-            modifier = Modifier.padding(top = StenoSpace.xs),
-            style = type.eyebrow,
-            color = colors.primary,
+            style = type.titleLarge.copy(
+                fontSize = BrandMarkSize,
+                lineHeight = BrandMarkSize * 1.2f,
+                fontWeight = FontWeight.Bold,
+            ),
+            color = colors.onBackground,
         )
     }
 }
@@ -729,7 +740,10 @@ private fun HomeDock(state: HomeState, callbacks: HomeCallbacks) {
     }
 }
 
-/** Импорт и запись рядом. На самом узком окне значки уступают словам, крупному шрифту нужны две строки. */
+/**
+ * Импорт и запись рядом, импорт главный. На самом узком окне значки уступают словам, крупному
+ * шрифту нужны две строки.
+ */
 @Composable
 private fun ImportActions(callbacks: HomeCallbacks) {
     val importText = stringResource(R.string.common_btn_import)
@@ -737,15 +751,15 @@ private fun ImportActions(callbacks: HomeCallbacks) {
     val layout = LocalWindowLayout.current
     if (layout.largeText && !layout.compactHeight) {
         Column(verticalArrangement = Arrangement.spacedBy(StenoSpace.s)) {
-            OutlinedAction(importText, callbacks.onImport, icon = R.drawable.ic_upload_file, tag = Tags.IMPORT)
-            PrimaryAction(recordText, callbacks.onRecord, icon = R.drawable.ic_mic, tag = Tags.RECORD)
+            PrimaryAction(importText, callbacks.onImport, icon = R.drawable.ic_upload_file, tag = Tags.IMPORT)
+            OutlinedAction(recordText, callbacks.onRecord, icon = R.drawable.ic_mic, tag = Tags.RECORD)
         }
         return
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val withIcons = maxWidth >= TightDock
         Row(horizontalArrangement = Arrangement.spacedBy(StenoSpace.s + StenoSpace.xs / 2)) {
-            OutlinedAction(
+            PrimaryAction(
                 text = importText,
                 onClick = callbacks.onImport,
                 modifier = Modifier.weight(IMPORT_WEIGHT),
@@ -753,7 +767,7 @@ private fun ImportActions(callbacks: HomeCallbacks) {
                 tag = Tags.IMPORT,
                 dense = true,
             )
-            PrimaryAction(
+            OutlinedAction(
                 text = recordText,
                 onClick = callbacks.onRecord,
                 modifier = Modifier.weight(RECORD_WEIGHT),

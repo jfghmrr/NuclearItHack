@@ -2,9 +2,11 @@ package ru.stenokot.app.ui.processing
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -34,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
@@ -95,6 +99,7 @@ import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 import ru.stenokot.app.ui.theme.animatedFraction
+import ru.stenokot.app.ui.theme.breathing
 import ru.stenokot.core.model.JobState
 import ru.stenokot.core.model.LlmStatus
 import ru.stenokot.core.model.PauseReason
@@ -107,6 +112,10 @@ private val StageShape = RoundedCornerShape(StenoRadius.stage)
 private val DoneTextWidth = 310.dp
 
 /** Обработка закончена, остался только показ: стенограмма сохранена, протокол идёт сам. */
+/** Плашка маскота в шапке обработки и сам скворец внутри неё. */
+private val HeroTile = 64.dp
+private val HeroArt = 58.dp
+
 private fun JobState.hasResult(): Boolean = routeForJob("", this) is Route.Result
 
 /** Есть что проверять в протоколе. Итог не обещает протокол, которого нет. */
@@ -327,36 +336,48 @@ private fun ProcessingHero(detail: JobDetailUi, processing: ProcessingUi, workin
     val name = preflight?.fileName ?: detail.summary.title
     val duration = (preflight?.durationMs ?: detail.summary.durationMs)?.let(::formatTimecode)
     val line = listOfNotNull(name, duration).joinToString(META_DOT)
-    Column(
-        modifier = Modifier.fillMaxWidth().testTag(Tags.CARD_FILE),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = StenoSpace.s).testTag(Tags.CARD_FILE),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(StenoSpace.l),
     ) {
         if (!layout.short && !layout.largeText) {
-            MascotPlate(MascotKind.WAITING, plate = StenoSize.mascotPlate * 0.8f, breathing = working)
+            Box(
+                modifier = Modifier
+                    .size(HeroTile)
+                    .background(colors.mascotPlate, RoundedCornerShape(StenoRadius.l)),
+                contentAlignment = Alignment.Center,
+            ) {
+                val art = Modifier.size(HeroArt)
+                Image(
+                    painter = painterResource(MascotKind.WAITING.art),
+                    contentDescription = null,
+                    modifier = if (working) art.breathing() else art,
+                )
+            }
         }
-        if (working) {
+        Column(Modifier.weight(1f)) {
+            if (working) {
+                Text(
+                    text = stringResource(R.string.scr03_headline),
+                    modifier = Modifier.semantics { heading() },
+                    style = type.titleLarge,
+                    color = colors.onBackground,
+                )
+            }
             Text(
-                text = stringResource(R.string.scr03_headline),
-                modifier = Modifier.padding(top = StenoSpace.s).semantics { heading() },
-                style = type.headline.copy(fontSize = type.display.fontSize * 0.7f),
-                color = colors.onBackground,
-                textAlign = TextAlign.Center,
+                text = line,
+                modifier = Modifier.padding(top = StenoSpace.xs).testTag(Tags.FILE_NAME),
+                style = type.bodySmall,
+                color = colors.onSurfaceVariant,
+            )
+            Text(
+                text = preflight?.let(::formatPreflight) ?: stringResource(R.string.scr03_on_device),
+                modifier = Modifier.then(if (preflight != null) Modifier.testTag(Tags.PREFLIGHT) else Modifier),
+                style = type.bodySmall,
+                color = colors.onSurfaceVariant,
             )
         }
-        Text(
-            text = line,
-            modifier = Modifier.padding(top = StenoSpace.s).testTag(Tags.FILE_NAME),
-            style = type.bodySmall,
-            color = colors.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = preflight?.let(::formatPreflight) ?: stringResource(R.string.scr03_on_device),
-            modifier = Modifier.then(if (preflight != null) Modifier.testTag(Tags.PREFLIGHT) else Modifier),
-            style = type.bodySmall,
-            color = colors.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
     }
 }
 
