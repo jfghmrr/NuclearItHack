@@ -11,6 +11,6 @@
 | Сравнение контрольных сумм | [checksums.png](checksums.png) и [logs/checksums.txt](logs/checksums.txt): SHA-256 входа и результата на диске совпадают с записанными в `metadata.json` |
 | Стенд | Телефон Honor NTN-LX1, Android 13, Snapdragon 662, 6 ГБ RAM, без сети у приложения. Видео снято с экрана телефона через `scrcpy` по `adb`, без монтажа и ускорения |
 
-Видео и файлы сняты на сборке 1.1.0, 8 ноября 2026. В ней папка результатов ещё называлась по-старому, поэтому в `metadata.json` путь `Download/Stenokot`; в 1.2.0 это `Download/Skvor`.
+Видео и файлы сняты на сборке 1.1.0, 8 ноября 2026, до переименования папки результатов: путь в `metadata.json` поэтому отличается от `Download/Skvor` в 1.2.0. Журналы оставлены как есть, без правки.
 
 Источники звука: `Podcast_RU.mp3` - фрагмент набора leshinsky/ru-youtube-diarization (Apache-2.0 по карточке набора), `Team_meeting_EN.mp3` - фрагмент AMI Meeting Corpus IS1008a (CC BY 4.0, Jean Carletta et al.).
