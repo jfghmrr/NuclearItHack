@@ -5,6 +5,20 @@
 <h1 align="center">Сквор</h1>
 
 <p align="center">
+  <a href="https://github.com/jfghmrr/NuclearItHack/releases/tag/v1.2.0"><img alt="Релиз" src="https://img.shields.io/badge/релиз-1.2.0-245DCC?style=for-the-badge&logo=android&logoColor=white"></a>
+  <a href=".github/workflows/release.yml"><img alt="Сборка" src="https://img.shields.io/badge/сборка-GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white"></a>
+  <img alt="Без сети" src="https://img.shields.io/badge/работает-без%20сети-121316?style=for-the-badge&logo=wifi&logoColor=white">
+  <br>
+  <img alt="Android 10+" src="https://img.shields.io/badge/Android-10%2B-3DDC84?style=flat-square&logo=android&logoColor=white">
+  <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.4-7F52FF?style=flat-square&logo=kotlin&logoColor=white">
+  <img alt="Jetpack Compose" src="https://img.shields.io/badge/Jetpack%20Compose-UI-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white">
+  <img alt="ONNX Runtime" src="https://img.shields.io/badge/sherpa--onnx-ASR%20%2B%20диаризация-005CED?style=flat-square&logo=onnx&logoColor=white">
+  <img alt="llama.cpp" src="https://img.shields.io/badge/llama.cpp-Qwen3%200.6B-555555?style=flat-square">
+  <a href="#сборка-в-docker"><img alt="Docker" src="https://img.shields.io/badge/Docker-сборка-2496ED?style=flat-square&logo=docker&logoColor=white"></a>
+  <img alt="Языки" src="https://img.shields.io/badge/языки-RU%20%7C%20EN-92B6FF?style=flat-square">
+</p>
+
+<p align="center">
   Расшифровка разговоров на Android без сети: дословный текст, говорящие, временные метки, файл JSON и протокол со ссылками на реплики
 </p>
 
