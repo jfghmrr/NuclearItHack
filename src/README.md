@@ -49,6 +49,8 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 
 Пробный запуск 42394754449 на коммите `f0bba51` собрал APK из чистого клона примерно за 17 минут.
 
+Те же шаги в Docker без установки JDK и SDK: `./scripts/docker_build.sh`, подробнее в разделе «Сборка в Docker» корневого [README](../README.md#сборка-в-docker).
+
 ## Варианты сборки
 
 | Вариант | Назначение |

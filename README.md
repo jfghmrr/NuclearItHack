@@ -78,6 +78,33 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 
 Нужны JDK 21, Android SDK 36, NDK 28.2.13676358 и 29.0.13113456, CMake 3.31.6. Подробно в [src/README.md](src/README.md).
 
+## Сборка в Docker
+
+Если ставить JDK и Android SDK не хочется, хватит Docker с плагином `compose`. Образ повторяет [release.yml](.github/workflows/release.yml): Ubuntu 24.04, Temurin JDK 21, те же компоненты Android SDK, те же шаги и проверка разрешений.
+
+```sh
+git clone --recurse-submodules https://github.com/jfghmrr/NuclearItHack.git
+cd NuclearItHack
+./scripts/docker_build.sh          # release-APK: out/skvor-<commit>.apk и .sha256
+./scripts/docker_build.sh test     # модульные тесты :core:test и :app:testDevDebugUnitTest
+./scripts/docker_build.sh all      # тесты и APK, как в CI
+```
+
+То же без обёртки: `docker compose build`, затем `docker compose run --rm apk` или `docker compose run --rm test`.
+
+- Модели в образ не входят. При запуске `scripts/fetch_models.sh` скачивает их, около 1,3 ГБ, в том `models` и сверяет SHA-256 по `config/models.lock`. Повторные запуски берут модели из тома. Кэш Gradle лежит в томе `gradle`
+- Образ собирается из рабочей копии, включая незакоммиченные правки. Хеш коммита в имени APK и в приложении берётся из `git rev-parse HEAD`
+- Место на диске: образ около IMAGE_SIZE, тома моделей и Gradle ещё около 4 ГБ, на время сборки внутри контейнера нужно 5-6 ГБ, сам APK весит 1,35 ГБ
+- Время: на машине x86_64 сборка близка к CI, около 17 минут без кэшей. Образ платформы `linux/amd64`, потому что инструменты Android SDK выпускаются только для x86_64. На Mac с Apple Silicon он идёт через эмуляцию и собирается в несколько раз медленнее, в Docker Desktop стоит включить Rosetta
+- Контейнер ограничен 4 ядрами и 6 ГБ памяти, Gradle работает без параллельных проектов. Пределы меняются переменными `SKVOR_CPUS` и `SKVOR_MEMORY`, памяти Docker должно быть выделено не меньше
+- Подпись: если в `src/mobile/android` лежит `keystore.properties` с относительным `storeFile` и сам ключ, APK подписывается им. Иначе, как и в CI без секретов, APK подписан отладочным ключом и не обновит версию, подписанную ключом команды
+
+Docker только собирает APK. Приложение запускается на устройстве или эмуляторе Android `arm64-v8a`, не внутри контейнера. Установка результата:
+
+```sh
+adb install -r -g out/skvor-<commit>.apk
+```
+
 ## Что делает
 
 Запись совещания, созвона или интервью часто нельзя отдавать в облачный сервис. Сквор делает всё на телефоне: у приложения нет разрешения `INTERNET`, модели лежат внутри APK.
