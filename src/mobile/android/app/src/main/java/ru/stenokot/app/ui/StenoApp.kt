@@ -32,6 +32,7 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import ru.stenokot.app.ControllerProvider
 import ru.stenokot.app.domain.RecordingUi
 import ru.stenokot.app.domain.StenoController
 import ru.stenokot.app.ui.components.StatusLine
@@ -40,12 +41,17 @@ import ru.stenokot.app.ui.failure.FailureRoute
 import ru.stenokot.app.ui.format.STATUS_IDLE
 import ru.stenokot.app.ui.format.STATUS_RECORDING
 import ru.stenokot.app.ui.format.statusCode
+import ru.stenokot.app.ui.help.HelpRoute
 import ru.stenokot.app.ui.home.HomeRoute
 import ru.stenokot.app.ui.layout.ProvideWindowLayout
 import ru.stenokot.app.ui.layout.screenInsets
 import ru.stenokot.app.ui.licenses.LicenseTextRoute
 import ru.stenokot.app.ui.licenses.LicensesRoute
 import ru.stenokot.app.ui.nav.Route
+import ru.stenokot.app.ui.onboarding.OnboardingRules
+import ru.stenokot.app.ui.onboarding.OnboardingScreen
+import ru.stenokot.app.ui.onboarding.OnboardingWatch
+import ru.stenokot.app.ui.onboarding.rememberOnboardingState
 import ru.stenokot.app.ui.nav.rememberNavigator
 import ru.stenokot.app.ui.nav.routeForJob
 import ru.stenokot.app.ui.nav.stateKey
@@ -83,7 +89,7 @@ private val Route.jobId: String?
         is Route.ResultFile -> jobId
         is Route.ProtocolItem -> jobId
         is Route.Failure -> jobId
-        Route.Home, Route.Record, Route.MicPermission, Route.Settings,
+        Route.Home, Route.Record, Route.MicPermission, Route.Settings, Route.Help,
         Route.Models, is Route.ModelCard, Route.Privacy, Route.Permissions,
         Route.Diagnostics, Route.About, Route.Licenses, is Route.LicenseText,
         -> null
@@ -139,6 +145,17 @@ private fun StenoShell(
     }
     val openPicker = rememberAudioPicker(importFiles)
     val actions = remember(navigator, openPicker) { AppActions(navigator, openPicker, importFiles) }
+    val onboarding = rememberOnboardingState { seen ->
+        OnboardingRules.decide(
+            seen = seen,
+            launchAction = activity.intent?.action,
+            externalRoute = externalRoute != null,
+            debugScene = ControllerProvider.override?.routeFor(activity.intent) != null,
+            jobs = controller.home.value.jobs.map { it.state },
+            recording = controller.recording.value !is RecordingUi.Idle,
+        )
+    }
+    OnboardingWatch(onboarding, controller, externalRoute != null)
 
     LaunchedEffect(externalRoute) {
         if (externalRoute != null) {
@@ -171,7 +188,9 @@ private fun StenoShell(
             .background(StenoTheme.colors.background)
             .resourceTags(),
     ) {
-        AnimatedContent(
+        if (onboarding.visible) {
+            OnboardingScreen(onboarding, onImport = actions.importAudio, modifier = Modifier.weight(1f).screenInsets())
+        } else AnimatedContent(
             targetState = navigator.current,
             modifier = Modifier.weight(1f).screenInsets(),
             transitionSpec = {
@@ -203,6 +222,7 @@ private fun StenoShell(
                     Route.About -> AboutRoute(actions)
                     Route.Licenses -> LicensesRoute(actions)
                     is Route.LicenseText -> LicenseTextRoute(route.entryId, actions)
+                    Route.Help -> HelpRoute(actions, onReplayIntro = onboarding::replay)
                 }
             }
         }

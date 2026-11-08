@@ -22,6 +22,9 @@ sealed interface Route {
     /** Настройки приложения. */
     data object Settings : Route
 
+    /** Помощь: как пользоваться и частые вопросы. */
+    data object Help : Route
+
     /** SCR-03. */
     data class Processing(val jobId: String) : Route
 
@@ -100,6 +103,7 @@ internal fun Route.encode(): String = when (this) {
     Route.Record -> "record"
     Route.MicPermission -> "mic"
     Route.Settings -> "settings"
+    Route.Help -> "help"
     Route.Models -> "models"
     is Route.ModelCard -> "model|$name"
     Route.Privacy -> "privacy"
@@ -122,6 +126,7 @@ internal fun decodeRoute(value: String): Route {
         "record" -> Route.Record
         "mic" -> Route.MicPermission
         "settings" -> Route.Settings
+        "help" -> Route.Help
         "models" -> Route.Models
         "model" -> Route.ModelCard(parts[1])
         "privacy" -> Route.Privacy

@@ -2,13 +2,10 @@ package ru.stenokot.app.ui.onboarding
 
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,10 +25,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -54,6 +53,7 @@ import ru.stenokot.app.ui.components.QuietAction
 import ru.stenokot.app.ui.layout.CenteredContent
 import ru.stenokot.app.ui.layout.LocalWindowLayout
 import ru.stenokot.app.ui.theme.EnterMotion
+import ru.stenokot.app.ui.theme.LocalMotionEnabled
 import ru.stenokot.app.ui.theme.StenoMotion
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
@@ -95,44 +95,18 @@ internal enum class IntroPage(val mascot: MascotKind, @StringRes val title: Int,
 }
 
 /**
- * Ворота знакомства вокруг экранов приложения. Пока знакомство открыто, экраны под ним не строятся,
- * поэтому в дереве нет двух кнопок импорта. Знакомство закрывается само, как только снаружи пришёл
- * файл, началась запись или в библиотеке появилась идущая задача.
+ * Следит за открытым знакомством: оно закрывается само, как только снаружи пришёл файл, началась
+ * запись или в библиотеке появилась идущая задача. Пока знакомство открыто, экраны под ним не
+ * строятся, поэтому в дереве нет второй кнопки импорта.
  */
 @Composable
-fun OnboardingGate(
-    state: OnboardingState,
-    controller: StenoController,
-    externalRoute: Boolean,
-    onImport: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    if (state.visible) {
-        val home by controller.home.collectAsStateWithLifecycle()
-        val recording by controller.recording.collectAsStateWithLifecycle()
-        LaunchedEffect(externalRoute, home.jobs, recording) {
-            val busy = recording !is RecordingUi.Idle
-            if (OnboardingRules.interrupted(externalRoute, home.jobs.map { it.state }, busy)) state.finish()
-        }
-    }
-    AnimatedContent(
-        targetState = state.visible,
-        modifier = modifier,
-        transitionSpec = { fadeIn(tween(StenoMotion.LONG)) togetherWith fadeOut(tween(StenoMotion.MEDIUM)) },
-        label = "onboarding",
-    ) { intro ->
-        if (intro) {
-            OnboardingScreen(
-                onFinish = state::finish,
-                onImport = {
-                    state.finish()
-                    onImport()
-                },
-            )
-        } else {
-            content()
-        }
+fun OnboardingWatch(state: OnboardingState, controller: StenoController, externalRoute: Boolean) {
+    if (!state.visible) return
+    val home by controller.home.collectAsStateWithLifecycle()
+    val recording by controller.recording.collectAsStateWithLifecycle()
+    LaunchedEffect(externalRoute, home.jobs, recording) {
+        val busy = recording !is RecordingUi.Idle
+        if (OnboardingRules.interrupted(externalRoute, home.jobs.map { it.state }, busy)) state.finish()
     }
 }
 
@@ -141,7 +115,8 @@ fun OnboardingGate(
  * «Импорт аудио» есть на каждой странице: человек, который уже знает, что делать, сразу выбирает файл.
  */
 @Composable
-private fun OnboardingScreen(onFinish: () -> Unit, onImport: () -> Unit) {
+fun OnboardingScreen(state: OnboardingState, onImport: () -> Unit, modifier: Modifier = Modifier) {
+    val onFinish: () -> Unit = state::finish
     val pages = IntroPage.entries
     val pager = rememberPagerState { pages.size }
     val scope = rememberCoroutineScope()
@@ -150,9 +125,13 @@ private fun OnboardingScreen(onFinish: () -> Unit, onImport: () -> Unit) {
     BackHandler {
         if (pager.currentPage > 0) scope.launch { pager.animateScrollToPage(pager.currentPage - 1) } else onFinish()
     }
+    val motion = LocalMotionEnabled.current
+    val appear = remember { Animatable(if (motion) 0f else 1f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, tween(StenoMotion.LONG)) }
     Column(
-        Modifier
+        modifier
             .fillMaxSize()
+            .graphicsLayer { alpha = appear.value }
             .background(StenoTheme.colors.background)
             .testTag(OnboardingTags.ROOT),
     ) {
@@ -194,7 +173,10 @@ private fun OnboardingScreen(onFinish: () -> Unit, onImport: () -> Unit) {
                 )
                 GhostAction(
                     text = stringResource(R.string.common_btn_import),
-                    onClick = onImport,
+                    onClick = {
+                        state.finish()
+                        onImport()
+                    },
                     icon = R.drawable.ic_upload_file,
                     tag = Tags.IMPORT,
                 )

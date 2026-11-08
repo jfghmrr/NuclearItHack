@@ -64,6 +64,7 @@ import ru.stenokot.app.ui.components.StenoIcon
 import ru.stenokot.app.ui.components.StenoTopBar
 import ru.stenokot.app.ui.components.resourceTags
 import ru.stenokot.app.ui.format.modelsLabel
+import ru.stenokot.app.ui.help.HelpTags
 import ru.stenokot.app.ui.layout.CenteredContent
 import ru.stenokot.app.ui.layout.LocalWindowLayout
 import ru.stenokot.app.ui.nav.Route
@@ -142,6 +143,16 @@ fun SettingsRoute(controller: StenoController, actions: AppActions) {
                 Section(R.string.settings_section_more) {
                     ListBlock(
                         rows = listOf(
+                            {
+                                LinkRow(
+                                    modifier = Modifier.heightIn(min = RowHeight),
+                                    title = stringResource(R.string.help_title),
+                                    subtitle = stringResource(R.string.help_settings_hint),
+                                    icon = R.drawable.ic_help,
+                                    onClick = { actions.navigator.push(Route.Help) },
+                                    tag = HelpTags.OPEN,
+                                )
+                            },
                             {
                                 LinkRow(
                                     modifier = Modifier.heightIn(min = RowHeight),
