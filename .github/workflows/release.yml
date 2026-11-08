@@ -103,7 +103,7 @@ jobs:
             echo "::error::В APK есть сетевые разрешения"
             exit 1
           fi
-          NAME="stenokot-${GITHUB_SHA::7}.apk"
+          NAME="skvor-${GITHUB_SHA::7}.apk"
           mv "$APK" "$NAME"
           sha256sum "$NAME" | tee "$NAME.sha256"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
@@ -120,4 +120,4 @@ jobs:
           fi
           SUM=$(cut -d' ' -f1 "$NAME.sha256")
           printf 'Сборка из коммита %s.\n\nSHA-256: `%s`\n' "${GITHUB_SHA::7}" "$SUM" > notes.md
-          gh release create "$TAG" "$NAME" --target "$GITHUB_SHA" --title "Стенокот $TAG" --notes-file notes.md
+          gh release create "$TAG" "$NAME" --target "$GITHUB_SHA" --title "Сквор $TAG" --notes-file notes.md
