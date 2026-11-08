@@ -99,10 +99,10 @@ object OnboardingTags {
 
 /** Страница знакомства: маскот, текст и упрощённая картинка экрана. */
 internal enum class IntroPage(val mascot: MascotKind, @StringRes val title: Int, @StringRes val body: Int) {
-    IMPORT(MascotKind.EMPTY, R.string.onb_import_title, R.string.onb_import_body),
+    IMPORT(MascotKind.HELLO, R.string.onb_import_title, R.string.onb_import_body),
     DEVICE(MascotKind.WAITING, R.string.onb_device_title, R.string.onb_device_body),
     RESULT(MascotKind.DONE, R.string.onb_result_title, R.string.onb_result_body),
-    EXPORT(MascotKind.DONE, R.string.onb_export_title, R.string.onb_export_body),
+    EXPORT(MascotKind.EXPORT, R.string.onb_export_title, R.string.onb_export_body),
 }
 
 /**

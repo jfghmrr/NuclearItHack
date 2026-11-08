@@ -376,7 +376,7 @@ private fun BrandLine() {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(
-            painter = painterResource(R.drawable.mascot_empty),
+            painter = painterResource(R.drawable.brand_mark),
             contentDescription = null,
             modifier = Modifier
                 .size(BrandTile)

@@ -64,6 +64,7 @@ import ru.stenokot.app.ui.components.BottomActions
 import ru.stenokot.app.ui.components.DangerAction
 import ru.stenokot.app.ui.components.GhostAction
 import ru.stenokot.app.ui.components.KeepScreenOn
+import ru.stenokot.app.ui.components.Mascot
 import ru.stenokot.app.ui.components.MascotKind
 import ru.stenokot.app.ui.components.MascotPlate
 import ru.stenokot.app.ui.components.OutlinedAction
@@ -99,7 +100,6 @@ import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 import ru.stenokot.app.ui.theme.animatedFraction
-import ru.stenokot.app.ui.theme.breathing
 import ru.stenokot.core.model.JobState
 import ru.stenokot.core.model.LlmStatus
 import ru.stenokot.core.model.PauseReason
@@ -325,7 +325,7 @@ private fun ProcessingScreen(
 
 /**
  * Маскот, заголовок и сведения о файле. На коротком экране маскот уступает место прогрессу.
- * Пока работа стоит, маскот не дышит и заголовок не говорит, что запись слушают.
+ * Пока работа стоит, заголовок не говорит, что запись разбирают.
  */
 @Composable
 private fun ProcessingHero(detail: JobDetailUi, processing: ProcessingUi, working: Boolean) {
@@ -348,12 +348,7 @@ private fun ProcessingHero(detail: JobDetailUi, processing: ProcessingUi, workin
                     .background(colors.mascotPlate, RoundedCornerShape(StenoRadius.l)),
                 contentAlignment = Alignment.Center,
             ) {
-                val art = Modifier.size(HeroArt)
-                Image(
-                    painter = painterResource(MascotKind.WAITING.art),
-                    contentDescription = null,
-                    modifier = if (working) art.breathing() else art,
-                )
+                Mascot(MascotKind.WAITING, size = HeroArt)
             }
         }
         Column(Modifier.weight(1f)) {

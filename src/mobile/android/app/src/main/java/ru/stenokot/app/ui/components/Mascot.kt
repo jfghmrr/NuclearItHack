@@ -1,10 +1,11 @@
 package ru.stenokot.app.ui.components
 
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -15,44 +16,59 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import ru.stenokot.app.R
 import ru.stenokot.app.ui.theme.EnterMotion
+import ru.stenokot.app.ui.theme.StenoMotion
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoTheme
-import ru.stenokot.app.ui.theme.breathing
 import ru.stenokot.app.ui.theme.enterOnce
 
 /**
- * Сюжет маскота. [sideInset] это доля пустого поля слева от фигуры: она нужна, чтобы прижатый
- * к левому краю скворец стоял на одной линии с текстом, а не с границей картинки.
+ * Поза скворца. Все позы нарисованы в одном масштабе на одинаковом холсте, поэтому подложка и
+ * размер у них общие. Мало памяти и мало места показывает одна и та же поза.
  */
-enum class MascotKind(@DrawableRes val art: Int, val sideInset: Float) {
-    EMPTY(R.drawable.mascot_empty, 0.198f),
-    NO_SPEECH(R.drawable.mascot_no_speech, 0.131f),
-    WAITING(R.drawable.mascot_waiting, 0.206f),
-    DONE(R.drawable.mascot_done, 0.198f),
-    FILE_ERROR(R.drawable.mascot_file_error, 0.131f),
-    STORAGE(R.drawable.mascot_storage, 0.198f),
-    MEMORY(R.drawable.mascot_memory, 0.131f),
-    INTERRUPTED(R.drawable.mascot_interrupted, 0.165f),
+enum class MascotKind(@DrawableRes val art: Int) {
+    EMPTY(R.drawable.mascot_empty),
+    NO_SPEECH(R.drawable.mascot_no_speech),
+    WAITING(R.drawable.mascot_waiting),
+    DONE(R.drawable.mascot_done),
+    FILE_ERROR(R.drawable.mascot_file_error),
+    STORAGE(R.drawable.mascot_storage),
+    MEMORY(R.drawable.mascot_storage),
+    INTERRUPTED(R.drawable.mascot_interrupted),
+    HELLO(R.drawable.mascot_hello),
+    IMPORT(R.drawable.mascot_import),
+    RECORD(R.drawable.mascot_record),
+    SPEAKERS(R.drawable.mascot_speakers),
+    SEARCH(R.drawable.mascot_search),
+    EXPORT(R.drawable.mascot_export),
+    HELP(R.drawable.mascot_help),
+    SLEEP(R.drawable.mascot_sleep),
 }
 
-/** Маскот: готовая иллюстрация, тёмный вариант приходит из ресурсов. TalkBack его пропускает. */
+/**
+ * Картинка позы. Новая поза сменяет прежнюю плавным наплывом, а не скачком; движение одноразовое
+ * и в покое ничего не перерисовывается. При выключенных анимациях система делает смену мгновенной.
+ */
+@Composable
+private fun MascotArt(kind: MascotKind, modifier: Modifier) {
+    Crossfade(targetState = kind, animationSpec = tween(StenoMotion.MEDIUM), label = "mascot") { pose ->
+        Image(painterResource(pose.art), contentDescription = null, modifier = modifier)
+    }
+}
+
+/** Маскот без подложки. Появляется один раз за жизнь экрана. TalkBack его пропускает. */
 @Composable
 fun Mascot(kind: MascotKind, modifier: Modifier = Modifier, size: Dp = StenoSize.mascot) {
-    Image(painterResource(kind.art), contentDescription = null, modifier.size(size))
+    MascotArt(kind, modifier.size(size).enterOnce(EnterMotion.EMPTY))
 }
 
-private const val FIGURE_SHARE = 0.85f
+private const val ART_SHARE = 1.22f
 private const val PLATE_WIDTH = 1.48f
 private const val PLATE_HEIGHT = 1.24f
 
-/** Во сколько раз картинка больше круга, чтобы фигура любой позы была одной ширины, как на макете. */
-private val MascotKind.plateArt: Float
-    get() = FIGURE_SHARE / (1f - 2f * sideInset)
-
 /**
  * Маскот на круглой подложке, как на макете. Скворец выступает за круг сверху и снизу, поэтому
- * область под него выше круга. Прозрачное поле картинки может выходить за область,
- * сама фигура нет. Движение либо однократное [motion], либо [breathing] на время ожидания.
+ * область под него выше круга. Прозрачное поле картинки может выходить за область, сама фигура нет.
+ * Появление однократное: [motion] выбирает его характер, без него скворец просто проявляется.
  */
 @Composable
 fun MascotPlate(
@@ -60,22 +76,12 @@ fun MascotPlate(
     modifier: Modifier = Modifier,
     plate: Dp = StenoSize.mascotPlate,
     motion: EnterMotion? = null,
-    breathing: Boolean = false,
 ) {
-    val art = Modifier.requiredSize(plate * kind.plateArt)
-    val height = if (kind == MascotKind.WAITING) plate else plate * PLATE_HEIGHT
-    Box(modifier.size(plate * PLATE_WIDTH, height), contentAlignment = Alignment.Center) {
+    Box(
+        modifier.size(plate * PLATE_WIDTH, plate * PLATE_HEIGHT).enterOnce(motion ?: EnterMotion.EMPTY),
+        contentAlignment = Alignment.Center,
+    ) {
         Box(Modifier.size(plate).background(StenoTheme.colors.mascotPlate, CircleShape))
-        when {
-            breathing -> Image(painterResource(kind.art), null, art.breathing())
-            motion != null -> Image(painterResource(kind.art), null, art.enterOnce(motion))
-            else -> Image(painterResource(kind.art), null, art)
-        }
+        MascotArt(kind, Modifier.requiredSize(plate * ART_SHARE))
     }
-}
-
-/** Маскот, у которого фигура, а не картинка, стоит на левом краю колонки. */
-@Composable
-fun MascotAtStart(kind: MascotKind, modifier: Modifier = Modifier, size: Dp = StenoSize.mascot) {
-    Mascot(kind, modifier.offset(x = -size * kind.sideInset), size)
 }
