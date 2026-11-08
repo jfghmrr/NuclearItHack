@@ -26,10 +26,8 @@ export GIT_COMMIT HOST_UID HOST_GID
 mkdir -p out
 
 docker compose build apk
-SERVICE=apk
-[ "$TARGET" = test ] && SERVICE=test
 if [ "$TARGET" = all ]; then
   docker compose run --rm apk all
 else
-  docker compose run --rm "$SERVICE"
+  docker compose run --rm "$TARGET"
 fi
