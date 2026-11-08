@@ -52,6 +52,7 @@ import ru.stenokot.app.ui.components.PrimaryAction
 import ru.stenokot.app.ui.components.QuietAction
 import ru.stenokot.app.ui.layout.CenteredContent
 import ru.stenokot.app.ui.layout.LocalWindowLayout
+import ru.stenokot.app.ui.layout.WindowLayout
 import ru.stenokot.app.ui.theme.EnterMotion
 import ru.stenokot.app.ui.theme.LocalMotionEnabled
 import ru.stenokot.app.ui.theme.StenoMotion
@@ -61,6 +62,16 @@ import ru.stenokot.app.ui.theme.StenoTheme
 
 private val DotSize = 8.dp
 private val DotActiveWidth = 24.dp
+private const val NARROW_DP = 360
+private const val LARGE_FONT = 1.25f
+
+/** Тесное окно: маленький телефон, узкая ширина или крупный шрифт. Картинка уступает место тексту. */
+private val WindowLayout.introCompact: Boolean
+    get() = short || widthDp < NARROW_DP || fontScale >= LARGE_FONT
+
+/** Совсем тесно: мини-макет убирается, чтобы текст страницы помещался без прокрутки. */
+private val WindowLayout.introTight: Boolean
+    get() = short || (widthDp < NARROW_DP && fontScale >= LARGE_FONT)
 
 /** Идентификаторы элементов знакомства для автоматики. */
 object OnboardingTags {
@@ -197,24 +208,27 @@ private fun IntroPageContent(page: IntroPage, index: Int) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = layout.gutter, vertical = StenoSpace.s),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(StenoSpace.l, Alignment.CenterVertically),
+            verticalArrangement = Arrangement.spacedBy(
+                if (layout.introCompact) StenoSpace.m else StenoSpace.l,
+                Alignment.CenterVertically,
+            ),
         ) {
             MascotPlate(
                 kind = page.mascot,
-                plate = if (layout.short) StenoSize.mascotPlateSmall else StenoSize.mascotPlate,
+                plate = if (layout.introCompact) StenoSize.mascotPlateSmall else StenoSize.mascotPlate,
                 motion = EnterMotion.EMPTY,
             )
-            IntroSketch(page)
+            if (!layout.introTight) IntroSketch(page)
             Text(
                 text = stringResource(page.title),
                 modifier = Modifier.testTag(OnboardingTags.page(index)).semantics { heading() },
-                style = if (layout.short) type.sheetTitle else type.headline,
+                style = if (layout.introCompact) type.sheetTitle else type.headline,
                 color = colors.onBackground,
                 textAlign = TextAlign.Center,
             )
             Text(
                 text = stringResource(page.body),
-                style = type.bodyLarge,
+                style = if (layout.introCompact) type.bodyMedium else type.bodyLarge,
                 color = colors.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
