@@ -27,7 +27,7 @@
 | 4. Архитектура и модели | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), раздел [Модели](#модели) |
 | 5. Ограничения | [docs/LIMITATIONS.md](docs/LIMITATIONS.md), раздел [Ограничения](#ограничения) |
 | 6. Результаты собственных тестов | [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md), [artifacts/test-results/](artifacts/test-results/README.md) |
-| 7. Видеодемонстрация | [artifacts/demo/skvor_demo_honor.mp4](artifacts/demo/skvor_demo_honor.mp4), 110 с, Honor, сборка 1.1.0; описание в [artifacts/demo/](artifacts/demo/README.md) |
+| 7. Видеодемонстрация | [artifacts/demo/skvor_tour_honor.mp4](artifacts/demo/skvor_tour_honor.mp4): все функции на Honor, 5 мин 49 с. Там же исходные и полученные файлы, логи и сравнение контрольных сумм: [artifacts/demo](artifacts/demo/README.md) |
 
 ## Команда
 
