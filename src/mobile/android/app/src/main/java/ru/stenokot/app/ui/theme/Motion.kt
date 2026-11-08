@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -26,6 +27,25 @@ private val BreathRise = 3.dp
 private const val BREATH_SCALE = 0.012f
 private const val SUCCESS_SCALE = 0.96f
 private const val SUCCESS_ALPHA = 0.4f
+
+/**
+ * Плавная доля прогресса. Рост от одного настоящего значения к следующему идёт за
+ * [StenoMotion.VALUE] миллисекунд, уменьшение (новый этап, повтор) встаёт сразу: полоса никогда не
+ * показывает долю, которой не было. Возвращает состояние, чтобы читать его на этапе отрисовки.
+ * Масштаб анимаций системы Compose учитывает сам, при нуле значение встаёт мгновенно.
+ */
+@Composable
+fun animatedFraction(target: Float): State<Float> {
+    val value = remember { Animatable(target) }
+    LaunchedEffect(target) {
+        if (target < value.value) {
+            value.snapTo(target)
+        } else {
+            value.animateTo(target, tween(StenoMotion.VALUE, easing = FastOutSlowInEasing))
+        }
+    }
+    return value.asState()
+}
 
 /** Однократное движение состояния. Значения взяты из `design_tokens.json`. */
 enum class EnterMotion { EMPTY, SUCCESS, ERROR }

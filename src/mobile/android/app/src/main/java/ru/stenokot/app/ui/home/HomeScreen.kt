@@ -9,6 +9,8 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -110,6 +112,7 @@ import ru.stenokot.app.ui.layout.LocalWindowLayout
 import ru.stenokot.app.ui.nav.Route
 import ru.stenokot.app.ui.nav.routeForJob
 import ru.stenokot.app.ui.theme.EnterMotion
+import ru.stenokot.app.ui.theme.StenoMotion
 import ru.stenokot.app.ui.theme.StenoRadius
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
@@ -520,7 +523,12 @@ private fun LazyListScope.libraryContent(
                 is LibraryRow.Day -> DayLabel(row.date, state.today)
                 is LibraryRow.Record -> {
                     val firstQueued = row.kind == RecordKind.QUEUED && row.index == 0
-                    Box(if (firstQueued) Modifier.testTag(Tags.LIST_QUEUE) else Modifier) {
+                    val appear = Modifier.animateItem(
+                        fadeInSpec = tween(StenoMotion.MEDIUM),
+                        placementSpec = tween(StenoMotion.MEDIUM, easing = FastOutSlowInEasing),
+                        fadeOutSpec = tween(StenoMotion.SHORT),
+                    )
+                    Box(if (firstQueued) appear.testTag(Tags.LIST_QUEUE) else appear) {
                         RecordCard(row, state.today, state.preflight, callbacks)
                     }
                 }

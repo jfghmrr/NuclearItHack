@@ -14,10 +14,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoTheme
+import ru.stenokot.app.ui.theme.animatedFraction
 
 /**
- * Определённая полоса прогресса. Значение меняется без анимации, неопределённого режима нет:
- * полоса показывает только реальную долю.
+ * Определённая полоса прогресса, неопределённого режима нет: полоса показывает только реальную долю.
+ * Заливка доезжает до нового значения плавно и читается только при отрисовке, без перекомпоновки.
  */
 @Composable
 fun StenoProgressBar(
@@ -30,6 +31,7 @@ fun StenoProgressBar(
     indicator: Color = StenoTheme.colors.primary,
 ) {
     val value = fraction.coerceIn(0f, 1f)
+    val shown = animatedFraction(value)
     Canvas(
         modifier
             .fillMaxWidth()
@@ -40,8 +42,9 @@ fun StenoProgressBar(
     ) {
         val radius = CornerRadius(size.height / 2)
         drawRoundRect(track, cornerRadius = radius)
-        if (value > 0f) {
-            val width = (size.width * value).coerceAtLeast(size.height)
+        val fill = shown.value
+        if (fill > 0f) {
+            val width = (size.width * fill).coerceAtLeast(size.height)
             drawRoundRect(indicator, size = Size(width, size.height), cornerRadius = radius)
         }
     }

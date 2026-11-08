@@ -14,6 +14,9 @@ class Navigator(initial: List<Route>) {
     /** Верхний экран. */
     val current: Route get() = stack.last()
 
+    /** Глубина стека: по её изменению переход понимает, вперёд идёт человек или назад. */
+    val depth: Int get() = stack.size
+
     /** Есть куда возвращаться. */
     val canGoBack: Boolean get() = stack.size > 1
 

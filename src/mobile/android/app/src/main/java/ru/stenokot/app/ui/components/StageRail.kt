@@ -1,5 +1,9 @@
 package ru.stenokot.app.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -13,9 +17,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -30,25 +38,40 @@ import ru.stenokot.app.domain.StageUi
 import ru.stenokot.app.ui.Tags
 import ru.stenokot.app.ui.format.formatTimecode
 import ru.stenokot.app.ui.format.userStageLabel
+import ru.stenokot.app.ui.theme.StenoMotion
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
 
 private val RowHeight = 41.dp
 private val CheckSize = 13.dp
+private const val CHECK_FROM = 0.3f
 
-/** Кружок этапа: номер, галочка или значок. Цвет только дополняет форму и подпись. */
+/**
+ * Кружок этапа: номер, галочка или значок. Цвет только дополняет форму и подпись. Заливка меняется
+ * плавно, а галочка этапа, завершившегося на глазах, вырастает из точки. Уже готовый этап при
+ * открытии экрана сразу стоит с галочкой.
+ */
 @Composable
 private fun StepDot(number: Int, status: StageStatus, paused: Boolean) {
     val colors = StenoTheme.colors
     val type = StenoTheme.type
     val active = status == StageStatus.ACTIVE
-    val fill = when {
+    val target = when {
         active && paused -> colors.warning
         active -> colors.primary
         status == StageStatus.DONE || status == StageStatus.SKIPPED -> colors.primaryContainer
         status == StageStatus.FAILED -> colors.errorContainer
         else -> colors.background
+    }
+    val fill by animateColorAsState(target, tween(StenoMotion.MEDIUM), label = "stepFill")
+    val check = remember { Animatable(if (status == StageStatus.DONE) 1f else 0f) }
+    LaunchedEffect(status) {
+        if (status == StageStatus.DONE) {
+            check.animateTo(1f, tween(StenoMotion.CHECK, easing = FastOutSlowInEasing))
+        } else {
+            check.snapTo(0f)
+        }
     }
     Box(
         modifier = Modifier
@@ -64,7 +87,17 @@ private fun StepDot(number: Int, status: StageStatus, paused: Boolean) {
         contentAlignment = Alignment.Center,
     ) {
         when (status) {
-            StageStatus.DONE -> StenoIcon(R.drawable.ic_check, colors.primary, size = CheckSize)
+            StageStatus.DONE -> StenoIcon(
+                icon = R.drawable.ic_check,
+                tint = colors.primary,
+                modifier = Modifier.graphicsLayer {
+                    val value = check.value
+                    alpha = value
+                    scaleX = CHECK_FROM + (1f - CHECK_FROM) * value
+                    scaleY = CHECK_FROM + (1f - CHECK_FROM) * value
+                },
+                size = CheckSize,
+            )
             StageStatus.SKIPPED -> StenoIcon(R.drawable.ic_block, colors.onSurfaceVariant, size = CheckSize)
             StageStatus.FAILED -> StenoIcon(R.drawable.ic_close, colors.error, size = CheckSize)
             StageStatus.ACTIVE, StageStatus.PENDING -> Text(

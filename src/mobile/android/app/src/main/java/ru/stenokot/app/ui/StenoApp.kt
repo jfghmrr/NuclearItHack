@@ -4,9 +4,12 @@ import android.app.Activity
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
@@ -16,6 +19,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -23,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.IntOffset
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.filterNotNull
@@ -68,6 +73,9 @@ import ru.stenokot.core.model.JobState
 import ru.stenokot.core.model.Stage
 
 /** Идентификатор задачи, которую показывает маршрут. */
+/** Сдвиг экрана при переходе: двадцатая часть ширины, чтобы движение читалось, но не мешало. */
+private const val SCREEN_SHIFT = 20
+
 private val Route.jobId: String?
     get() = when (this) {
         is Route.Processing -> jobId
@@ -152,6 +160,11 @@ private fun StenoShell(
 
     BackHandler(enabled = navigator.canGoBack) { navigator.back() }
 
+    val depth = navigator.depth
+    var shownDepth by remember { mutableIntStateOf(depth) }
+    val forward = depth >= shownDepth
+    SideEffect { shownDepth = depth }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -162,7 +175,11 @@ private fun StenoShell(
             targetState = navigator.current,
             modifier = Modifier.weight(1f).screenInsets(),
             transitionSpec = {
-                fadeIn(tween(StenoMotion.MEDIUM)) togetherWith fadeOut(tween(StenoMotion.SHORT))
+                val sign = if (forward) 1 else -1
+                val enter = tween<IntOffset>(StenoMotion.MEDIUM, easing = FastOutSlowInEasing)
+                val exit = tween<IntOffset>(StenoMotion.SHORT, easing = FastOutSlowInEasing)
+                (fadeIn(tween(StenoMotion.MEDIUM)) + slideInHorizontally(enter) { sign * it / SCREEN_SHIFT }) togetherWith
+                    (fadeOut(tween(StenoMotion.SHORT)) + slideOutHorizontally(exit) { -sign * it / SCREEN_SHIFT })
             },
             contentKey = { it::class },
             label = "screen",

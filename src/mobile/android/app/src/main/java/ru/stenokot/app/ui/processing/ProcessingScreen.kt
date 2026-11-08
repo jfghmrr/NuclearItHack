@@ -94,6 +94,7 @@ import ru.stenokot.app.ui.theme.StenoRadius
 import ru.stenokot.app.ui.theme.StenoSize
 import ru.stenokot.app.ui.theme.StenoSpace
 import ru.stenokot.app.ui.theme.StenoTheme
+import ru.stenokot.app.ui.theme.animatedFraction
 import ru.stenokot.core.model.JobState
 import ru.stenokot.core.model.LlmStatus
 import ru.stenokot.core.model.PauseReason
@@ -448,11 +449,13 @@ private fun StageCard(stage: StageUi, processing: ProcessingUi, pipelineStage: S
     }
 }
 
+/** Процент этапа. Цифра на экране доходит до нового значения плавно, озвучивается настоящее. */
 @Composable
 private fun StagePercent(fraction: Float) {
     val colors = StenoTheme.colors
     val type = StenoTheme.type
-    val value = percentValue(fraction).toString()
+    val shown by animatedFraction(fraction.coerceIn(0f, 1f))
+    val value = percentValue(shown).toString()
     val unit = stringResource(R.string.scr03_percent_unit)
     Row(
         modifier = Modifier.testTag(Tags.STAGE_PERCENT).spokenAs("${percentSpoken(fraction)} этапа", formatPercent(fraction)),
